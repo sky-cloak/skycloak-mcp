@@ -1,0 +1,19 @@
+# Binaries
+skycloak-mcp
+dist/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Go
+vendor/
+
+# Local env / secrets
+.env
+.env.*
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
