@@ -27,6 +27,30 @@ func registerWriteTools(s *mcp.Server, api API) {
 	}, deleteClusterHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_create_application",
+		Description: "Create an OIDC/SAML client (application) in a realm. Returns the client secret for confidential clients (store it; it is not retrievable later).",
+		Annotations: &mcp.ToolAnnotations{Title: "Create application", ReadOnlyHint: false, DestructiveHint: ptr(false)},
+	}, createApplicationHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_delete_application",
+		Description: "Delete an application (OIDC/SAML client) from a realm. Set confirm=true to proceed.",
+		Annotations: &mcp.ToolAnnotations{Title: "Delete application", ReadOnlyHint: false, DestructiveHint: ptr(true)},
+	}, deleteApplicationHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_create_identity_provider",
+		Description: "Create an OIDC identity provider (SSO connection) in a realm.",
+		Annotations: &mcp.ToolAnnotations{Title: "Create identity provider", ReadOnlyHint: false, DestructiveHint: ptr(false)},
+	}, createIdentityProviderHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_delete_identity_provider",
+		Description: "Delete an identity provider from a realm. Set confirm=true to proceed.",
+		Annotations: &mcp.ToolAnnotations{Title: "Delete identity provider", ReadOnlyHint: false, DestructiveHint: ptr(true)},
+	}, deleteIdentityProviderHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_realm",
 		Description: "Create a new Keycloak realm in a cluster. Requires the server to be started with --allow-writes and a write-scoped API key.",
 		Annotations: &mcp.ToolAnnotations{Title: "Create realm", ReadOnlyHint: false, DestructiveHint: ptr(false)},
@@ -37,6 +61,117 @@ func registerWriteTools(s *mcp.Server, api API) {
 		Description: "Permanently delete a realm and all of its users, clients and configuration. This is irreversible. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{Title: "Delete realm", ReadOnlyHint: false, DestructiveHint: ptr(true)},
 	}, deleteRealmHandler(api))
+}
+
+// CreateApplicationInput is the input schema for skycloak_create_application.
+type CreateApplicationInput struct {
+	ClusterID    string   `json:"cluster_id" jsonschema:"the cluster ID"`
+	Realm        string   `json:"realm" jsonschema:"the realm name"`
+	ClientID     string   `json:"client_id" jsonschema:"the OAuth client ID (unique within the realm)"`
+	Name         string   `json:"name" jsonschema:"display name"`
+	Type         string   `json:"type,omitempty" jsonschema:"confidential or public; defaults to confidential"`
+	Protocol     string   `json:"protocol,omitempty" jsonschema:"openid-connect or saml; defaults to openid-connect"`
+	RedirectURIs []string `json:"redirect_uris,omitempty" jsonschema:"allowed redirect URIs"`
+}
+
+// CreateApplicationOutput is the structured result.
+type CreateApplicationOutput struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret,omitempty"`
+}
+
+func createApplicationHandler(api API) mcp.ToolHandlerFor[CreateApplicationInput, CreateApplicationOutput] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in CreateApplicationInput) (*mcp.CallToolResult, CreateApplicationOutput, error) {
+		if in.ClusterID == "" || in.Realm == "" || in.ClientID == "" {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "cluster_id, realm and client_id are required"}}}, CreateApplicationOutput{}, nil
+		}
+		clientID, secret, err := api.CreateApplication(ctx, in.ClusterID, in.Realm, skycloak.CreateApplicationRequest{
+			ClientID: in.ClientID, Name: in.Name, Type: in.Type, Protocol: in.Protocol, RedirectURIs: in.RedirectURIs,
+		})
+		if err != nil {
+			return toolError(err), CreateApplicationOutput{}, nil
+		}
+		text := fmt.Sprintf("Created application %q in realm %s.", clientID, in.Realm)
+		if secret != "" {
+			text += " A client secret was generated (returned in structured output; store it securely)."
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, CreateApplicationOutput{ClientID: clientID, ClientSecret: secret}, nil
+	}
+}
+
+// DeleteApplicationInput is the input schema for skycloak_delete_application.
+type DeleteApplicationInput struct {
+	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Realm     string `json:"realm" jsonschema:"the realm name"`
+	ClientID  string `json:"client_id" jsonschema:"the application client ID to delete"`
+	Confirm   bool   `json:"confirm" jsonschema:"must be true to confirm deletion"`
+}
+
+func deleteApplicationHandler(api API) mcp.ToolHandlerFor[DeleteApplicationInput, struct{}] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteApplicationInput) (*mcp.CallToolResult, struct{}, error) {
+		if in.ClusterID == "" || in.Realm == "" || in.ClientID == "" {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "cluster_id, realm and client_id are required"}}}, struct{}{}, nil
+		}
+		if !in.Confirm {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Refusing to delete application %q: set confirm=true.", in.ClientID)}}}, struct{}{}, nil
+		}
+		if err := api.DeleteApplication(ctx, in.ClusterID, in.Realm, in.ClientID); err != nil {
+			return toolError(err), struct{}{}, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Deleted application %q.", in.ClientID)}}}, struct{}{}, nil
+	}
+}
+
+// CreateIdentityProviderInput is the input schema for skycloak_create_identity_provider (OIDC).
+type CreateIdentityProviderInput struct {
+	ClusterID        string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Realm            string `json:"realm" jsonschema:"the realm name"`
+	ProviderID       string `json:"provider_id" jsonschema:"unique provider alias within the realm"`
+	DisplayName      string `json:"display_name" jsonschema:"login button / display name"`
+	ClientID         string `json:"client_id,omitempty" jsonschema:"upstream OAuth client ID"`
+	ClientSecret     string `json:"client_secret,omitempty" jsonschema:"upstream OAuth client secret"`
+	Issuer           string `json:"issuer,omitempty" jsonschema:"OIDC issuer URL"`
+	AuthorizationURL string `json:"authorization_url,omitempty" jsonschema:"OIDC authorization endpoint"`
+	TokenURL         string `json:"token_url,omitempty" jsonschema:"OIDC token endpoint"`
+}
+
+func createIdentityProviderHandler(api API) mcp.ToolHandlerFor[CreateIdentityProviderInput, struct{}] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in CreateIdentityProviderInput) (*mcp.CallToolResult, struct{}, error) {
+		if in.ClusterID == "" || in.Realm == "" || in.ProviderID == "" {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "cluster_id, realm and provider_id are required"}}}, struct{}{}, nil
+		}
+		err := api.CreateOIDCIdentityProvider(ctx, in.ClusterID, in.Realm, skycloak.CreateOIDCIdentityProviderRequest{
+			ProviderID: in.ProviderID, DisplayName: in.DisplayName, ClientID: in.ClientID, ClientSecret: in.ClientSecret,
+			Issuer: in.Issuer, AuthorizationURL: in.AuthorizationURL, TokenURL: in.TokenURL,
+		})
+		if err != nil {
+			return toolError(err), struct{}{}, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Created OIDC identity provider %q in realm %s.", in.ProviderID, in.Realm)}}}, struct{}{}, nil
+	}
+}
+
+// DeleteIdentityProviderInput is the input schema for skycloak_delete_identity_provider.
+type DeleteIdentityProviderInput struct {
+	ClusterID  string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Realm      string `json:"realm" jsonschema:"the realm name"`
+	ProviderID string `json:"provider_id" jsonschema:"the provider alias to delete"`
+	Confirm    bool   `json:"confirm" jsonschema:"must be true to confirm deletion"`
+}
+
+func deleteIdentityProviderHandler(api API) mcp.ToolHandlerFor[DeleteIdentityProviderInput, struct{}] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteIdentityProviderInput) (*mcp.CallToolResult, struct{}, error) {
+		if in.ClusterID == "" || in.Realm == "" || in.ProviderID == "" {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "cluster_id, realm and provider_id are required"}}}, struct{}{}, nil
+		}
+		if !in.Confirm {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Refusing to delete identity provider %q: set confirm=true.", in.ProviderID)}}}, struct{}{}, nil
+		}
+		if err := api.DeleteIdentityProvider(ctx, in.ClusterID, in.Realm, in.ProviderID); err != nil {
+			return toolError(err), struct{}{}, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Deleted identity provider %q.", in.ProviderID)}}}, struct{}{}, nil
+	}
 }
 
 // CreateClusterInput is the input schema for skycloak_create_cluster.

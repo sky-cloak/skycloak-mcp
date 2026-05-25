@@ -67,6 +67,25 @@ func (s stubAPI) DeleteCluster(context.Context, string) error {
 	return s.err
 }
 
+func (s stubAPI) CreateApplication(_ context.Context, _, _ string, req skycloak.CreateApplicationRequest) (string, string, error) {
+	if s.err != nil {
+		return "", "", s.err
+	}
+	return req.ClientID, "generated-secret", nil
+}
+
+func (s stubAPI) DeleteApplication(context.Context, string, string, string) error {
+	return s.err
+}
+
+func (s stubAPI) CreateOIDCIdentityProvider(context.Context, string, string, skycloak.CreateOIDCIdentityProviderRequest) error {
+	return s.err
+}
+
+func (s stubAPI) DeleteIdentityProvider(context.Context, string, string, string) error {
+	return s.err
+}
+
 func TestListClustersHandler(t *testing.T) {
 	api := stubAPI{clusters: []skycloak.Cluster{
 		{ID: "c1", Name: "prod", Status: "available", Type: "keycloak", Size: "small", Version: "26.1", Location: "eu"},

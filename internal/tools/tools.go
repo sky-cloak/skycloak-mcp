@@ -21,6 +21,10 @@ type API interface {
 	DeleteRealm(ctx context.Context, clusterID, name string) error
 	CreateCluster(ctx context.Context, req skycloak.CreateClusterRequest) (*skycloak.Cluster, error)
 	DeleteCluster(ctx context.Context, id string) error
+	CreateApplication(ctx context.Context, clusterID, realm string, req skycloak.CreateApplicationRequest) (clientID, clientSecret string, err error)
+	DeleteApplication(ctx context.Context, clusterID, realm, clientID string) error
+	CreateOIDCIdentityProvider(ctx context.Context, clusterID, realm string, req skycloak.CreateOIDCIdentityProviderRequest) error
+	DeleteIdentityProvider(ctx context.Context, clusterID, realm, providerID string) error
 }
 
 // Register adds all tools to the server.

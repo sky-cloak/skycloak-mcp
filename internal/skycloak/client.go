@@ -297,23 +297,150 @@ type Application struct {
 	Status   string
 }
 
-// ListApplications returns the applications in a realm.
+func applicationFromAPI(a *apiclient.Application) Application {
+	return Application{
+		ClientID: string(a.ClientId), Name: a.Name, Type: string(a.Type),
+		Protocol: string(a.Protocol), Status: string(a.Status),
+	}
+}
+
+// ListApplications returns all applications in a realm, following pagination.
 func (c *Client) ListApplications(ctx context.Context, clusterID, realm string) ([]Application, error) {
-	resp, err := c.gen.ListApplicationsWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
-	if err != nil {
-		return nil, err
-	}
-	if resp.JSON200 == nil {
-		return nil, statusError(resp.HTTPResponse, resp.Body)
-	}
-	out := make([]Application, 0, len(*resp.JSON200))
-	for _, a := range *resp.JSON200 {
-		out = append(out, Application{
-			ClientID: string(a.ClientId), Name: a.Name, Type: string(a.Type),
-			Protocol: string(a.Protocol), Status: string(a.Status),
-		})
+	const limit = 100
+	var out []Application
+	for offset := 0; ; offset += limit {
+		l := apiclient.PaginationLimit(limit)
+		o := apiclient.PaginationOffset(offset)
+		resp, err := c.gen.ListApplicationsWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm),
+			&apiclient.ListApplicationsParams{Limit: &l, Offset: &o})
+		if err != nil {
+			return nil, err
+		}
+		if resp.JSON200 == nil {
+			return nil, statusError(resp.HTTPResponse, resp.Body)
+		}
+		page := *resp.JSON200
+		for i := range page {
+			out = append(out, applicationFromAPI(&page[i]))
+		}
+		if len(page) < limit {
+			break
+		}
 	}
 	return out, nil
+}
+
+// CreateApplicationRequest is the input for creating an application.
+type CreateApplicationRequest struct {
+	ClientID     string
+	Name         string
+	Type         string
+	Protocol     string
+	RedirectURIs []string
+}
+
+// CreateApplication creates an OIDC/SAML client in a realm. The returned
+// ClientSecret is only present for confidential clients on creation.
+func (c *Client) CreateApplication(ctx context.Context, clusterID, realm string, req CreateApplicationRequest) (clientID, clientSecret string, err error) {
+	body := apiclient.CreateApplicationJSONRequestBody{
+		ClientId:   apiclient.ApplicationClientId(req.ClientID),
+		Name:       req.Name,
+		GrantTypes: []apiclient.GrantType{},
+	}
+	if req.Type != "" {
+		t := apiclient.ApplicationType(req.Type)
+		body.Type = &t
+	}
+	if req.Protocol != "" {
+		p := apiclient.ApplicationProtocol(req.Protocol)
+		body.Protocol = &p
+	}
+	if len(req.RedirectURIs) > 0 {
+		ru := req.RedirectURIs
+		body.RedirectUris = &ru
+	}
+	resp, err := c.gen.CreateApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	if err != nil {
+		return "", "", err
+	}
+	if resp.JSON201 == nil {
+		return "", "", statusError(resp.HTTPResponse, resp.Body)
+	}
+	secret := ""
+	if resp.JSON201.ClientSecret != nil {
+		secret = *resp.JSON201.ClientSecret
+	}
+	return string(resp.JSON201.ClientId), secret, nil
+}
+
+// DeleteApplication deletes an application.
+func (c *Client) DeleteApplication(ctx context.Context, clusterID, realm, clientID string) error {
+	resp, err := c.gen.DeleteApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// CreateOIDCIdentityProviderRequest is the input for creating an OIDC identity
+// provider (the common case exposed via MCP).
+type CreateOIDCIdentityProviderRequest struct {
+	ProviderID       string
+	DisplayName      string
+	ClientID         string
+	ClientSecret     string
+	Issuer           string
+	AuthorizationURL string
+	TokenURL         string
+}
+
+// CreateOIDCIdentityProvider creates an OIDC identity provider.
+func (c *Client) CreateOIDCIdentityProvider(ctx context.Context, clusterID, realm string, req CreateOIDCIdentityProviderRequest) error {
+	cfg := &apiclient.ProviderConfig{Oidc: &apiclient.OIDCConfig{}}
+	if req.Issuer != "" {
+		cfg.Oidc.Issuer = &req.Issuer
+	}
+	if req.AuthorizationURL != "" {
+		cfg.Oidc.AuthorizationUrl = &req.AuthorizationURL
+	}
+	if req.TokenURL != "" {
+		cfg.Oidc.TokenUrl = &req.TokenURL
+	}
+	body := apiclient.CreateIdentityProviderJSONRequestBody{
+		ProviderId:  apiclient.SkycloakProviderId(req.ProviderID),
+		Type:        apiclient.ProviderType("oidc"),
+		DisplayName: req.DisplayName,
+		Config:      cfg,
+	}
+	if req.ClientID != "" {
+		body.ClientId = &req.ClientID
+	}
+	if req.ClientSecret != "" {
+		body.ClientSecret = &req.ClientSecret
+	}
+	resp, err := c.gen.CreateIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	if err != nil {
+		return err
+	}
+	if resp.JSON201 == nil {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// DeleteIdentityProvider deletes an identity provider.
+func (c *Client) DeleteIdentityProvider(ctx context.Context, clusterID, realm, providerID string) error {
+	resp, err := c.gen.DeleteIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ProviderId(providerID))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
 }
 
 // IdentityProvider mirrors the public API identity-provider resource (subset).

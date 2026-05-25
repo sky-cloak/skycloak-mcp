@@ -11,7 +11,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - API-key authentication (`SKYCLOAK_API_KEY`) scoped to the key's workspace.
 - `--allow-writes` gate (default off) separating the read-only and mutating tool surfaces.
 - Read-only tools: `list_clusters`, `get_cluster`, `list_realms`, `list_applications`, `list_identity_providers`.
-- Write tools (behind `--allow-writes`): `create_cluster`, `delete_cluster`, `create_realm`, `delete_realm`. Destructive tools (`delete_*`) require `confirm=true`.
+- Write tools (behind `--allow-writes`): `create_cluster`, `delete_cluster`, `create_realm`, `delete_realm`, `create_application`, `delete_application`, `create_identity_provider` (OIDC), `delete_identity_provider`. Destructive tools (`delete_*`) require `confirm=true`.
+- `list_applications` follows pagination across all pages.
 - Typed API client generated from the Skycloak OpenAPI specification (oapi-codegen) with a `make generate` workflow.
 - Unit tests, CI, a container image, and a release pipeline.
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
