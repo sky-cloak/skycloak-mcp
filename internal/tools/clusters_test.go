@@ -161,7 +161,7 @@ func TestListRealmsHandler_MissingClusterID(t *testing.T) {
 
 // TestRegister ensures tool registration (and JSON-schema inference for every
 // tool's input/output) does not panic — this is what would break at startup.
-func TestRegister(t *testing.T) {
+func TestRegister(_ *testing.T) {
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "test"}, nil)
-	Register(s, stubAPI{}, true) // allowWrites=true exercises both paths
+	Register(s, stubAPI{}, true) // allowWrites=true exercises both paths; must not panic
 }
