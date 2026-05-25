@@ -1035,3 +1035,99 @@ func (c *Client) UninstallExtension(ctx context.Context, clusterID, extensionID 
 	}
 	return nil
 }
+
+// ---- Database exports ----
+
+func ntimeN(n nullable.Nullable[time.Time]) string {
+	if !n.IsSpecified() || n.IsNull() {
+		return ""
+	}
+	v, err := n.Get()
+	if err != nil {
+		return ""
+	}
+	return v.Format(time.RFC3339)
+}
+
+func nintN(n nullable.Nullable[int]) int64 {
+	if !n.IsSpecified() || n.IsNull() {
+		return 0
+	}
+	v, err := n.Get()
+	if err != nil {
+		return 0
+	}
+	return int64(v)
+}
+
+// Export is a database export job (subset used by the tools).
+type Export struct {
+	ID            string `json:"id"`
+	Format        string `json:"format"`
+	Status        string `json:"status"`
+	Progress      int64  `json:"progress"`
+	IsEncrypted   bool   `json:"is_encrypted"`
+	FileSizeBytes int64  `json:"file_size_bytes,omitempty"`
+	DownloadURL   string `json:"download_url,omitempty"`
+	ErrorMessage  string `json:"error_message,omitempty"`
+	CompletedAt   string `json:"completed_at,omitempty"`
+	ExpiresAt     string `json:"expires_at,omitempty"`
+}
+
+func exportFromAPI(e *apiclient.Export) Export {
+	return Export{
+		ID: e.Id.String(), Format: string(e.Format), Status: string(e.Status), Progress: int64(e.Progress),
+		IsEncrypted: e.IsEncrypted, FileSizeBytes: nintN(e.FileSizeBytes), DownloadURL: nstrN(e.DownloadUrl),
+		ErrorMessage: nstrN(e.ErrorMessage), CompletedAt: ntimeN(e.CompletedAt), ExpiresAt: ntimeN(e.ExpiresAt),
+	}
+}
+
+// ListExports returns the export jobs for a cluster.
+func (c *Client) ListExports(ctx context.Context, clusterID string) ([]Export, error) {
+	resp, err := c.gen.ListExportsWithResponse(ctx, cid(clusterID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]Export, 0, len(*resp.JSON200))
+	for _, s := range *resp.JSON200 {
+		out = append(out, Export{ID: s.Id.String(), Format: string(s.Format), Status: string(s.Status), CompletedAt: ntimeN(s.CompletedAt), ExpiresAt: ntimeN(s.ExpiresAt)})
+	}
+	return out, nil
+}
+
+// GetExport returns a single export job by ID.
+func (c *Client) GetExport(ctx context.Context, clusterID, exportID string) (*Export, error) {
+	resp, err := c.gen.GetExportWithResponse(ctx, cid(clusterID), uid(exportID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	e := exportFromAPI(resp.JSON200)
+	return &e, nil
+}
+
+// CreateExport starts a database export job (asynchronous).
+func (c *Client) CreateExport(ctx context.Context, clusterID, format string, includeCredentials bool, encryptionPassword string) (*Export, error) {
+	body := apiclient.CreateExportJSONRequestBody{Format: apiclient.ExportFormat(format)}
+	if includeCredentials {
+		inc := true
+		body.IncludeCredentials = &inc
+	}
+	if encryptionPassword != "" {
+		body.EncryptionPassword = &encryptionPassword
+	}
+	resp, err := c.gen.CreateExportWithResponse(ctx, cid(clusterID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON202 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	e := exportFromAPI(resp.JSON202)
+	return &e, nil
+}

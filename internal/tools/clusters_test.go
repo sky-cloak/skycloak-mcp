@@ -27,6 +27,8 @@ type stubAPI struct {
 	email    *skycloak.EmailBranding
 	catalog  []skycloak.ExtensionInfo
 	clusExts []skycloak.ClusterExtension
+	exports  []skycloak.Export
+	export   *skycloak.Export
 	err      error
 }
 
@@ -209,6 +211,27 @@ func (s stubAPI) UpgradeExtension(_ context.Context, _, extensionID string) (*sk
 
 func (s stubAPI) UninstallExtension(context.Context, string, string) error {
 	return s.err
+}
+
+func (s stubAPI) ListExports(context.Context, string) ([]skycloak.Export, error) {
+	return s.exports, s.err
+}
+
+func (s stubAPI) GetExport(context.Context, string, string) (*skycloak.Export, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.export == nil {
+		return &skycloak.Export{ID: "x1", Status: "completed", DownloadURL: "https://dl/x.zip"}, nil
+	}
+	return s.export, nil
+}
+
+func (s stubAPI) CreateExport(_ context.Context, _, format string, _ bool, _ string) (*skycloak.Export, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.Export{ID: "x1", Format: format, Status: "pending"}, nil
 }
 
 func TestListClustersHandler(t *testing.T) {

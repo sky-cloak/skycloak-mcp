@@ -43,6 +43,9 @@ type API interface {
 	InstallExtension(ctx context.Context, clusterID, extensionID string, params map[string]string) (*skycloak.ClusterExtension, error)
 	UpgradeExtension(ctx context.Context, clusterID, extensionID string) (*skycloak.ClusterExtension, error)
 	UninstallExtension(ctx context.Context, clusterID, extensionID string) error
+	ListExports(ctx context.Context, clusterID string) ([]skycloak.Export, error)
+	GetExport(ctx context.Context, clusterID, exportID string) (*skycloak.Export, error)
+	CreateExport(ctx context.Context, clusterID, format string, includeCredentials bool, encryptionPassword string) (*skycloak.Export, error)
 }
 
 // Register adds all tools to the server.
@@ -58,6 +61,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerDomainReadTools(s, api)
 	registerBrandingReadTools(s, api)
 	registerExtensionReadTools(s, api)
+	registerExportReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}
