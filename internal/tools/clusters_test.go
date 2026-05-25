@@ -21,6 +21,10 @@ type stubAPI struct {
 	events   []skycloak.EventEntry
 	domains  []skycloak.Domain
 	domain   *skycloak.Domain
+	themes   []skycloak.Theme
+	assign   *skycloak.ThemeAssignment
+	login    *skycloak.LoginBranding
+	email    *skycloak.EmailBranding
 	err      error
 }
 
@@ -136,6 +140,47 @@ func (s stubAPI) VerifyDomain(context.Context, string, string) (*skycloak.Domain
 
 func (s stubAPI) DeleteDomain(context.Context, string, string) error {
 	return s.err
+}
+
+func (s stubAPI) ListThemes(context.Context, string) ([]skycloak.Theme, error) {
+	return s.themes, s.err
+}
+
+func (s stubAPI) GetThemeAssignment(context.Context, string, string) (*skycloak.ThemeAssignment, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.assign == nil {
+		return &skycloak.ThemeAssignment{}, nil
+	}
+	return s.assign, nil
+}
+
+func (s stubAPI) SetThemeAssignment(_ context.Context, _, _ string, a skycloak.ThemeAssignment) (*skycloak.ThemeAssignment, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &a, nil
+}
+
+func (s stubAPI) GetLoginBranding(context.Context, string, string) (*skycloak.LoginBranding, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.login == nil {
+		return &skycloak.LoginBranding{Status: "applied"}, nil
+	}
+	return s.login, nil
+}
+
+func (s stubAPI) GetEmailBranding(context.Context, string, string) (*skycloak.EmailBranding, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.email == nil {
+		return &skycloak.EmailBranding{Status: "applied"}, nil
+	}
+	return s.email, nil
 }
 
 func TestListClustersHandler(t *testing.T) {

@@ -9,6 +9,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - Observability read tools: `get_logs`, `get_security_logs`, `query_events`.
 - Custom-domain tools: `list_domains`, `get_domain` (read); `create_domain`, `verify_domain`, `delete_domain` (write). `create_domain` returns the DNS records to create; `delete_domain` requires `confirm=true`.
+- Branding & theme tools: `list_themes`, `get_theme_assignment`, `get_login_branding`, `get_email_branding` (read); `set_theme_assignment` (write — activates a custom theme per Keycloak theme type, empty string resets to the built-in default).
 
 ## [0.1.0] - 2026-05-25
 

@@ -752,3 +752,150 @@ func (c *Client) DeleteDomain(ctx context.Context, clusterID, domainID string) e
 	}
 	return nil
 }
+
+// ---- Branding & themes ----
+
+// Theme is a custom theme uploaded to a cluster (subset used by the tools).
+type Theme struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Status     string   `json:"status"`
+	ThemeTypes []string `json:"theme_types"`
+	Version    string   `json:"version,omitempty"`
+	FileSize   int64    `json:"file_size"`
+}
+
+func themeFromAPI(t *apiclient.Theme) Theme {
+	out := Theme{ID: t.Id.String(), Name: t.Name, Status: string(t.Status), FileSize: t.FileSize}
+	out.Version = strDeref(t.Version)
+	for _, tt := range t.ThemeTypes {
+		out.ThemeTypes = append(out.ThemeTypes, string(tt))
+	}
+	return out
+}
+
+// ListThemes returns the custom themes uploaded to a cluster.
+func (c *Client) ListThemes(ctx context.Context, clusterID string) ([]Theme, error) {
+	resp, err := c.gen.ListThemesWithResponse(ctx, cid(clusterID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]Theme, 0, len(*resp.JSON200))
+	for i := range *resp.JSON200 {
+		out = append(out, themeFromAPI(&(*resp.JSON200)[i]))
+	}
+	return out, nil
+}
+
+// ThemeAssignment is the active theme per Keycloak theme type for a realm. An
+// empty field means the realm uses Keycloak's built-in default.
+type ThemeAssignment struct {
+	Login   string `json:"login,omitempty"`
+	Account string `json:"account,omitempty"`
+	Admin   string `json:"admin,omitempty"`
+	Email   string `json:"email,omitempty"`
+}
+
+func nThemeID(n nullable.Nullable[apiclient.ThemeId]) string {
+	if !n.IsSpecified() || n.IsNull() {
+		return ""
+	}
+	v, err := n.Get()
+	if err != nil {
+		return ""
+	}
+	return v.String()
+}
+
+func themeIDNullable(s string) nullable.Nullable[apiclient.ThemeId] {
+	if s == "" {
+		return nullable.NewNullNullable[apiclient.ThemeId]()
+	}
+	return nullable.NewNullableWithValue(uid(s))
+}
+
+func themeAssignmentFromAPI(a *apiclient.ThemeAssignment) *ThemeAssignment {
+	return &ThemeAssignment{Login: nThemeID(a.Login), Account: nThemeID(a.Account), Admin: nThemeID(a.Admin), Email: nThemeID(a.Email)}
+}
+
+// GetThemeAssignment returns the realm-level theme assignment.
+func (c *Client) GetThemeAssignment(ctx context.Context, clusterID, realm string) (*ThemeAssignment, error) {
+	resp, err := c.gen.GetThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return themeAssignmentFromAPI(resp.JSON200), nil
+}
+
+// SetThemeAssignment sets the realm-level theme assignment. Empty fields are
+// sent as explicit null (reset to Keycloak's built-in default).
+func (c *Client) SetThemeAssignment(ctx context.Context, clusterID, realm string, a ThemeAssignment) (*ThemeAssignment, error) {
+	body := apiclient.SetThemeAssignmentJSONRequestBody{
+		Login: themeIDNullable(a.Login), Account: themeIDNullable(a.Account),
+		Admin: themeIDNullable(a.Admin), Email: themeIDNullable(a.Email),
+	}
+	resp, err := c.gen.SetThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return themeAssignmentFromAPI(resp.JSON200), nil
+}
+
+// LoginBranding is the login-page branding for a realm (subset used by the tools).
+type LoginBranding struct {
+	PrimaryColor          string `json:"primary_color,omitempty"`
+	BackgroundColor       string `json:"background_color,omitempty"`
+	LogoURL               string `json:"logo_url,omitempty"`
+	RegistrationEnabled   bool   `json:"registration_enabled"`
+	ForgotPasswordEnabled bool   `json:"forgot_password_enabled"`
+	Status                string `json:"status"`
+}
+
+// GetLoginBranding returns the login-branding configuration for a realm.
+func (c *Client) GetLoginBranding(ctx context.Context, clusterID, realm string) (*LoginBranding, error) {
+	resp, err := c.gen.GetLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	b := resp.JSON200
+	return &LoginBranding{
+		PrimaryColor: strDeref(b.PrimaryColor), BackgroundColor: strDeref(b.BackgroundColor), LogoURL: strDeref(b.LogoUrl),
+		RegistrationEnabled: b.RegistrationEnabled, ForgotPasswordEnabled: b.ForgotPasswordEnabled, Status: string(b.Status),
+	}, nil
+}
+
+// EmailBranding is the email-template branding for a realm (subset used by the tools).
+type EmailBranding struct {
+	PrimaryColor       string `json:"primary_color,omitempty"`
+	HeaderLogoLightURL string `json:"header_logo_light_url,omitempty"`
+	FooterCompanyName  string `json:"footer_company_name,omitempty"`
+	Status             string `json:"status"`
+}
+
+// GetEmailBranding returns the email-branding configuration for a realm.
+func (c *Client) GetEmailBranding(ctx context.Context, clusterID, realm string) (*EmailBranding, error) {
+	resp, err := c.gen.GetEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	b := resp.JSON200
+	return &EmailBranding{
+		PrimaryColor: strDeref(b.PrimaryColor), HeaderLogoLightURL: strDeref(b.HeaderLogoLightUrl),
+		FooterCompanyName: strDeref(b.FooterCompanyName), Status: string(b.Status),
+	}, nil
+}

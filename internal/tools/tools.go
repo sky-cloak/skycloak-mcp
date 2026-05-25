@@ -33,6 +33,11 @@ type API interface {
 	CreateDomain(ctx context.Context, clusterID, domain, subdomain string) (*skycloak.Domain, error)
 	VerifyDomain(ctx context.Context, clusterID, domainID string) (*skycloak.Domain, error)
 	DeleteDomain(ctx context.Context, clusterID, domainID string) error
+	ListThemes(ctx context.Context, clusterID string) ([]skycloak.Theme, error)
+	GetThemeAssignment(ctx context.Context, clusterID, realm string) (*skycloak.ThemeAssignment, error)
+	SetThemeAssignment(ctx context.Context, clusterID, realm string, a skycloak.ThemeAssignment) (*skycloak.ThemeAssignment, error)
+	GetLoginBranding(ctx context.Context, clusterID, realm string) (*skycloak.LoginBranding, error)
+	GetEmailBranding(ctx context.Context, clusterID, realm string) (*skycloak.EmailBranding, error)
 }
 
 // Register adds all tools to the server.
@@ -46,6 +51,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerIdentityProviderReadTools(s, api)
 	registerObservabilityReadTools(s, api)
 	registerDomainReadTools(s, api)
+	registerBrandingReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}
