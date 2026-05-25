@@ -13,9 +13,9 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for **
 
 ## Tools
 
-**Read-only** (always available): `list_clusters`, `get_cluster`, `list_realms`, `list_applications`, `list_identity_providers`, `get_logs`, `get_security_logs`, `query_events`, `list_domains`, `get_domain`, `list_themes`, `get_theme_assignment`, `get_login_branding`, `get_email_branding`.
+**Read-only** (always available): `list_clusters`, `get_cluster`, `list_realms`, `list_applications`, `list_identity_providers`, `get_logs`, `get_security_logs`, `query_events`, `list_domains`, `get_domain`, `list_themes`, `get_theme_assignment`, `get_login_branding`, `get_email_branding`, `list_extensions`, `list_cluster_extensions`.
 
-**Write** (require `--allow-writes`): `create_cluster`, `delete_cluster`, `create_realm`, `delete_realm`, `create_application`, `delete_application`, `create_identity_provider` (OIDC), `delete_identity_provider`, `create_domain`, `verify_domain`, `delete_domain`, `set_theme_assignment`. Destructive tools (`delete_*`) require `confirm=true`. `create_cluster` is asynchronous — poll `get_cluster` until the cluster is `available`. `create_domain` returns the DNS records the customer must create; `verify_domain` triggers a DNS check. `set_theme_assignment` activates a custom theme per Keycloak theme type (empty string resets to the built-in default).
+**Write** (require `--allow-writes`): `create_cluster`, `delete_cluster`, `create_realm`, `delete_realm`, `create_application`, `delete_application`, `create_identity_provider` (OIDC), `delete_identity_provider`, `create_domain`, `verify_domain`, `delete_domain`, `set_theme_assignment`, `install_extension`, `upgrade_extension`, `uninstall_extension`. Destructive tools (`delete_*`) require `confirm=true`. `create_cluster` is asynchronous — poll `get_cluster` until the cluster is `available`. `create_domain` returns the DNS records the customer must create; `verify_domain` triggers a DNS check. `set_theme_assignment` activates a custom theme per Keycloak theme type (empty string resets to the built-in default).
 
 ## Connecting
 

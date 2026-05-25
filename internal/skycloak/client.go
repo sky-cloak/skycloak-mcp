@@ -899,3 +899,139 @@ func (c *Client) GetEmailBranding(ctx context.Context, clusterID, realm string) 
 		FooterCompanyName: strDeref(b.FooterCompanyName), Status: string(b.Status),
 	}, nil
 }
+
+// ---- Extensions ----
+
+func nstrN(n nullable.Nullable[string]) string {
+	if !n.IsSpecified() || n.IsNull() {
+		return ""
+	}
+	v, err := n.Get()
+	if err != nil {
+		return ""
+	}
+	return v
+}
+
+// ExtensionInfo is a catalog entry from the extensions marketplace.
+type ExtensionInfo struct {
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description,omitempty"`
+	Source           string   `json:"source"`
+	KeycloakVersions []string `json:"keycloak_versions"`
+	DocumentationURL string   `json:"documentation_url,omitempty"`
+}
+
+func extensionInfoFromAPI(e *apiclient.Extension) ExtensionInfo {
+	return ExtensionInfo{
+		ID: e.Id.String(), Name: e.Name, Description: nstrN(e.Description), Source: string(e.Source),
+		KeycloakVersions: e.KeycloakVersions, DocumentationURL: nstrN(e.DocumentationUrl),
+	}
+}
+
+// ListExtensions returns the extension catalog available to the workspace.
+func (c *Client) ListExtensions(ctx context.Context) ([]ExtensionInfo, error) {
+	resp, err := c.gen.ListExtensionsWithResponse(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ExtensionInfo, 0, len(*resp.JSON200))
+	for i := range *resp.JSON200 {
+		out = append(out, extensionInfoFromAPI(&(*resp.JSON200)[i]))
+	}
+	return out, nil
+}
+
+// GetExtension returns a single catalog extension by ID.
+func (c *Client) GetExtension(ctx context.Context, extensionID string) (*ExtensionInfo, error) {
+	resp, err := c.gen.GetExtensionWithResponse(ctx, uid(extensionID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	e := extensionInfoFromAPI(resp.JSON200)
+	return &e, nil
+}
+
+// ClusterExtension is an extension installed on a cluster.
+type ClusterExtension struct {
+	ExtensionID      string `json:"extension_id"`
+	ExtensionName    string `json:"extension_name"`
+	Source           string `json:"source"`
+	InstalledVersion string `json:"installed_version"`
+	AvailableVersion string `json:"available_version,omitempty"`
+	Status           string `json:"status"`
+	UpgradeAvailable bool   `json:"upgrade_available"`
+}
+
+func clusterExtensionFromAPI(e *apiclient.ClusterExtension) ClusterExtension {
+	return ClusterExtension{
+		ExtensionID: e.ExtensionId.String(), ExtensionName: e.ExtensionName, Source: string(e.ExtensionSource),
+		InstalledVersion: e.InstalledVersion, AvailableVersion: nstrN(e.AvailableVersion),
+		Status: string(e.Status), UpgradeAvailable: e.UpgradeAvailable,
+	}
+}
+
+// ListClusterExtensions returns the extensions installed on a cluster.
+func (c *Client) ListClusterExtensions(ctx context.Context, clusterID string) ([]ClusterExtension, error) {
+	resp, err := c.gen.ListClusterExtensionsWithResponse(ctx, cid(clusterID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ClusterExtension, 0, len(*resp.JSON200))
+	for i := range *resp.JSON200 {
+		out = append(out, clusterExtensionFromAPI(&(*resp.JSON200)[i]))
+	}
+	return out, nil
+}
+
+// InstallExtension installs an extension on a cluster (asynchronous).
+func (c *Client) InstallExtension(ctx context.Context, clusterID, extensionID string, params map[string]string) (*ClusterExtension, error) {
+	body := apiclient.InstallExtensionJSONRequestBody{ExtensionId: uid(extensionID)}
+	if len(params) > 0 {
+		body.Parameters = &params
+	}
+	resp, err := c.gen.InstallExtensionWithResponse(ctx, cid(clusterID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON202 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	e := clusterExtensionFromAPI(resp.JSON202)
+	return &e, nil
+}
+
+// UpgradeExtension upgrades an installed extension to the latest version (asynchronous).
+func (c *Client) UpgradeExtension(ctx context.Context, clusterID, extensionID string) (*ClusterExtension, error) {
+	resp, err := c.gen.UpgradeClusterExtensionWithResponse(ctx, cid(clusterID), uid(extensionID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON202 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	e := clusterExtensionFromAPI(resp.JSON202)
+	return &e, nil
+}
+
+// UninstallExtension removes an extension from a cluster.
+func (c *Client) UninstallExtension(ctx context.Context, clusterID, extensionID string) error {
+	resp, err := c.gen.UninstallExtensionWithResponse(ctx, cid(clusterID), uid(extensionID))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}

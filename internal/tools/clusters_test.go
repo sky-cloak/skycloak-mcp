@@ -25,6 +25,8 @@ type stubAPI struct {
 	assign   *skycloak.ThemeAssignment
 	login    *skycloak.LoginBranding
 	email    *skycloak.EmailBranding
+	catalog  []skycloak.ExtensionInfo
+	clusExts []skycloak.ClusterExtension
 	err      error
 }
 
@@ -181,6 +183,32 @@ func (s stubAPI) GetEmailBranding(context.Context, string, string) (*skycloak.Em
 		return &skycloak.EmailBranding{Status: "applied"}, nil
 	}
 	return s.email, nil
+}
+
+func (s stubAPI) ListExtensions(context.Context) ([]skycloak.ExtensionInfo, error) {
+	return s.catalog, s.err
+}
+
+func (s stubAPI) ListClusterExtensions(context.Context, string) ([]skycloak.ClusterExtension, error) {
+	return s.clusExts, s.err
+}
+
+func (s stubAPI) InstallExtension(_ context.Context, _, extensionID string, _ map[string]string) (*skycloak.ClusterExtension, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.ClusterExtension{ExtensionID: extensionID, ExtensionName: "Ext", Status: "installing"}, nil
+}
+
+func (s stubAPI) UpgradeExtension(_ context.Context, _, extensionID string) (*skycloak.ClusterExtension, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.ClusterExtension{ExtensionID: extensionID, ExtensionName: "Ext", Status: "upgrading"}, nil
+}
+
+func (s stubAPI) UninstallExtension(context.Context, string, string) error {
+	return s.err
 }
 
 func TestListClustersHandler(t *testing.T) {

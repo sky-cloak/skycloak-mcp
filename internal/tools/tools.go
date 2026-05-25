@@ -38,6 +38,11 @@ type API interface {
 	SetThemeAssignment(ctx context.Context, clusterID, realm string, a skycloak.ThemeAssignment) (*skycloak.ThemeAssignment, error)
 	GetLoginBranding(ctx context.Context, clusterID, realm string) (*skycloak.LoginBranding, error)
 	GetEmailBranding(ctx context.Context, clusterID, realm string) (*skycloak.EmailBranding, error)
+	ListExtensions(ctx context.Context) ([]skycloak.ExtensionInfo, error)
+	ListClusterExtensions(ctx context.Context, clusterID string) ([]skycloak.ClusterExtension, error)
+	InstallExtension(ctx context.Context, clusterID, extensionID string, params map[string]string) (*skycloak.ClusterExtension, error)
+	UpgradeExtension(ctx context.Context, clusterID, extensionID string) (*skycloak.ClusterExtension, error)
+	UninstallExtension(ctx context.Context, clusterID, extensionID string) error
 }
 
 // Register adds all tools to the server.
@@ -52,6 +57,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerObservabilityReadTools(s, api)
 	registerDomainReadTools(s, api)
 	registerBrandingReadTools(s, api)
+	registerExtensionReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}
