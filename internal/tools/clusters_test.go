@@ -19,6 +19,8 @@ type stubAPI struct {
 	logs     []skycloak.LogEntry
 	secLogs  []skycloak.SecurityLogEntry
 	events   []skycloak.EventEntry
+	domains  []skycloak.Domain
+	domain   *skycloak.Domain
 	err      error
 }
 
@@ -99,6 +101,41 @@ func (s stubAPI) GetSecurityLogs(context.Context, string, skycloak.SecurityLogQu
 
 func (s stubAPI) QueryEvents(context.Context, string, skycloak.EventQuery) ([]skycloak.EventEntry, error) {
 	return s.events, s.err
+}
+
+func (s stubAPI) ListDomains(context.Context, string) ([]skycloak.Domain, error) {
+	return s.domains, s.err
+}
+
+func (s stubAPI) GetDomain(context.Context, string, string) (*skycloak.Domain, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.domain == nil {
+		return nil, errors.New("no domain configured in stub")
+	}
+	return s.domain, nil
+}
+
+func (s stubAPI) CreateDomain(_ context.Context, _, domain, subdomain string) (*skycloak.Domain, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.Domain{ID: "d1", Domain: domain, Subdomain: subdomain, VerificationStatus: "pending"}, nil
+}
+
+func (s stubAPI) VerifyDomain(context.Context, string, string) (*skycloak.Domain, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.domain == nil {
+		return &skycloak.Domain{ID: "d1", VerificationStatus: "verified"}, nil
+	}
+	return s.domain, nil
+}
+
+func (s stubAPI) DeleteDomain(context.Context, string, string) error {
+	return s.err
 }
 
 func TestListClustersHandler(t *testing.T) {

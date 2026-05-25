@@ -644,3 +644,111 @@ func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery
 	}
 	return out, nil
 }
+
+// ---- Custom domains ----
+
+func uid(s string) uuid.UUID { id, _ := uuid.Parse(s); return id }
+
+// DNSRecord is a DNS record the customer must create for a domain.
+type DNSRecord struct {
+	Type  string `json:"type"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// Domain is a custom domain (subset used by the tools).
+type Domain struct {
+	ID                 string      `json:"id"`
+	Domain             string      `json:"domain"`
+	Subdomain          string      `json:"subdomain,omitempty"`
+	CnameTarget        string      `json:"cname_target,omitempty"`
+	SSLStatus          string      `json:"ssl_status,omitempty"`
+	VerificationStatus string      `json:"verification_status,omitempty"`
+	IsActive           bool        `json:"is_active"`
+	DNSRecords         []DNSRecord `json:"dns_records,omitempty"`
+}
+
+func domainFromAPI(d *apiclient.Domain) Domain {
+	out := Domain{
+		ID: d.Id.String(), Domain: string(d.Domain), CnameTarget: d.CnameTarget,
+		SSLStatus: string(d.SslStatus), VerificationStatus: string(d.VerificationStatus), IsActive: d.IsActive,
+	}
+	if d.Subdomain != nil {
+		out.Subdomain = *d.Subdomain
+	}
+	for _, r := range d.DnsRecords {
+		out.DNSRecords = append(out.DNSRecords, DNSRecord{Type: string(r.Type), Name: r.Name, Value: r.Value})
+	}
+	return out
+}
+
+// ListDomains returns the custom domains on a cluster.
+func (c *Client) ListDomains(ctx context.Context, clusterID string) ([]Domain, error) {
+	resp, err := c.gen.ListDomainsWithResponse(ctx, cid(clusterID), nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]Domain, 0, len(*resp.JSON200))
+	for i := range *resp.JSON200 {
+		out = append(out, domainFromAPI(&(*resp.JSON200)[i]))
+	}
+	return out, nil
+}
+
+// GetDomain returns a custom domain by ID.
+func (c *Client) GetDomain(ctx context.Context, clusterID, domainID string) (*Domain, error) {
+	resp, err := c.gen.GetDomainWithResponse(ctx, cid(clusterID), uid(domainID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	d := domainFromAPI(resp.JSON200)
+	return &d, nil
+}
+
+// CreateDomain adds a custom domain; the returned DNSRecords must be created by the customer.
+func (c *Client) CreateDomain(ctx context.Context, clusterID, domain, subdomain string) (*Domain, error) {
+	body := apiclient.CreateDomainJSONRequestBody{Domain: domain}
+	if subdomain != "" {
+		body.Subdomain = &subdomain
+	}
+	resp, err := c.gen.CreateDomainWithResponse(ctx, cid(clusterID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON201 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	d := domainFromAPI(resp.JSON201)
+	return &d, nil
+}
+
+// VerifyDomain triggers DNS verification and returns the updated domain.
+func (c *Client) VerifyDomain(ctx context.Context, clusterID, domainID string) (*Domain, error) {
+	resp, err := c.gen.VerifyDomainWithResponse(ctx, cid(clusterID), uid(domainID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	d := domainFromAPI(resp.JSON200)
+	return &d, nil
+}
+
+// DeleteDomain removes a custom domain.
+func (c *Client) DeleteDomain(ctx context.Context, clusterID, domainID string) error {
+	resp, err := c.gen.DeleteDomainWithResponse(ctx, cid(clusterID), uid(domainID))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}

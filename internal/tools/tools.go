@@ -28,6 +28,11 @@ type API interface {
 	GetLogs(ctx context.Context, clusterID string, q skycloak.LogQuery) ([]skycloak.LogEntry, error)
 	GetSecurityLogs(ctx context.Context, clusterID string, q skycloak.SecurityLogQuery) ([]skycloak.SecurityLogEntry, error)
 	QueryEvents(ctx context.Context, clusterID string, q skycloak.EventQuery) ([]skycloak.EventEntry, error)
+	ListDomains(ctx context.Context, clusterID string) ([]skycloak.Domain, error)
+	GetDomain(ctx context.Context, clusterID, domainID string) (*skycloak.Domain, error)
+	CreateDomain(ctx context.Context, clusterID, domain, subdomain string) (*skycloak.Domain, error)
+	VerifyDomain(ctx context.Context, clusterID, domainID string) (*skycloak.Domain, error)
+	DeleteDomain(ctx context.Context, clusterID, domainID string) error
 }
 
 // Register adds all tools to the server.
@@ -40,6 +45,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerApplicationReadTools(s, api)
 	registerIdentityProviderReadTools(s, api)
 	registerObservabilityReadTools(s, api)
+	registerDomainReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}

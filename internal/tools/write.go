@@ -14,6 +14,7 @@ import (
 // write scopes. Destructive tools set DestructiveHint and require a typed
 // confirmation argument.
 func registerWriteTools(s *mcp.Server, api API) {
+	registerDomainWriteTools(s, api)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_cluster",
 		Description: "Provision a new Keycloak cluster. Asynchronous: the returned cluster starts in a provisioning state — poll skycloak_get_cluster until its status is 'available'. Requires --allow-writes.",
