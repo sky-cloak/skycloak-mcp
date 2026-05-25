@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.skycloak/skycloak-mcp",
+  "description": "Manage your Skycloak managed-Keycloak environment from your AI assistant — provision clusters, realms, OIDC/SAML applications and SSO identity providers, and inspect events and insights, all with your Skycloak API key. Skycloak is managed Keycloak hosting; create a free account and key at https://app.skycloak.io.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/sky-cloak/skycloak-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://skycloak.io",
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/sky-cloak/skycloak-mcp",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "SKYCLOAK_API_KEY",
+          "description": "Skycloak API key, created in the Skycloak dashboard (https://app.skycloak.io). Scopes the connection to that key's workspace.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "SKYCLOAK_ENDPOINT",
+          "description": "Public API base URL. Defaults to https://api.skycloak.io.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

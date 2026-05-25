@@ -77,6 +77,10 @@ The client in `internal/apiclient` is generated from `internal/apiclient/openapi
 
 Requests are retried on `429`/`5xx` with `Retry-After`-aware backoff.
 
+## Distribution
+
+Released as GitHub binaries + a `ghcr.io/sky-cloak/skycloak-mcp` container image on each tag. See [DISTRIBUTION.md](./DISTRIBUTION.md) for the discovery channels (MCP Registry, Claude/Cursor directories).
+
 ## License
 
 [Apache-2.0](./LICENSE).
