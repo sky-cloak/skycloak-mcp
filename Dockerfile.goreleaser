@@ -1,0 +1,7 @@
+# Used by goreleaser: the binary is already built and placed in the context.
+# (The root Dockerfile builds from source for local `make docker`.)
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY skycloak-mcp /usr/local/bin/skycloak-mcp
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/skycloak-mcp"]
+CMD ["--transport", "stdio"]

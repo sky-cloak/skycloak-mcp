@@ -30,9 +30,10 @@ dockers:
   - image_templates:
       - "ghcr.io/sky-cloak/skycloak-mcp:{{ .Version }}"
       - "ghcr.io/sky-cloak/skycloak-mcp:latest"
-    dockerfile: Dockerfile
-    build_flag_templates:
-      - "--build-arg=VERSION={{ .Version }}"
+    dockerfile: Dockerfile.goreleaser
+    goos: linux
+    goarch: amd64
+    ids: [skycloak-mcp]
 
 changelog:
   use: github
