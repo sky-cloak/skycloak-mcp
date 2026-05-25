@@ -1,61 +1,74 @@
-// Package skycloak is a minimal typed client for the Skycloak public API.
-//
-// This is a hand-written subset covering the endpoints the MCP server uses
-// today. The full client is generated from the OpenAPI spec via oapi-codegen
-// (internal/apiclient); the types and method shapes here are kept compatible
-// with that client.
+// Package skycloak is a thin facade over the generated Skycloak API client
+// (internal/apiclient). It exposes the domain structs and methods the MCP
+// tools consume, mapping them to/from the generated wire types. The HTTP layer
+// and wire types are generated from the OpenAPI spec and stay in sync on
+// `make generate`.
 package skycloak
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"strconv"
 	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/sky-cloak/skycloak-mcp/internal/apiclient"
 )
 
 const defaultEndpoint = "https://api.skycloak.io"
 
-// Client talks to the Skycloak public API. Every request is workspace-scoped by
-// the API key.
+// Client wraps the generated API client.
 type Client struct {
-	httpClient *http.Client
-	endpoint   string
-	apiKey     string
-	apiVersion string
-	userAgent  string
+	gen *apiclient.ClientWithResponses
 }
 
 // Option configures a Client.
-type Option func(*Client)
+type Option func(*config)
+
+type config struct {
+	httpClient *http.Client
+	userAgent  string
+}
 
 // WithHTTPClient overrides the underlying HTTP client (useful in tests).
-func WithHTTPClient(h *http.Client) Option { return func(c *Client) { c.httpClient = h } }
+func WithHTTPClient(h *http.Client) Option { return func(c *config) { c.httpClient = h } }
 
 // WithUserAgent sets the User-Agent header sent on every request.
-func WithUserAgent(ua string) Option { return func(c *Client) { c.userAgent = ua } }
+func WithUserAgent(ua string) Option { return func(c *config) { c.userAgent = ua } }
 
 // New builds a Client. endpoint defaults to https://api.skycloak.io when empty.
 func New(endpoint, apiKey, apiVersion string, opts ...Option) *Client {
+	cfg := &config{httpClient: &http.Client{Timeout: 30 * time.Second}, userAgent: "skycloak-go/dev"}
+	for _, o := range opts {
+		o(cfg)
+	}
 	if endpoint == "" {
 		endpoint = defaultEndpoint
 	}
-	c := &Client{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		endpoint:   endpoint,
-		apiKey:     apiKey,
-		apiVersion: apiVersion,
-		userAgent:  "skycloak-go/dev",
+
+	editor := func(_ context.Context, req *http.Request) error {
+		req.Header.Set("apikey", apiKey)
+		req.Header.Set("Accept", "application/json")
+		if apiVersion != "" {
+			req.Header.Set("API-Version", apiVersion)
+		}
+		if cfg.userAgent != "" {
+			req.Header.Set("User-Agent", cfg.userAgent)
+		}
+		return nil
 	}
-	for _, o := range opts {
-		o(c)
+
+	gen, err := apiclient.NewClientWithResponses(endpoint,
+		apiclient.WithHTTPClient(cfg.httpClient),
+		apiclient.WithRequestEditorFn(editor),
+	)
+	if err != nil {
+		panic(fmt.Sprintf("skycloak: invalid endpoint %q: %v", endpoint, err))
 	}
-	return c
+	return &Client{gen: gen}
 }
 
 // Problem is the RFC 9457 application/problem+json error body.
@@ -66,7 +79,7 @@ type Problem struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// APIError wraps a non-2xx response from the public API.
+// APIError wraps a non-2xx response.
 type APIError struct {
 	StatusCode int
 	Problem    Problem
@@ -91,207 +104,191 @@ func AsAPIError(err error) (*APIError, bool) {
 	return nil, false
 }
 
-// Cluster mirrors the public API Cluster resource (subset used today).
-type Cluster struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	Size      string `json:"size"`
-	Version   string `json:"version"`
-	Location  string `json:"location"`
-	Status    string `json:"status"`
-	URL       string `json:"url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
+func statusError(resp *http.Response, body []byte) error {
+	code := 0
+	if resp != nil {
+		code = resp.StatusCode
+	}
+	e := &APIError{StatusCode: code}
+	_ = json.Unmarshal(body, &e.Problem)
+	return e
 }
 
-// ListClustersParams holds the query parameters for ListClusters.
+func fmtTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
+}
+
+// cid parses a cluster ID string into the generated UUID type.
+func cid(s string) apiclient.ClusterId {
+	id, _ := uuid.Parse(s)
+	return id
+}
+
+// Cluster mirrors the public API Cluster resource (subset used by the tools).
+type Cluster struct {
+	ID        string
+	Name      string
+	Type      string
+	Size      string
+	Version   string
+	Location  string
+	Status    string
+	URL       string
+	CreatedAt string
+	UpdatedAt string
+}
+
+// ListClustersParams holds optional pagination parameters (the clusters list is
+// not paginated server-side today, so they are accepted for forward
+// compatibility but ignored).
 type ListClustersParams struct {
 	Limit  int
 	Offset int
 }
 
-// ListClusters returns the clusters in the workspace the API key belongs to.
-func (c *Client) ListClusters(ctx context.Context, p ListClustersParams) ([]Cluster, error) {
-	q := url.Values{}
-	if p.Limit > 0 {
-		q.Set("limit", strconv.Itoa(p.Limit))
-	}
-	if p.Offset > 0 {
-		q.Set("offset", strconv.Itoa(p.Offset))
-	}
-	var out []Cluster
-	if err := c.do(ctx, http.MethodGet, "/clusters", q, &out); err != nil {
+// ListClusters returns the workspace's clusters.
+func (c *Client) ListClusters(ctx context.Context, _ ListClustersParams) ([]Cluster, error) {
+	resp, err := c.gen.ListClustersWithResponse(ctx)
+	if err != nil {
 		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]Cluster, 0, len(*resp.JSON200))
+	for _, s := range *resp.JSON200 {
+		out = append(out, Cluster{
+			ID: s.Id.String(), Name: string(s.Name), Type: string(s.Type), Size: string(s.Size),
+			Version: string(s.Version), Location: string(s.Location), Status: string(s.Status),
+			URL: s.Url, CreatedAt: fmtTime(s.CreatedAt), UpdatedAt: fmtTime(s.UpdatedAt),
+		})
 	}
 	return out, nil
 }
 
-// GetCluster returns a single cluster by its ID.
+// GetCluster returns a single cluster by ID.
 func (c *Client) GetCluster(ctx context.Context, id string) (*Cluster, error) {
-	var out Cluster
-	if err := c.do(ctx, http.MethodGet, "/clusters/"+url.PathEscape(id), nil, &out); err != nil {
+	resp, err := c.gen.GetClusterWithResponse(ctx, cid(id))
+	if err != nil {
 		return nil, err
 	}
-	return &out, nil
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	cl := resp.JSON200
+	return &Cluster{
+		ID: cl.Id.String(), Name: string(cl.Name), Type: string(cl.Type), Size: string(cl.Size),
+		Version: string(cl.Version), Location: string(cl.Location), Status: string(cl.Status),
+		URL: cl.Url, CreatedAt: fmtTime(cl.CreatedAt), UpdatedAt: fmtTime(cl.UpdatedAt),
+	}, nil
 }
 
-// Realm mirrors the public API Realm resource (subset used today).
+// Realm mirrors the public API Realm resource (subset used by the tools).
 type Realm struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name,omitempty"`
-	Enabled     bool   `json:"enabled"`
+	Name        string
+	DisplayName string
+	Enabled     bool
 }
 
 // ListRealms returns the realms in a cluster.
 func (c *Client) ListRealms(ctx context.Context, clusterID string) ([]Realm, error) {
-	var out []Realm
-	if err := c.do(ctx, http.MethodGet, "/clusters/"+url.PathEscape(clusterID)+"/realms", nil, &out); err != nil {
+	resp, err := c.gen.ListRealmsWithResponse(ctx, cid(clusterID))
+	if err != nil {
 		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]Realm, 0, len(*resp.JSON200))
+	for _, r := range *resp.JSON200 {
+		out = append(out, Realm{Name: string(r.Name), DisplayName: string(r.DisplayName), Enabled: r.Enabled})
 	}
 	return out, nil
 }
 
-// Application mirrors the public API Application resource (subset used today).
+// CreateRealm creates a realm (name + optional display name).
+func (c *Client) CreateRealm(ctx context.Context, clusterID string, r Realm) (*Realm, error) {
+	body := apiclient.CreateRealmJSONRequestBody{Name: apiclient.RealmName(r.Name)}
+	if r.DisplayName != "" {
+		dn := apiclient.RealmDisplayName(r.DisplayName)
+		body.DisplayName = &dn
+	}
+	resp, err := c.gen.CreateRealmWithResponse(ctx, cid(clusterID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON201 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := resp.JSON201
+	return &Realm{Name: string(out.Name), DisplayName: string(out.DisplayName), Enabled: out.Enabled}, nil
+}
+
+// DeleteRealm deletes a realm and all of its data.
+func (c *Client) DeleteRealm(ctx context.Context, clusterID, name string) error {
+	resp, err := c.gen.DeleteRealmWithResponse(ctx, cid(clusterID), apiclient.RealmName(name))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// Application mirrors the public API Application resource (subset used by the tools).
 type Application struct {
-	ClientID string `json:"client_id"`
-	Name     string `json:"name,omitempty"`
-	Type     string `json:"type,omitempty"`
-	Protocol string `json:"protocol,omitempty"`
-	Status   string `json:"status,omitempty"`
+	ClientID string
+	Name     string
+	Type     string
+	Protocol string
+	Status   string
 }
 
 // ListApplications returns the applications in a realm.
 func (c *Client) ListApplications(ctx context.Context, clusterID, realm string) ([]Application, error) {
-	var out []Application
-	path := "/clusters/" + url.PathEscape(clusterID) + "/realms/" + url.PathEscape(realm) + "/applications"
-	if err := c.do(ctx, http.MethodGet, path, nil, &out); err != nil {
+	resp, err := c.gen.ListApplicationsWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
+	if err != nil {
 		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]Application, 0, len(*resp.JSON200))
+	for _, a := range *resp.JSON200 {
+		out = append(out, Application{
+			ClientID: string(a.ClientId), Name: a.Name, Type: string(a.Type),
+			Protocol: string(a.Protocol), Status: string(a.Status),
+		})
 	}
 	return out, nil
 }
 
 // IdentityProvider mirrors the public API identity-provider resource (subset).
 type IdentityProvider struct {
-	ProviderID  string `json:"provider_id"`
-	Type        string `json:"type,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
-	Enabled     bool   `json:"enabled"`
+	ProviderID  string
+	Type        string
+	DisplayName string
+	Enabled     bool
 }
 
 // ListIdentityProviders returns the identity providers in a realm.
 func (c *Client) ListIdentityProviders(ctx context.Context, clusterID, realm string) ([]IdentityProvider, error) {
-	var out []IdentityProvider
-	path := "/clusters/" + url.PathEscape(clusterID) + "/realms/" + url.PathEscape(realm) + "/identity-providers"
-	if err := c.do(ctx, http.MethodGet, path, nil, &out); err != nil {
+	resp, err := c.gen.ListIdentityProvidersWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	if err != nil {
 		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]IdentityProvider, 0, len(*resp.JSON200))
+	for _, p := range *resp.JSON200 {
+		out = append(out, IdentityProvider{
+			ProviderID: string(p.ProviderId), Type: string(p.Type), DisplayName: p.DisplayName, Enabled: p.Enabled,
+		})
 	}
 	return out, nil
-}
-
-// CreateRealm creates a realm in a cluster.
-func (c *Client) CreateRealm(ctx context.Context, clusterID string, r Realm) (*Realm, error) {
-	var out Realm
-	path := "/clusters/" + url.PathEscape(clusterID) + "/realms"
-	if err := c.doBody(ctx, http.MethodPost, path, r, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// DeleteRealm deletes a realm and all of its data.
-func (c *Client) DeleteRealm(ctx context.Context, clusterID, name string) error {
-	path := "/clusters/" + url.PathEscape(clusterID) + "/realms/" + url.PathEscape(name)
-	return c.doBody(ctx, http.MethodDelete, path, nil, nil)
-}
-
-// doBody performs a request with an optional JSON body and optional JSON
-// response decoding. Used by the write methods.
-func (c *Client) doBody(ctx context.Context, method, path string, body, out any) error {
-	var reader io.Reader
-	if body != nil {
-		buf, err := json.Marshal(body)
-		if err != nil {
-			return err
-		}
-		reader = bytes.NewReader(buf)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, c.endpoint+path, reader)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("apikey", c.apiKey)
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if c.apiVersion != "" {
-		req.Header.Set("API-Version", c.apiVersion)
-	}
-	if c.userAgent != "" {
-		req.Header.Set("User-Agent", c.userAgent)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		apiErr := &APIError{StatusCode: resp.StatusCode}
-		_ = json.Unmarshal(data, &apiErr.Problem)
-		return apiErr
-	}
-	if out != nil && len(data) > 0 {
-		if err := json.Unmarshal(data, out); err != nil {
-			return fmt.Errorf("decoding response: %w", err)
-		}
-	}
-	return nil
-}
-
-func (c *Client) do(ctx context.Context, method, path string, query url.Values, out any) error {
-	u := c.endpoint + path
-	if len(query) > 0 {
-		u += "?" + query.Encode()
-	}
-	req, err := http.NewRequestWithContext(ctx, method, u, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("apikey", c.apiKey)
-	req.Header.Set("Accept", "application/json")
-	if c.apiVersion != "" {
-		req.Header.Set("API-Version", c.apiVersion)
-	}
-	if c.userAgent != "" {
-		req.Header.Set("User-Agent", c.userAgent)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		apiErr := &APIError{StatusCode: resp.StatusCode}
-		_ = json.Unmarshal(data, &apiErr.Problem)
-		return apiErr
-	}
-	if out != nil && len(data) > 0 {
-		if err := json.Unmarshal(data, out); err != nil {
-			return fmt.Errorf("decoding response: %w", err)
-		}
-	}
-	return nil
 }
