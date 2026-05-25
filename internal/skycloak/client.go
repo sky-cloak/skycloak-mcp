@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/oapi-codegen/nullable"
 
 	"github.com/sky-cloak/skycloak-mcp/internal/apiclient"
 )
@@ -464,6 +465,181 @@ func (c *Client) ListIdentityProviders(ctx context.Context, clusterID, realm str
 	for _, p := range *resp.JSON200 {
 		out = append(out, IdentityProvider{
 			ProviderID: string(p.ProviderId), Type: string(p.Type), DisplayName: p.DisplayName, Enabled: p.Enabled,
+		})
+	}
+	return out, nil
+}
+
+// ---- Observability: logs, security logs, events ----
+
+func nstr(n nullable.Nullable[string]) string {
+	if v, err := n.Get(); err == nil {
+		return v
+	}
+	return ""
+}
+
+// LogQuery filters a cluster log query.
+type LogQuery struct {
+	Limit  int
+	Level  string
+	Search string
+}
+
+// LogEntry is one cluster log line.
+type LogEntry struct {
+	Timestamp  string `json:"timestamp"`
+	Level      string `json:"level"`
+	Category   string `json:"category"`
+	Message    string `json:"message"`
+	Source     string `json:"source,omitempty"`
+	ThreadName string `json:"thread_name,omitempty"`
+}
+
+// GetLogs returns a page of cluster logs.
+func (c *Client) GetLogs(ctx context.Context, clusterID string, q LogQuery) ([]LogEntry, error) {
+	params := &apiclient.ListClusterLogsParams{}
+	if q.Limit > 0 {
+		l := apiclient.LogPageLimit(q.Limit)
+		params.Limit = &l
+	}
+	if q.Level != "" {
+		lv := apiclient.LogLevel(q.Level)
+		params.Level = &lv
+	}
+	if q.Search != "" {
+		params.Search = &q.Search
+	}
+	resp, err := c.gen.ListClusterLogsWithResponse(ctx, cid(clusterID), params)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]LogEntry, 0, len(*resp.JSON200))
+	for _, l := range *resp.JSON200 {
+		out = append(out, LogEntry{
+			Timestamp: l.Timestamp.Format(time.RFC3339), Level: string(l.Level), Category: l.Category,
+			Message: l.Message, Source: l.Source, ThreadName: l.ThreadName,
+		})
+	}
+	return out, nil
+}
+
+// SecurityLogQuery filters a security log query.
+type SecurityLogQuery struct {
+	Limit  int
+	Search string
+}
+
+// SecurityLogEntry is one WAF/security log line.
+type SecurityLogEntry struct {
+	Timestamp string `json:"timestamp"`
+	Type      string `json:"type"`
+	Action    string `json:"action"`
+	SourceIP  string `json:"source_ip,omitempty"`
+	Country   string `json:"country,omitempty"`
+	Severity  string `json:"severity,omitempty"`
+	Method    string `json:"method,omitempty"`
+	URI       string `json:"uri,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
+// GetSecurityLogs returns a page of cluster security (WAF) logs.
+func (c *Client) GetSecurityLogs(ctx context.Context, clusterID string, q SecurityLogQuery) ([]SecurityLogEntry, error) {
+	params := &apiclient.ListClusterSecurityLogsParams{}
+	if q.Limit > 0 {
+		l := apiclient.LogPageLimit(q.Limit)
+		params.Limit = &l
+	}
+	if q.Search != "" {
+		params.Search = &q.Search
+	}
+	resp, err := c.gen.ListClusterSecurityLogsWithResponse(ctx, cid(clusterID), params)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]SecurityLogEntry, 0, len(*resp.JSON200))
+	for _, s := range *resp.JSON200 {
+		out = append(out, SecurityLogEntry{
+			Timestamp: s.Timestamp.Format(time.RFC3339), Type: string(s.Type), Action: string(s.Action),
+			SourceIP: s.SourceIp, Country: nstr(s.Country), Severity: nstr(s.Severity),
+			Method: s.Method, URI: s.Uri, Message: s.Message,
+		})
+	}
+	return out, nil
+}
+
+// EventQuery filters an events query.
+type EventQuery struct {
+	Limit    int
+	Category string
+	Realm    string
+	Username string
+	Search   string
+}
+
+// EventEntry is one Keycloak user/admin event.
+type EventEntry struct {
+	Timestamp string `json:"timestamp"`
+	Category  string `json:"category"`
+	Type      string `json:"type,omitempty"`
+	RealmName string `json:"realm_name,omitempty"`
+	ClientID  string `json:"client_id,omitempty"`
+	Username  string `json:"username,omitempty"`
+	IPAddress string `json:"ip_address,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+func strDeref(p *string) string {
+	if p != nil {
+		return *p
+	}
+	return ""
+}
+
+// QueryEvents returns a page of Keycloak events (user and admin).
+func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery) ([]EventEntry, error) {
+	params := &apiclient.ListClusterEventsParams{}
+	if q.Limit > 0 {
+		l := apiclient.PageLimit(q.Limit)
+		params.Limit = &l
+	}
+	if q.Category != "" {
+		cat := apiclient.EventCategory(q.Category)
+		params.Category = &cat
+	}
+	if q.Realm != "" {
+		rn := apiclient.RealmName(q.Realm)
+		params.Realm = &rn
+	}
+	if q.Username != "" {
+		params.Username = &q.Username
+	}
+	if q.Search != "" {
+		params.Search = &q.Search
+	}
+	resp, err := c.gen.ListClusterEventsWithResponse(ctx, cid(clusterID), params)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]EventEntry, 0, len(*resp.JSON200))
+	for _, e := range *resp.JSON200 {
+		typ := strDeref((*string)(e.Type))
+		if typ == "" && e.OperationType != nil {
+			typ = string(*e.OperationType)
+		}
+		out = append(out, EventEntry{
+			Timestamp: e.Timestamp.Format(time.RFC3339), Category: string(e.Category), Type: typ,
+			RealmName: e.RealmName, ClientID: strDeref(e.ClientId), Username: strDeref(e.Username),
+			IPAddress: strDeref(e.IpAddress), Error: strDeref(e.Error),
 		})
 	}
 	return out, nil

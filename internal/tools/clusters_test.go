@@ -16,6 +16,9 @@ type stubAPI struct {
 	realms   []skycloak.Realm
 	apps     []skycloak.Application
 	idps     []skycloak.IdentityProvider
+	logs     []skycloak.LogEntry
+	secLogs  []skycloak.SecurityLogEntry
+	events   []skycloak.EventEntry
 	err      error
 }
 
@@ -84,6 +87,18 @@ func (s stubAPI) CreateOIDCIdentityProvider(context.Context, string, string, sky
 
 func (s stubAPI) DeleteIdentityProvider(context.Context, string, string, string) error {
 	return s.err
+}
+
+func (s stubAPI) GetLogs(context.Context, string, skycloak.LogQuery) ([]skycloak.LogEntry, error) {
+	return s.logs, s.err
+}
+
+func (s stubAPI) GetSecurityLogs(context.Context, string, skycloak.SecurityLogQuery) ([]skycloak.SecurityLogEntry, error) {
+	return s.secLogs, s.err
+}
+
+func (s stubAPI) QueryEvents(context.Context, string, skycloak.EventQuery) ([]skycloak.EventEntry, error) {
+	return s.events, s.err
 }
 
 func TestListClustersHandler(t *testing.T) {

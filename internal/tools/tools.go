@@ -25,6 +25,9 @@ type API interface {
 	DeleteApplication(ctx context.Context, clusterID, realm, clientID string) error
 	CreateOIDCIdentityProvider(ctx context.Context, clusterID, realm string, req skycloak.CreateOIDCIdentityProviderRequest) error
 	DeleteIdentityProvider(ctx context.Context, clusterID, realm, providerID string) error
+	GetLogs(ctx context.Context, clusterID string, q skycloak.LogQuery) ([]skycloak.LogEntry, error)
+	GetSecurityLogs(ctx context.Context, clusterID string, q skycloak.SecurityLogQuery) ([]skycloak.SecurityLogEntry, error)
+	QueryEvents(ctx context.Context, clusterID string, q skycloak.EventQuery) ([]skycloak.EventEntry, error)
 }
 
 // Register adds all tools to the server.
@@ -36,6 +39,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerRealmReadTools(s, api)
 	registerApplicationReadTools(s, api)
 	registerIdentityProviderReadTools(s, api)
+	registerObservabilityReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}

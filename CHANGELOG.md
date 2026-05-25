@@ -6,6 +6,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Observability read tools: `get_logs`, `get_security_logs`, `query_events`.
+
 ## [0.1.0] - 2026-05-25
 
 ### Added
