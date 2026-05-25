@@ -15,6 +15,18 @@ import (
 // confirmation argument.
 func registerWriteTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_create_cluster",
+		Description: "Provision a new Keycloak cluster. Asynchronous: the returned cluster starts in a provisioning state — poll skycloak_get_cluster until its status is 'available'. Requires --allow-writes.",
+		Annotations: &mcp.ToolAnnotations{Title: "Create cluster", ReadOnlyHint: false, DestructiveHint: ptr(false)},
+	}, createClusterHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_delete_cluster",
+		Description: "Permanently delete a Keycloak cluster and all of its realms and data. Irreversible. Set confirm=true to proceed.",
+		Annotations: &mcp.ToolAnnotations{Title: "Delete cluster", ReadOnlyHint: false, DestructiveHint: ptr(true)},
+	}, deleteClusterHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_realm",
 		Description: "Create a new Keycloak realm in a cluster. Requires the server to be started with --allow-writes and a write-scoped API key.",
 		Annotations: &mcp.ToolAnnotations{Title: "Create realm", ReadOnlyHint: false, DestructiveHint: ptr(false)},
@@ -25,6 +37,51 @@ func registerWriteTools(s *mcp.Server, api API) {
 		Description: "Permanently delete a realm and all of its users, clients and configuration. This is irreversible. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{Title: "Delete realm", ReadOnlyHint: false, DestructiveHint: ptr(true)},
 	}, deleteRealmHandler(api))
+}
+
+// CreateClusterInput is the input schema for skycloak_create_cluster.
+type CreateClusterInput struct {
+	Name     string `json:"name" jsonschema:"human-readable cluster name"`
+	Type     string `json:"type,omitempty" jsonschema:"cluster type (keycloak or tidecloak); defaults to keycloak"`
+	Size     string `json:"size" jsonschema:"instance size: small, medium, or large"`
+	Version  string `json:"version" jsonschema:"Keycloak version, e.g. 26.1"`
+	Location string `json:"location" jsonschema:"region: us, ca, eu, or au"`
+}
+
+func createClusterHandler(api API) mcp.ToolHandlerFor[CreateClusterInput, ClusterDetail] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in CreateClusterInput) (*mcp.CallToolResult, ClusterDetail, error) {
+		if in.Name == "" || in.Size == "" || in.Version == "" || in.Location == "" {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "name, size, version and location are required"}}}, ClusterDetail{}, nil
+		}
+		cl, err := api.CreateCluster(ctx, skycloak.CreateClusterRequest{Name: in.Name, Type: in.Type, Size: in.Size, Version: in.Version, Location: in.Location})
+		if err != nil {
+			return toolError(err), ClusterDetail{}, nil
+		}
+		detail := ClusterDetail{ID: cl.ID, Name: cl.Name, Status: cl.Status, Type: cl.Type, Size: cl.Size, Version: cl.Version, Location: cl.Location, URL: cl.URL, CreatedAt: cl.CreatedAt, UpdatedAt: cl.UpdatedAt}
+		text := fmt.Sprintf("Provisioning cluster %q (%s), status %q. Poll skycloak_get_cluster with id=%s until status is 'available'.", cl.Name, cl.ID, cl.Status, cl.ID)
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, detail, nil
+	}
+}
+
+// DeleteClusterInput is the input schema for skycloak_delete_cluster.
+type DeleteClusterInput struct {
+	ID      string `json:"id" jsonschema:"the cluster ID to delete"`
+	Confirm bool   `json:"confirm" jsonschema:"must be true to confirm permanent, irreversible deletion of the cluster and all its data"`
+}
+
+func deleteClusterHandler(api API) mcp.ToolHandlerFor[DeleteClusterInput, struct{}] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteClusterInput) (*mcp.CallToolResult, struct{}, error) {
+		if in.ID == "" {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "id is required"}}}, struct{}{}, nil
+		}
+		if !in.Confirm {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Refusing to delete cluster %s: set confirm=true. This is irreversible.", in.ID)}}}, struct{}{}, nil
+		}
+		if err := api.DeleteCluster(ctx, in.ID); err != nil {
+			return toolError(err), struct{}{}, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Deleting cluster %s.", in.ID)}}}, struct{}{}, nil
+	}
 }
 
 // CreateRealmInput is the input schema for skycloak_create_realm.

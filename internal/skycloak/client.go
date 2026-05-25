@@ -171,6 +171,14 @@ func (c *Client) ListClusters(ctx context.Context, _ ListClustersParams) ([]Clus
 	return out, nil
 }
 
+func clusterFromAPI(cl *apiclient.Cluster) *Cluster {
+	return &Cluster{
+		ID: cl.Id.String(), Name: string(cl.Name), Type: string(cl.Type), Size: string(cl.Size),
+		Version: string(cl.Version), Location: string(cl.Location), Status: string(cl.Status),
+		URL: cl.Url, CreatedAt: fmtTime(cl.CreatedAt), UpdatedAt: fmtTime(cl.UpdatedAt),
+	}
+}
+
 // GetCluster returns a single cluster by ID.
 func (c *Client) GetCluster(ctx context.Context, id string) (*Cluster, error) {
 	resp, err := c.gen.GetClusterWithResponse(ctx, cid(id))
@@ -180,12 +188,51 @@ func (c *Client) GetCluster(ctx context.Context, id string) (*Cluster, error) {
 	if resp.JSON200 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	cl := resp.JSON200
-	return &Cluster{
-		ID: cl.Id.String(), Name: string(cl.Name), Type: string(cl.Type), Size: string(cl.Size),
-		Version: string(cl.Version), Location: string(cl.Location), Status: string(cl.Status),
-		URL: cl.Url, CreatedAt: fmtTime(cl.CreatedAt), UpdatedAt: fmtTime(cl.UpdatedAt),
-	}, nil
+	return clusterFromAPI(resp.JSON200), nil
+}
+
+// CreateClusterRequest is the body for creating a cluster.
+type CreateClusterRequest struct {
+	Name     string
+	Type     string
+	Size     string
+	Version  string
+	Location string
+}
+
+// CreateCluster provisions a new cluster (asynchronous; the returned cluster is
+// in a provisioning state).
+func (c *Client) CreateCluster(ctx context.Context, req CreateClusterRequest) (*Cluster, error) {
+	body := apiclient.CreateClusterJSONRequestBody{
+		Name:     apiclient.ClusterName(req.Name),
+		Size:     apiclient.ClusterSize(req.Size),
+		Version:  apiclient.KeycloakVersion(req.Version),
+		Location: apiclient.ClusterLocation(req.Location),
+	}
+	if req.Type != "" {
+		t := apiclient.ClusterType(req.Type)
+		body.Type = &t
+	}
+	resp, err := c.gen.CreateClusterWithResponse(ctx, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON201 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return clusterFromAPI(resp.JSON201), nil
+}
+
+// DeleteCluster deletes a cluster.
+func (c *Client) DeleteCluster(ctx context.Context, id string) error {
+	resp, err := c.gen.DeleteClusterWithResponse(ctx, cid(id))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
 }
 
 // Realm mirrors the public API Realm resource (subset used by the tools).

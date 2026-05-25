@@ -15,7 +15,7 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for **
 
 **Read-only** (always available): `list_clusters`, `get_cluster`, `list_realms`, `list_applications`, `list_identity_providers`.
 
-**Write** (require `--allow-writes`): `create_realm`, `delete_realm` (destructive — requires `confirm=true`).
+**Write** (require `--allow-writes`): `create_cluster`, `delete_cluster`, `create_realm`, `delete_realm`. Destructive tools (`delete_*`) require `confirm=true`. `create_cluster` is asynchronous — poll `get_cluster` until the cluster is `available`.
 
 ## Connecting
 

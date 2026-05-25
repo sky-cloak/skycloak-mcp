@@ -19,6 +19,8 @@ type API interface {
 	ListIdentityProviders(ctx context.Context, clusterID, realm string) ([]skycloak.IdentityProvider, error)
 	CreateRealm(ctx context.Context, clusterID string, r skycloak.Realm) (*skycloak.Realm, error)
 	DeleteRealm(ctx context.Context, clusterID, name string) error
+	CreateCluster(ctx context.Context, req skycloak.CreateClusterRequest) (*skycloak.Cluster, error)
+	DeleteCluster(ctx context.Context, id string) error
 }
 
 // Register adds all tools to the server.

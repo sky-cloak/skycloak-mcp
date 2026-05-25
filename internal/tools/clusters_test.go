@@ -56,6 +56,17 @@ func (s stubAPI) DeleteRealm(context.Context, string, string) error {
 	return s.err
 }
 
+func (s stubAPI) CreateCluster(_ context.Context, req skycloak.CreateClusterRequest) (*skycloak.Cluster, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.Cluster{ID: "new", Name: req.Name, Status: "provisioning", Type: req.Type, Size: req.Size, Version: req.Version, Location: req.Location}, nil
+}
+
+func (s stubAPI) DeleteCluster(context.Context, string) error {
+	return s.err
+}
+
 func TestListClustersHandler(t *testing.T) {
 	api := stubAPI{clusters: []skycloak.Cluster{
 		{ID: "c1", Name: "prod", Status: "available", Type: "keycloak", Size: "small", Version: "26.1", Location: "eu"},
