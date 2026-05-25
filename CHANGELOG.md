@@ -14,5 +14,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Write tools (behind `--allow-writes`): `create_realm`, `delete_realm` (destructive; requires `confirm=true`).
 - Typed API client generated from the Skycloak OpenAPI specification (oapi-codegen) with a `make generate` workflow.
 - Unit tests, CI, a container image, and a release pipeline.
+- Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
+- `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
 [Unreleased]: https://github.com/sky-cloak/skycloak-mcp/commits/main

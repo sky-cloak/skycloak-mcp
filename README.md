@@ -71,6 +71,12 @@ make generate   # regenerate the API client from the OpenAPI spec
 The API client under `internal/apiclient` is generated from the Skycloak OpenAPI
 specification with [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen).
 
+## Keeping in sync with the API
+
+The client in `internal/apiclient` is generated from `internal/apiclient/openapi.yaml`. A **CI drift gate** fails if the committed generated code drifts from the spec (`make generate` to fix), and a weekly **`spec-sync` workflow** (also on demand / backend `repository_dispatch: openapi-updated`) pulls the latest spec, regenerates, builds + tests, and opens a PR on any change — flagging breaking changes and listing API operations not yet exposed as tools. Requires an `OPENAPI_SOURCE_TOKEN` secret with read access to the source repo.
+
+Requests are retried on `429`/`5xx` with `Retry-After`-aware backoff.
+
 ## License
 
 [Apache-2.0](./LICENSE).
