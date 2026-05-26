@@ -18,6 +18,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Write/read parity tools: `get_smtp`, `get_theme`, `get_domain_route`, `get_client_theme_assignment`, `list_user_roles`, `list_user_groups` (read); `rotate_application_secret`, `update_realm`, `delete_smtp`, `create_domain_route`, `delete_domain_route`, `set_client_theme_assignment`, `delete_theme`, `delete_extension`, `delete_export` (write). Destructive deletes require `confirm=true`.
 - Action tools: `discover_oidc` (read); `test_smtp`, `test_identity_provider`, `cancel_cluster_upgrade` (write). `cancel_cluster_upgrade` requires `confirm=true`.
 - Cluster security tools: `get_cluster_security` (read); `update_cluster_security` (write) — IP allow-listing, rate limiting, WAF, geo-blocking, bot management (CAPTCHA preserved).
+- Read-parity tools: `get_cluster_credentials`, `list_cluster_builds`, `get_cluster_build`, `get_cluster_upgrade_path`, `get_cluster_insights`, `get_realm_role`, `get_realm_group`, `list_realm_group_members`.
 
 ## [0.1.0] - 2026-05-25
 

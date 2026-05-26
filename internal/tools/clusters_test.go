@@ -48,6 +48,8 @@ type stubAPI struct {
 	smtp      *skycloak.SMTPConfig
 	theme     *skycloak.Theme
 	route     *skycloak.DomainRoute
+	builds    []skycloak.ClusterBuild
+	upPath    []skycloak.UpgradePathStep
 	err       error
 }
 
@@ -503,6 +505,53 @@ func (s stubAPI) UpdateClusterSecurity(_ context.Context, _ string, sec *skycloa
 		return nil, s.err
 	}
 	return sec, nil
+}
+
+func (s stubAPI) GetClusterCredentials(context.Context, string) (*skycloak.ClusterCredentials, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.ClusterCredentials{AdminUsername: "admin", AdminPassword: "s3cr3t"}, nil
+}
+
+func (s stubAPI) ListClusterBuilds(context.Context, string) ([]skycloak.ClusterBuild, error) {
+	return s.builds, s.err
+}
+
+func (s stubAPI) GetClusterBuild(context.Context, string, string) (*skycloak.ClusterBuild, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.ClusterBuild{ID: "b1", Status: "completed", Phase: "done", Progress: 100, Logs: []string{"l1"}}, nil
+}
+
+func (s stubAPI) GetClusterUpgradePath(context.Context, string) ([]skycloak.UpgradePathStep, error) {
+	return s.upPath, s.err
+}
+
+func (s stubAPI) ClusterInsights(context.Context, string, string) ([]byte, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return []byte(`{"ok":true}`), nil
+}
+
+func (s stubAPI) GetRealmRole(context.Context, string, string, string) (*skycloak.RealmRole, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmRole{Name: "admin"}, nil
+}
+
+func (s stubAPI) GetRealmGroup(context.Context, string, string, string) (*skycloak.RealmGroup, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmGroup{ID: "g1", Name: "eng", Path: "/eng"}, nil
+}
+
+func (s stubAPI) ListRealmGroupMembers(context.Context, string, string, string) ([]skycloak.RealmUser, error) {
+	return s.rusers, s.err
 }
 
 func TestListClustersHandler(t *testing.T) {

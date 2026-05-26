@@ -1963,3 +1963,173 @@ func (c *Client) CancelClusterUpgrade(ctx context.Context, clusterID string) err
 	}
 	return nil
 }
+
+// ---- Read parity: credentials, builds, upgrade path, insights, role/group get, members ----
+
+// ClusterCredentials holds a cluster's Keycloak admin credentials.
+type ClusterCredentials struct {
+	AdminUsername string `json:"admin_username"`
+	AdminPassword string `json:"admin_password"`
+}
+
+// GetClusterCredentials returns a cluster's admin credentials.
+func (c *Client) GetClusterCredentials(ctx context.Context, clusterID string) (*ClusterCredentials, error) {
+	resp, err := c.gen.GetClusterCredentialsWithResponse(ctx, cid(clusterID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return &ClusterCredentials{AdminUsername: resp.JSON200.AdminUsername, AdminPassword: resp.JSON200.AdminPassword}, nil
+}
+
+// ClusterBuild is a cluster image build summary.
+type ClusterBuild struct {
+	ID       string   `json:"id"`
+	Status   string   `json:"status"`
+	Phase    string   `json:"phase"`
+	Progress int64    `json:"progress"`
+	Logs     []string `json:"logs,omitempty"`
+}
+
+// ListClusterBuilds returns the image build history for a cluster.
+func (c *Client) ListClusterBuilds(ctx context.Context, clusterID string) ([]ClusterBuild, error) {
+	resp, err := c.gen.ListClusterBuildsWithResponse(ctx, cid(clusterID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ClusterBuild, 0, len(*resp.JSON200))
+	for _, b := range *resp.JSON200 {
+		out = append(out, ClusterBuild{ID: b.Id.String(), Status: string(b.Status), Phase: b.Phase, Progress: int64(b.Progress)})
+	}
+	return out, nil
+}
+
+// GetClusterBuild returns a single image build, including its logs.
+func (c *Client) GetClusterBuild(ctx context.Context, clusterID, buildID string) (*ClusterBuild, error) {
+	resp, err := c.gen.GetClusterBuildWithResponse(ctx, cid(clusterID), uid(buildID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	b := resp.JSON200
+	return &ClusterBuild{ID: b.Id.String(), Status: string(b.Status), Phase: b.Phase, Progress: int64(b.Progress), Logs: b.Logs}, nil
+}
+
+// UpgradePathStep is one step in a cluster's recommended upgrade path.
+type UpgradePathStep struct {
+	Version  string `json:"version"`
+	Required bool   `json:"required"`
+}
+
+// GetClusterUpgradePath returns the recommended version-upgrade path.
+func (c *Client) GetClusterUpgradePath(ctx context.Context, clusterID string) ([]UpgradePathStep, error) {
+	resp, err := c.gen.GetClusterUpgradePathWithResponse(ctx, cid(clusterID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]UpgradePathStep, 0, len(*resp.JSON200))
+	for _, s := range *resp.JSON200 {
+		out = append(out, UpgradePathStep{Version: string(s.Version), Required: s.Required})
+	}
+	return out, nil
+}
+
+// ClusterInsights returns a cluster analytics document as raw JSON. kind is one
+// of: overview, authentication, events, performance, security.
+func (c *Client) ClusterInsights(ctx context.Context, clusterID, kind string) ([]byte, error) {
+	id := cid(clusterID)
+	var raw []byte
+	var resp *http.Response
+	var err error
+	switch kind {
+	case "authentication":
+		r, e := c.gen.GetClusterInsightsAuthenticationWithResponse(ctx, id, nil)
+		err = e
+		if r != nil {
+			raw, resp = r.Body, r.HTTPResponse
+		}
+	case "events":
+		r, e := c.gen.GetClusterInsightsEventsWithResponse(ctx, id, nil)
+		err = e
+		if r != nil {
+			raw, resp = r.Body, r.HTTPResponse
+		}
+	case "performance":
+		r, e := c.gen.GetClusterInsightsPerformanceWithResponse(ctx, id, nil)
+		err = e
+		if r != nil {
+			raw, resp = r.Body, r.HTTPResponse
+		}
+	case "security":
+		r, e := c.gen.GetClusterInsightsSecurityWithResponse(ctx, id, nil)
+		err = e
+		if r != nil {
+			raw, resp = r.Body, r.HTTPResponse
+		}
+	default:
+		r, e := c.gen.GetClusterInsightsOverviewWithResponse(ctx, id, nil)
+		err = e
+		if r != nil {
+			raw, resp = r.Body, r.HTTPResponse
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, statusError(resp, raw)
+	}
+	return raw, nil
+}
+
+// GetRealmRole returns a single realm role by name.
+func (c *Client) GetRealmRole(ctx context.Context, clusterID, realm, name string) (*RealmRole, error) {
+	resp, err := c.gen.GetRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), name)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	r := realmRoleFromAPI(resp.JSON200)
+	return &r, nil
+}
+
+// GetRealmGroup returns a single realm group by ID.
+func (c *Client) GetRealmGroup(ctx context.Context, clusterID, realm, groupID string) (*RealmGroup, error) {
+	resp, err := c.gen.GetRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), uid(groupID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	g := realmGroupFromAPI(resp.JSON200)
+	return &g, nil
+}
+
+// ListRealmGroupMembers returns the users that belong to a group.
+func (c *Client) ListRealmGroupMembers(ctx context.Context, clusterID, realm, groupID string) ([]RealmUser, error) {
+	resp, err := c.gen.ListRealmGroupMembersWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), uid(groupID), nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]RealmUser, 0, len(*resp.JSON200))
+	for i := range *resp.JSON200 {
+		out = append(out, realmUserFromAPI(&(*resp.JSON200)[i]))
+	}
+	return out, nil
+}

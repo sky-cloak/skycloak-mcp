@@ -1,0 +1,229 @@
+package tools
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/sky-cloak/skycloak-mcp/internal/skycloak"
+)
+
+func registerReads2Tools(s *mcp.Server, api API) {
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_get_cluster_credentials",
+		Description: "Get a cluster's Keycloak admin credentials. The password is sensitive.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get cluster credentials"},
+	}, getClusterCredentialsHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_list_cluster_builds",
+		Description: "List the image build history for a cluster.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List cluster builds"},
+	}, listClusterBuildsHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_get_cluster_build",
+		Description: "Get a single cluster image build, including its log lines.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get cluster build"},
+	}, getClusterBuildHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_get_cluster_upgrade_path",
+		Description: "Get the recommended version-upgrade path for a cluster.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get upgrade path"},
+	}, getClusterUpgradePathHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_get_cluster_insights",
+		Description: "Get cluster analytics as a JSON document. type is one of: overview, authentication, events, performance, security.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get cluster insights"},
+	}, getClusterInsightsHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_get_realm_role",
+		Description: "Get a realm role by name.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get realm role"},
+	}, getRealmRoleHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_get_realm_group",
+		Description: "Get a realm group by ID.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get realm group"},
+	}, getRealmGroupHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_list_realm_group_members",
+		Description: "List the users that belong to a realm group.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List group members"},
+	}, listRealmGroupMembersHandler(api))
+}
+
+func getClusterCredentialsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, skycloak.ClusterCredentials] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in ListDomainsInput) (*mcp.CallToolResult, skycloak.ClusterCredentials, error) {
+		if in.ClusterID == "" {
+			return errResult("cluster_id is required"), skycloak.ClusterCredentials{}, nil
+		}
+		creds, err := api.GetClusterCredentials(ctx, in.ClusterID)
+		if err != nil {
+			return toolError(err), skycloak.ClusterCredentials{}, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "admin_username=" + creds.AdminUsername + " (password in structured output)"}}}, *creds, nil
+	}
+}
+
+// BuildsOutput is the structured build-list result.
+type BuildsOutput struct {
+	Builds []skycloak.ClusterBuild `json:"builds"`
+	Count  int                     `json:"count"`
+}
+
+func listClusterBuildsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, BuildsOutput] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in ListDomainsInput) (*mcp.CallToolResult, BuildsOutput, error) {
+		if in.ClusterID == "" {
+			return errResult("cluster_id is required"), BuildsOutput{}, nil
+		}
+		builds, err := api.ListClusterBuilds(ctx, in.ClusterID)
+		if err != nil {
+			return toolError(err), BuildsOutput{}, nil
+		}
+		var b strings.Builder
+		for _, bd := range builds {
+			fmt.Fprintf(&b, "- %s status=%s phase=%s progress=%d%%\n", bd.ID, bd.Status, bd.Phase, bd.Progress)
+		}
+		if len(builds) == 0 {
+			b.WriteString("No builds for this cluster.")
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: b.String()}}}, BuildsOutput{Builds: builds, Count: len(builds)}, nil
+	}
+}
+
+// BuildRef identifies a build.
+type BuildRef struct {
+	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
+	BuildID   string `json:"build_id" jsonschema:"the build ID"`
+}
+
+func getClusterBuildHandler(api API) mcp.ToolHandlerFor[BuildRef, skycloak.ClusterBuild] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in BuildRef) (*mcp.CallToolResult, skycloak.ClusterBuild, error) {
+		if in.ClusterID == "" || in.BuildID == "" {
+			return errResult("cluster_id and build_id are required"), skycloak.ClusterBuild{}, nil
+		}
+		bd, err := api.GetClusterBuild(ctx, in.ClusterID, in.BuildID)
+		if err != nil {
+			return toolError(err), skycloak.ClusterBuild{}, nil
+		}
+		txt := fmt.Sprintf("%s status=%s phase=%s progress=%d%%", bd.ID, bd.Status, bd.Phase, bd.Progress)
+		if len(bd.Logs) > 0 {
+			txt += "\n" + strings.Join(bd.Logs, "\n")
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: txt}}}, *bd, nil
+	}
+}
+
+// UpgradePathOutput is the structured upgrade-path result.
+type UpgradePathOutput struct {
+	Steps []skycloak.UpgradePathStep `json:"steps"`
+}
+
+func getClusterUpgradePathHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, UpgradePathOutput] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in ListDomainsInput) (*mcp.CallToolResult, UpgradePathOutput, error) {
+		if in.ClusterID == "" {
+			return errResult("cluster_id is required"), UpgradePathOutput{}, nil
+		}
+		steps, err := api.GetClusterUpgradePath(ctx, in.ClusterID)
+		if err != nil {
+			return toolError(err), UpgradePathOutput{}, nil
+		}
+		parts := make([]string, 0, len(steps))
+		for _, s := range steps {
+			parts = append(parts, s.Version)
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: strings.Join(parts, " -> ")}}}, UpgradePathOutput{Steps: steps}, nil
+	}
+}
+
+// InsightsInput selects a cluster insight type.
+type InsightsInput struct {
+	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Type      string `json:"type,omitempty" jsonschema:"overview, authentication, events, performance, or security (defaults to overview)"`
+}
+
+// InsightsOutput carries the raw analytics JSON.
+type InsightsOutput struct {
+	JSON string `json:"json"`
+}
+
+func getClusterInsightsHandler(api API) mcp.ToolHandlerFor[InsightsInput, InsightsOutput] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in InsightsInput) (*mcp.CallToolResult, InsightsOutput, error) {
+		if in.ClusterID == "" {
+			return errResult("cluster_id is required"), InsightsOutput{}, nil
+		}
+		raw, err := api.ClusterInsights(ctx, in.ClusterID, in.Type)
+		if err != nil {
+			return toolError(err), InsightsOutput{}, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(raw)}}}, InsightsOutput{JSON: string(raw)}, nil
+	}
+}
+
+// RealmRoleRef identifies a realm role.
+type RealmRoleRef struct {
+	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Realm     string `json:"realm" jsonschema:"the Keycloak realm name"`
+	Name      string `json:"name" jsonschema:"the role name"`
+}
+
+func getRealmRoleHandler(api API) mcp.ToolHandlerFor[RealmRoleRef, skycloak.RealmRole] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in RealmRoleRef) (*mcp.CallToolResult, skycloak.RealmRole, error) {
+		if in.ClusterID == "" || in.Realm == "" || in.Name == "" {
+			return errResult("cluster_id, realm and name are required"), skycloak.RealmRole{}, nil
+		}
+		role, err := api.GetRealmRole(ctx, in.ClusterID, in.Realm, in.Name)
+		if err != nil {
+			return toolError(err), skycloak.RealmRole{}, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: role.Name + descSuffix(role.Description)}}}, *role, nil
+	}
+}
+
+// RealmGroupRef identifies a realm group.
+type RealmGroupRef struct {
+	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Realm     string `json:"realm" jsonschema:"the Keycloak realm name"`
+	GroupID   string `json:"group_id" jsonschema:"the group ID"`
+}
+
+func getRealmGroupHandler(api API) mcp.ToolHandlerFor[RealmGroupRef, skycloak.RealmGroup] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in RealmGroupRef) (*mcp.CallToolResult, skycloak.RealmGroup, error) {
+		if in.ClusterID == "" || in.Realm == "" || in.GroupID == "" {
+			return errResult("cluster_id, realm and group_id are required"), skycloak.RealmGroup{}, nil
+		}
+		g, err := api.GetRealmGroup(ctx, in.ClusterID, in.Realm, in.GroupID)
+		if err != nil {
+			return toolError(err), skycloak.RealmGroup{}, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s (%s) path=%s", g.Name, g.ID, g.Path)}}}, *g, nil
+	}
+}
+
+func listRealmGroupMembersHandler(api API) mcp.ToolHandlerFor[RealmGroupRef, UsersOutput] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in RealmGroupRef) (*mcp.CallToolResult, UsersOutput, error) {
+		if in.ClusterID == "" || in.Realm == "" || in.GroupID == "" {
+			return errResult("cluster_id, realm and group_id are required"), UsersOutput{}, nil
+		}
+		users, err := api.ListRealmGroupMembers(ctx, in.ClusterID, in.Realm, in.GroupID)
+		if err != nil {
+			return toolError(err), UsersOutput{}, nil
+		}
+		var b strings.Builder
+		for _, u := range users {
+			fmt.Fprintf(&b, "- %s (%s) <%s>\n", u.Username, u.ID, u.Email)
+		}
+		if len(users) == 0 {
+			b.WriteString("No members in this group.")
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: b.String()}}}, UsersOutput{Users: users, Count: len(users)}, nil
+	}
+}
