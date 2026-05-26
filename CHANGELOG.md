@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-26
+
 ### Added
 - Observability read tools: `get_logs`, `get_security_logs`, `query_events`.
 - Custom-domain tools: `list_domains`, `get_domain` (read); `create_domain`, `verify_domain`, `delete_domain` (write). `create_domain` returns the DNS records to create; `delete_domain` requires `confirm=true`.
@@ -36,5 +38,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
 - `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
-[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sky-cloak/skycloak-mcp/releases/tag/v0.1.0
