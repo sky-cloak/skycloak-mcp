@@ -60,6 +60,10 @@ type API interface {
 	RemoveRealmUserRole(ctx context.Context, clusterID, realm, userID, roleName string) error
 	AddRealmUserToGroup(ctx context.Context, clusterID, realm, userID, groupID string) error
 	RemoveRealmUserFromGroup(ctx context.Context, clusterID, realm, userID, groupID string) error
+	ListApplicationRoles(ctx context.Context, clusterID, realm, clientID string) ([]skycloak.ApplicationRole, error)
+	AssignApplicationRole(ctx context.Context, clusterID, realm, clientID, roleName, roleClientID string) error
+	RemoveApplicationRole(ctx context.Context, clusterID, realm, clientID, roleName, roleClientID string) error
+	ListApplicationSessions(ctx context.Context, clusterID, realm, clientID string) ([]skycloak.ApplicationSession, error)
 }
 
 // Register adds all tools to the server.
@@ -77,6 +81,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerExtensionReadTools(s, api)
 	registerExportReadTools(s, api)
 	registerRBACReadTools(s, api)
+	registerApplicationRoleReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}

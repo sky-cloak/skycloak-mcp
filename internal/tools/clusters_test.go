@@ -33,6 +33,8 @@ type stubAPI struct {
 	rgroups  []skycloak.RealmGroup
 	rusers   []skycloak.RealmUser
 	ruser    *skycloak.RealmUser
+	appRoles []skycloak.ApplicationRole
+	appSess  []skycloak.ApplicationSession
 	err      error
 }
 
@@ -301,6 +303,22 @@ func (s stubAPI) AddRealmUserToGroup(context.Context, string, string, string, st
 
 func (s stubAPI) RemoveRealmUserFromGroup(context.Context, string, string, string, string) error {
 	return s.err
+}
+
+func (s stubAPI) ListApplicationRoles(context.Context, string, string, string) ([]skycloak.ApplicationRole, error) {
+	return s.appRoles, s.err
+}
+
+func (s stubAPI) AssignApplicationRole(context.Context, string, string, string, string, string) error {
+	return s.err
+}
+
+func (s stubAPI) RemoveApplicationRole(context.Context, string, string, string, string, string) error {
+	return s.err
+}
+
+func (s stubAPI) ListApplicationSessions(context.Context, string, string, string) ([]skycloak.ApplicationSession, error) {
+	return s.appSess, s.err
 }
 
 func TestListClustersHandler(t *testing.T) {

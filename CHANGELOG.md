@@ -13,6 +13,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Extension tools: `list_extensions` (catalog), `list_cluster_extensions` (read); `install_extension`, `upgrade_extension`, `uninstall_extension` (write). Install/upgrade are asynchronous; `uninstall_extension` requires `confirm=true`.
 - Database export tools: `list_exports`, `get_export` (read); `create_export` (write, asynchronous — poll `get_export` for the download URL). Including credentials requires an `encryption_password`.
 - Realm RBAC tools: `list_realm_roles`, `list_realm_groups`, `list_realm_users`, `get_realm_user` (read); `create_realm_role`, `delete_realm_role`, `create_realm_group`, `delete_realm_group`, `create_realm_user`, `delete_realm_user`, `assign_realm_user_role`, `remove_realm_user_role`, `add_realm_user_to_group`, `remove_realm_user_from_group` (write). Destructive `delete_*` tools require `confirm=true`.
+- Application role & session tools: `list_application_roles`, `list_application_sessions` (read); `assign_application_role`, `remove_application_role` (write).
 
 ## [0.1.0] - 2026-05-25
 

@@ -1383,3 +1383,85 @@ func (c *Client) RemoveRealmUserFromGroup(ctx context.Context, clusterID, realm,
 	}
 	return nil
 }
+
+// ---- Application roles & sessions ----
+
+// ApplicationRole is a role assigned to an application's service account.
+type ApplicationRole struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	ClientRole  bool   `json:"client_role"`
+}
+
+// ListApplicationRoles returns the roles on an application's service account.
+func (c *Client) ListApplicationRoles(ctx context.Context, clusterID, realm, clientID string) ([]ApplicationRole, error) {
+	resp, err := c.gen.ListApplicationRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ApplicationRole, 0, len(*resp.JSON200))
+	for _, r := range *resp.JSON200 {
+		out = append(out, ApplicationRole{Name: r.Name, Description: strDeref(r.Description), ClientRole: r.ClientRole})
+	}
+	return out, nil
+}
+
+// AssignApplicationRole assigns a role to an application's service account.
+func (c *Client) AssignApplicationRole(ctx context.Context, clusterID, realm, clientID, roleName, roleClientID string) error {
+	body := apiclient.AssignApplicationRoleJSONRequestBody{Name: roleName}
+	if roleClientID != "" {
+		body.RoleClientId = &roleClientID
+	}
+	resp, err := c.gen.AssignApplicationRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), body)
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// RemoveApplicationRole removes a role from an application's service account.
+func (c *Client) RemoveApplicationRole(ctx context.Context, clusterID, realm, clientID, roleName, roleClientID string) error {
+	var params *apiclient.RemoveApplicationRoleParams
+	if roleClientID != "" {
+		params = &apiclient.RemoveApplicationRoleParams{RoleClientId: &roleClientID}
+	}
+	resp, err := c.gen.RemoveApplicationRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), roleName, params)
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// ApplicationSession is an active user session for an application.
+type ApplicationSession struct {
+	ID           string `json:"id"`
+	Username     string `json:"username"`
+	Email        string `json:"email,omitempty"`
+	IPAddress    string `json:"ip_address,omitempty"`
+	LastAccessAt string `json:"last_access_at"`
+}
+
+// ListApplicationSessions returns active user sessions for an application.
+func (c *Client) ListApplicationSessions(ctx context.Context, clusterID, realm, clientID string) ([]ApplicationSession, error) {
+	resp, err := c.gen.ListApplicationSessionsWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ApplicationSession, 0, len(*resp.JSON200))
+	for _, s := range *resp.JSON200 {
+		out = append(out, ApplicationSession{ID: s.Id, Username: s.Username, Email: strDeref(s.Email), IPAddress: strDeref(s.IpAddress), LastAccessAt: fmtTime(s.LastAccessAt)})
+	}
+	return out, nil
+}
