@@ -45,6 +45,9 @@ type stubAPI struct {
 	app       *skycloak.Application
 	idp       *skycloak.IdentityProvider
 	realm     *skycloak.Realm
+	smtp      *skycloak.SMTPConfig
+	theme     *skycloak.Theme
+	route     *skycloak.DomainRoute
 	err       error
 }
 
@@ -387,6 +390,82 @@ func (s stubAPI) ListIdentityProviderTemplates(context.Context) ([]skycloak.Prov
 
 func (s stubAPI) ListDomainRoutes(context.Context, string, string) ([]skycloak.DomainRoute, error) {
 	return s.routes, s.err
+}
+
+func (s stubAPI) GetSMTP(context.Context, string, string) (*skycloak.SMTPConfig, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.smtp == nil {
+		return &skycloak.SMTPConfig{Host: "smtp.example.com", Port: 587, FromEmail: "no-reply@example.com", AuthType: "basic"}, nil
+	}
+	return s.smtp, nil
+}
+
+func (s stubAPI) DeleteSMTP(context.Context, string, string) error { return s.err }
+
+func (s stubAPI) RotateApplicationSecret(context.Context, string, string, string) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	return "rotated-secret", nil
+}
+
+func (s stubAPI) GetTheme(context.Context, string, string) (*skycloak.Theme, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.theme == nil {
+		return &skycloak.Theme{ID: "t1", Name: "corp", Status: "deployed"}, nil
+	}
+	return s.theme, nil
+}
+
+func (s stubAPI) DeleteTheme(context.Context, string, string) error  { return s.err }
+func (s stubAPI) DeleteExtension(context.Context, string) error      { return s.err }
+func (s stubAPI) DeleteExport(context.Context, string, string) error { return s.err }
+func (s stubAPI) DeleteDomainRoute(context.Context, string, string, string) error {
+	return s.err
+}
+
+func (s stubAPI) GetDomainRoute(context.Context, string, string, string) (*skycloak.DomainRoute, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.route == nil {
+		return &skycloak.DomainRoute{ID: "r1", Realm: "app"}, nil
+	}
+	return s.route, nil
+}
+
+func (s stubAPI) CreateDomainRoute(_ context.Context, _, _, realm string, admin, hide bool) (*skycloak.DomainRoute, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.DomainRoute{ID: "r1", Realm: realm, AllowAdminAccess: admin, HideRealmPath: hide}, nil
+}
+
+func (s stubAPI) GetClientThemeAssignment(context.Context, string, string, string) (string, error) {
+	return "", s.err
+}
+
+func (s stubAPI) SetClientThemeAssignment(_ context.Context, _, _, _, login string) (string, error) {
+	return login, s.err
+}
+
+func (s stubAPI) ListRealmUserRoles(context.Context, string, string, string) ([]skycloak.RealmRole, error) {
+	return s.rroles, s.err
+}
+
+func (s stubAPI) ListRealmUserGroups(context.Context, string, string, string) ([]skycloak.RealmGroup, error) {
+	return s.rgroups, s.err
+}
+
+func (s stubAPI) UpdateRealm(_ context.Context, _, realm, displayName string, enabled bool) (*skycloak.Realm, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.Realm{Name: realm, DisplayName: displayName, Enabled: enabled}, nil
 }
 
 func TestListClustersHandler(t *testing.T) {

@@ -74,6 +74,21 @@ type API interface {
 	ListClusterUpgrades(ctx context.Context, clusterID string) ([]skycloak.ClusterUpgrade, error)
 	ListIdentityProviderTemplates(ctx context.Context) ([]skycloak.ProviderTemplate, error)
 	ListDomainRoutes(ctx context.Context, clusterID, domainID string) ([]skycloak.DomainRoute, error)
+	GetSMTP(ctx context.Context, clusterID, realm string) (*skycloak.SMTPConfig, error)
+	DeleteSMTP(ctx context.Context, clusterID, realm string) error
+	RotateApplicationSecret(ctx context.Context, clusterID, realm, clientID string) (string, error)
+	GetTheme(ctx context.Context, clusterID, themeID string) (*skycloak.Theme, error)
+	DeleteTheme(ctx context.Context, clusterID, themeID string) error
+	DeleteExtension(ctx context.Context, extensionID string) error
+	DeleteExport(ctx context.Context, clusterID, exportID string) error
+	GetDomainRoute(ctx context.Context, clusterID, domainID, routeID string) (*skycloak.DomainRoute, error)
+	CreateDomainRoute(ctx context.Context, clusterID, domainID, realm string, allowAdminAccess, hideRealmPath bool) (*skycloak.DomainRoute, error)
+	DeleteDomainRoute(ctx context.Context, clusterID, domainID, routeID string) error
+	GetClientThemeAssignment(ctx context.Context, clusterID, realm, clientID string) (string, error)
+	SetClientThemeAssignment(ctx context.Context, clusterID, realm, clientID, login string) (string, error)
+	ListRealmUserRoles(ctx context.Context, clusterID, realm, userID string) ([]skycloak.RealmRole, error)
+	ListRealmUserGroups(ctx context.Context, clusterID, realm, userID string) ([]skycloak.RealmGroup, error)
+	UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled bool) (*skycloak.Realm, error)
 }
 
 // Register adds all tools to the server.
@@ -93,6 +108,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerRBACReadTools(s, api)
 	registerApplicationRoleReadTools(s, api)
 	registerReadParityTools(s, api)
+	registerParityReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}

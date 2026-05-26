@@ -1660,3 +1660,224 @@ func (c *Client) ListDomainRoutes(ctx context.Context, clusterID, domainID strin
 	}
 	return out, nil
 }
+
+// ---- Write/read parity (SMTP, rotate, routes, themes, deletes, update realm) ----
+
+// SMTPConfig is a realm's SMTP configuration (non-secret subset).
+type SMTPConfig struct {
+	Host        string `json:"host"`
+	Port        int64  `json:"port"`
+	Encryption  string `json:"encryption,omitempty"`
+	FromEmail   string `json:"from_email"`
+	FromName    string `json:"from_name,omitempty"`
+	AuthType    string `json:"auth_type"`
+	HasPassword bool   `json:"has_password"`
+	Status      string `json:"status,omitempty"`
+}
+
+// GetSMTP returns the SMTP configuration for a realm.
+func (c *Client) GetSMTP(ctx context.Context, clusterID, realm string) (*SMTPConfig, error) {
+	resp, err := c.gen.GetSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	s := resp.JSON200
+	out := &SMTPConfig{
+		Host: string(s.Host), Port: int64(s.Port), Encryption: string(s.Encryption), FromEmail: string(s.FromEmail),
+		AuthType: string(s.AuthType), HasPassword: s.HasPassword, Status: string(s.Status),
+	}
+	out.FromName = strDeref(s.FromName)
+	return out, nil
+}
+
+// DeleteSMTP removes the SMTP configuration for a realm.
+func (c *Client) DeleteSMTP(ctx context.Context, clusterID, realm string) error {
+	resp, err := c.gen.DeleteSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// RotateApplicationSecret regenerates and returns an application's client secret.
+func (c *Client) RotateApplicationSecret(ctx context.Context, clusterID, realm, clientID string) (string, error) {
+	resp, err := c.gen.RotateApplicationSecretWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	if err != nil {
+		return "", err
+	}
+	if resp.JSON200 == nil {
+		return "", statusError(resp.HTTPResponse, resp.Body)
+	}
+	return resp.JSON200.ClientSecret, nil
+}
+
+// GetTheme returns a single custom theme by ID.
+func (c *Client) GetTheme(ctx context.Context, clusterID, themeID string) (*Theme, error) {
+	resp, err := c.gen.GetThemeWithResponse(ctx, cid(clusterID), uid(themeID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	t := themeFromAPI(resp.JSON200)
+	return &t, nil
+}
+
+// DeleteTheme removes a custom theme from a cluster.
+func (c *Client) DeleteTheme(ctx context.Context, clusterID, themeID string) error {
+	resp, err := c.gen.DeleteThemeWithResponse(ctx, cid(clusterID), uid(themeID))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// DeleteExtension removes a custom extension from the workspace catalog.
+func (c *Client) DeleteExtension(ctx context.Context, extensionID string) error {
+	resp, err := c.gen.DeleteExtensionWithResponse(ctx, uid(extensionID))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// DeleteExport removes an export archive.
+func (c *Client) DeleteExport(ctx context.Context, clusterID, exportID string) error {
+	resp, err := c.gen.DeleteExportWithResponse(ctx, cid(clusterID), uid(exportID))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// GetDomainRoute returns a single domain route.
+func (c *Client) GetDomainRoute(ctx context.Context, clusterID, domainID, routeID string) (*DomainRoute, error) {
+	resp, err := c.gen.GetDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), uid(routeID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	r := resp.JSON200
+	return &DomainRoute{ID: r.Id.String(), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath}, nil
+}
+
+// CreateDomainRoute adds a realm route to a domain.
+func (c *Client) CreateDomainRoute(ctx context.Context, clusterID, domainID, realm string, allowAdminAccess, hideRealmPath bool) (*DomainRoute, error) {
+	admin, hide := allowAdminAccess, hideRealmPath
+	body := apiclient.CreateDomainRouteJSONRequestBody{Realm: apiclient.RealmName(realm), AllowAdminAccess: &admin, HideRealmPath: &hide}
+	resp, err := c.gen.CreateDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON201 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	r := resp.JSON201
+	return &DomainRoute{ID: r.Id.String(), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath}, nil
+}
+
+// DeleteDomainRoute removes a route from a domain.
+func (c *Client) DeleteDomainRoute(ctx context.Context, clusterID, domainID, routeID string) error {
+	resp, err := c.gen.DeleteDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), uid(routeID))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// GetClientThemeAssignment returns a client's login-theme override ("" = realm default).
+func (c *Client) GetClientThemeAssignment(ctx context.Context, clusterID, realm, clientID string) (string, error) {
+	resp, err := c.gen.GetClientThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	if err != nil {
+		return "", err
+	}
+	if resp.JSON200 == nil {
+		return "", statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nThemeID(resp.JSON200.Login), nil
+}
+
+// SetClientThemeAssignment sets a client's login-theme override; "" resets to the realm default.
+func (c *Client) SetClientThemeAssignment(ctx context.Context, clusterID, realm, clientID, login string) (string, error) {
+	body := apiclient.SetClientThemeAssignmentJSONRequestBody{Login: themeIDNullable(login)}
+	resp, err := c.gen.SetClientThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), body)
+	if err != nil {
+		return "", err
+	}
+	if resp.JSON200 == nil {
+		return "", statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nThemeID(resp.JSON200.Login), nil
+}
+
+// ListRealmUserRoles returns the realm roles assigned to a user.
+func (c *Client) ListRealmUserRoles(ctx context.Context, clusterID, realm, userID string) ([]RealmRole, error) {
+	resp, err := c.gen.ListRealmUserRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]RealmRole, 0, len(*resp.JSON200))
+	for i := range *resp.JSON200 {
+		out = append(out, realmRoleFromAPI(&(*resp.JSON200)[i]))
+	}
+	return out, nil
+}
+
+// ListRealmUserGroups returns the groups a user belongs to.
+func (c *Client) ListRealmUserGroups(ctx context.Context, clusterID, realm, userID string) ([]RealmGroup, error) {
+	resp, err := c.gen.ListRealmUserGroupsWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]RealmGroup, 0, len(*resp.JSON200))
+	for i := range *resp.JSON200 {
+		out = append(out, realmGroupFromAPI(&(*resp.JSON200)[i]))
+	}
+	return out, nil
+}
+
+// UpdateRealm updates a realm's mutable settings.
+func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled bool) (*Realm, error) {
+	en := enabled
+	body := apiclient.UpdateRealmJSONRequestBody{Enabled: &en}
+	if displayName != "" {
+		dn := apiclient.RealmDisplayName(displayName)
+		body.DisplayName = &dn
+	}
+	resp, err := c.gen.UpdateRealmWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	r := resp.JSON200
+	return &Realm{Name: string(r.Name), DisplayName: string(r.DisplayName), Enabled: r.Enabled}, nil
+}
