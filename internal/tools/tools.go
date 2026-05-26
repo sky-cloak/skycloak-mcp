@@ -46,6 +46,20 @@ type API interface {
 	ListExports(ctx context.Context, clusterID string) ([]skycloak.Export, error)
 	GetExport(ctx context.Context, clusterID, exportID string) (*skycloak.Export, error)
 	CreateExport(ctx context.Context, clusterID, format string, includeCredentials bool, encryptionPassword string) (*skycloak.Export, error)
+	ListRealmRoles(ctx context.Context, clusterID, realm string) ([]skycloak.RealmRole, error)
+	CreateRealmRole(ctx context.Context, clusterID, realm, name, description string) (*skycloak.RealmRole, error)
+	DeleteRealmRole(ctx context.Context, clusterID, realm, name string) error
+	ListRealmGroups(ctx context.Context, clusterID, realm string) ([]skycloak.RealmGroup, error)
+	CreateRealmGroup(ctx context.Context, clusterID, realm, name, parentID string) (*skycloak.RealmGroup, error)
+	DeleteRealmGroup(ctx context.Context, clusterID, realm, groupID string) error
+	ListRealmUsers(ctx context.Context, clusterID, realm string) ([]skycloak.RealmUser, error)
+	GetRealmUser(ctx context.Context, clusterID, realm, userID string) (*skycloak.RealmUser, error)
+	CreateRealmUser(ctx context.Context, clusterID, realm, username, email, firstName, lastName, temporaryPassword string, enabled bool) (*skycloak.RealmUser, error)
+	DeleteRealmUser(ctx context.Context, clusterID, realm, userID string) error
+	AssignRealmUserRole(ctx context.Context, clusterID, realm, userID, roleName string) error
+	RemoveRealmUserRole(ctx context.Context, clusterID, realm, userID, roleName string) error
+	AddRealmUserToGroup(ctx context.Context, clusterID, realm, userID, groupID string) error
+	RemoveRealmUserFromGroup(ctx context.Context, clusterID, realm, userID, groupID string) error
 }
 
 // Register adds all tools to the server.
@@ -62,6 +76,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerBrandingReadTools(s, api)
 	registerExtensionReadTools(s, api)
 	registerExportReadTools(s, api)
+	registerRBACReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}

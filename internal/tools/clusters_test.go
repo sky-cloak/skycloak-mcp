@@ -29,6 +29,10 @@ type stubAPI struct {
 	clusExts []skycloak.ClusterExtension
 	exports  []skycloak.Export
 	export   *skycloak.Export
+	rroles   []skycloak.RealmRole
+	rgroups  []skycloak.RealmGroup
+	rusers   []skycloak.RealmUser
+	ruser    *skycloak.RealmUser
 	err      error
 }
 
@@ -232,6 +236,71 @@ func (s stubAPI) CreateExport(_ context.Context, _, format string, _ bool, _ str
 		return nil, s.err
 	}
 	return &skycloak.Export{ID: "x1", Format: format, Status: "pending"}, nil
+}
+
+func (s stubAPI) ListRealmRoles(context.Context, string, string) ([]skycloak.RealmRole, error) {
+	return s.rroles, s.err
+}
+
+func (s stubAPI) CreateRealmRole(_ context.Context, _, _, name, description string) (*skycloak.RealmRole, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmRole{Name: name, Description: description}, nil
+}
+
+func (s stubAPI) DeleteRealmRole(context.Context, string, string, string) error { return s.err }
+
+func (s stubAPI) ListRealmGroups(context.Context, string, string) ([]skycloak.RealmGroup, error) {
+	return s.rgroups, s.err
+}
+
+func (s stubAPI) CreateRealmGroup(_ context.Context, _, _, name, _ string) (*skycloak.RealmGroup, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmGroup{ID: "g1", Name: name, Path: "/" + name}, nil
+}
+
+func (s stubAPI) DeleteRealmGroup(context.Context, string, string, string) error { return s.err }
+
+func (s stubAPI) ListRealmUsers(context.Context, string, string) ([]skycloak.RealmUser, error) {
+	return s.rusers, s.err
+}
+
+func (s stubAPI) GetRealmUser(context.Context, string, string, string) (*skycloak.RealmUser, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.ruser == nil {
+		return &skycloak.RealmUser{ID: "u1", Username: "jdoe", Email: "jdoe@example.com", Enabled: true}, nil
+	}
+	return s.ruser, nil
+}
+
+func (s stubAPI) CreateRealmUser(_ context.Context, _, _, username, email, _, _, _ string, _ bool) (*skycloak.RealmUser, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmUser{ID: "u1", Username: username, Email: email, Enabled: true}, nil
+}
+
+func (s stubAPI) DeleteRealmUser(context.Context, string, string, string) error { return s.err }
+
+func (s stubAPI) AssignRealmUserRole(context.Context, string, string, string, string) error {
+	return s.err
+}
+
+func (s stubAPI) RemoveRealmUserRole(context.Context, string, string, string, string) error {
+	return s.err
+}
+
+func (s stubAPI) AddRealmUserToGroup(context.Context, string, string, string, string) error {
+	return s.err
+}
+
+func (s stubAPI) RemoveRealmUserFromGroup(context.Context, string, string, string, string) error {
+	return s.err
 }
 
 func TestListClustersHandler(t *testing.T) {
