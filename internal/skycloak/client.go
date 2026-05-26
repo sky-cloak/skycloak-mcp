@@ -1465,3 +1465,198 @@ func (c *Client) ListApplicationSessions(ctx context.Context, clusterID, realm, 
 	}
 	return out, nil
 }
+
+// ---- Read parity: get-by-id, cluster metadata, lists ----
+
+// GetRealm returns a single realm by name.
+func (c *Client) GetRealm(ctx context.Context, clusterID, realm string) (*Realm, error) {
+	resp, err := c.gen.GetRealmWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	r := resp.JSON200
+	return &Realm{Name: string(r.Name), DisplayName: string(r.DisplayName), Enabled: r.Enabled}, nil
+}
+
+// GetApplication returns a single application by client ID.
+func (c *Client) GetApplication(ctx context.Context, clusterID, realm, clientID string) (*Application, error) {
+	resp, err := c.gen.GetApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	a := applicationFromAPI(resp.JSON200)
+	return &a, nil
+}
+
+// GetIdentityProvider returns a single identity provider by provider ID.
+func (c *Client) GetIdentityProvider(ctx context.Context, clusterID, realm, providerID string) (*IdentityProvider, error) {
+	resp, err := c.gen.GetIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), providerID)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	p := resp.JSON200
+	return &IdentityProvider{ProviderID: string(p.ProviderId), Type: string(p.Type), DisplayName: p.DisplayName, Enabled: p.Enabled}, nil
+}
+
+// ClusterLocationInfo is a supported deployment region.
+type ClusterLocationInfo struct {
+	Location  string `json:"location"`
+	Name      string `json:"name"`
+	Available bool   `json:"available"`
+}
+
+// ListClusterLocations returns the supported deployment regions.
+func (c *Client) ListClusterLocations(ctx context.Context) ([]ClusterLocationInfo, error) {
+	resp, err := c.gen.ListClusterLocationsWithResponse(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ClusterLocationInfo, 0, len(*resp.JSON200))
+	for _, l := range *resp.JSON200 {
+		out = append(out, ClusterLocationInfo{Location: string(l.Location), Name: l.Name, Available: l.Available})
+	}
+	return out, nil
+}
+
+// ClusterTypeInfo is a supported cluster type.
+type ClusterTypeInfo struct {
+	Type      string `json:"type"`
+	Name      string `json:"name"`
+	Available bool   `json:"available"`
+}
+
+// ListClusterTypes returns the supported cluster types.
+func (c *Client) ListClusterTypes(ctx context.Context) ([]ClusterTypeInfo, error) {
+	resp, err := c.gen.ListClusterTypesWithResponse(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ClusterTypeInfo, 0, len(*resp.JSON200))
+	for _, t := range *resp.JSON200 {
+		out = append(out, ClusterTypeInfo{Type: string(t.Type), Name: t.Name, Available: t.Available})
+	}
+	return out, nil
+}
+
+// ClusterFeatureInfo is an available Keycloak feature flag.
+type ClusterFeatureInfo struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Description string `json:"description,omitempty"`
+	Preview     bool   `json:"preview"`
+}
+
+// ListClusterFeatures returns the available Keycloak feature flags.
+func (c *Client) ListClusterFeatures(ctx context.Context) ([]ClusterFeatureInfo, error) {
+	resp, err := c.gen.ListClusterFeaturesWithResponse(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ClusterFeatureInfo, 0, len(*resp.JSON200))
+	for _, f := range *resp.JSON200 {
+		out = append(out, ClusterFeatureInfo{Name: f.Name, DisplayName: f.DisplayName, Description: nstrN(f.Description), Preview: f.Preview})
+	}
+	return out, nil
+}
+
+// ClusterTypeVersions returns the Keycloak versions available for a cluster type.
+func (c *Client) ClusterTypeVersions(ctx context.Context, clusterType string) ([]string, error) {
+	resp, err := c.gen.GetClusterTypeVersionsWithResponse(ctx, apiclient.ClusterType(clusterType))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return *resp.JSON200, nil
+}
+
+// ClusterUpgrade is a cluster version-upgrade record.
+type ClusterUpgrade struct {
+	ID          string `json:"id"`
+	FromVersion string `json:"from_version"`
+	ToVersion   string `json:"to_version"`
+	Phase       string `json:"phase"`
+}
+
+// ListClusterUpgrades returns the upgrade history for a cluster.
+func (c *Client) ListClusterUpgrades(ctx context.Context, clusterID string) ([]ClusterUpgrade, error) {
+	resp, err := c.gen.ListClusterUpgradesWithResponse(ctx, cid(clusterID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ClusterUpgrade, 0, len(*resp.JSON200))
+	for _, u := range *resp.JSON200 {
+		out = append(out, ClusterUpgrade{ID: u.Id, FromVersion: string(u.FromVersion), ToVersion: string(u.ToVersion), Phase: u.Phase})
+	}
+	return out, nil
+}
+
+// ProviderTemplate is a pre-configured identity-provider template.
+type ProviderTemplate struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Type        string `json:"type"`
+}
+
+// ListIdentityProviderTemplates returns the identity-provider template catalog.
+func (c *Client) ListIdentityProviderTemplates(ctx context.Context) ([]ProviderTemplate, error) {
+	resp, err := c.gen.ListIdentityProviderTemplatesWithResponse(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]ProviderTemplate, 0, len(*resp.JSON200))
+	for _, t := range *resp.JSON200 {
+		out = append(out, ProviderTemplate{ID: t.Id, Name: t.Name, Description: t.Description, Type: string(t.Type)})
+	}
+	return out, nil
+}
+
+// DomainRoute maps a realm onto a custom domain.
+type DomainRoute struct {
+	ID               string `json:"id"`
+	Realm            string `json:"realm"`
+	AllowAdminAccess bool   `json:"allow_admin_access"`
+	HideRealmPath    bool   `json:"hide_realm_path"`
+}
+
+// ListDomainRoutes returns the routes configured on a custom domain.
+func (c *Client) ListDomainRoutes(ctx context.Context, clusterID, domainID string) ([]DomainRoute, error) {
+	resp, err := c.gen.ListDomainRoutesWithResponse(ctx, cid(clusterID), uid(domainID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]DomainRoute, 0, len(*resp.JSON200))
+	for _, r := range *resp.JSON200 {
+		out = append(out, DomainRoute{ID: r.Id.String(), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath})
+	}
+	return out, nil
+}

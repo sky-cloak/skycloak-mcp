@@ -11,31 +11,41 @@ import (
 )
 
 type stubAPI struct {
-	clusters []skycloak.Cluster
-	cluster  *skycloak.Cluster
-	realms   []skycloak.Realm
-	apps     []skycloak.Application
-	idps     []skycloak.IdentityProvider
-	logs     []skycloak.LogEntry
-	secLogs  []skycloak.SecurityLogEntry
-	events   []skycloak.EventEntry
-	domains  []skycloak.Domain
-	domain   *skycloak.Domain
-	themes   []skycloak.Theme
-	assign   *skycloak.ThemeAssignment
-	login    *skycloak.LoginBranding
-	email    *skycloak.EmailBranding
-	catalog  []skycloak.ExtensionInfo
-	clusExts []skycloak.ClusterExtension
-	exports  []skycloak.Export
-	export   *skycloak.Export
-	rroles   []skycloak.RealmRole
-	rgroups  []skycloak.RealmGroup
-	rusers   []skycloak.RealmUser
-	ruser    *skycloak.RealmUser
-	appRoles []skycloak.ApplicationRole
-	appSess  []skycloak.ApplicationSession
-	err      error
+	clusters  []skycloak.Cluster
+	cluster   *skycloak.Cluster
+	realms    []skycloak.Realm
+	apps      []skycloak.Application
+	idps      []skycloak.IdentityProvider
+	logs      []skycloak.LogEntry
+	secLogs   []skycloak.SecurityLogEntry
+	events    []skycloak.EventEntry
+	domains   []skycloak.Domain
+	domain    *skycloak.Domain
+	themes    []skycloak.Theme
+	assign    *skycloak.ThemeAssignment
+	login     *skycloak.LoginBranding
+	email     *skycloak.EmailBranding
+	catalog   []skycloak.ExtensionInfo
+	clusExts  []skycloak.ClusterExtension
+	exports   []skycloak.Export
+	export    *skycloak.Export
+	rroles    []skycloak.RealmRole
+	rgroups   []skycloak.RealmGroup
+	rusers    []skycloak.RealmUser
+	ruser     *skycloak.RealmUser
+	appRoles  []skycloak.ApplicationRole
+	appSess   []skycloak.ApplicationSession
+	locations []skycloak.ClusterLocationInfo
+	ctypes    []skycloak.ClusterTypeInfo
+	features  []skycloak.ClusterFeatureInfo
+	versions  []string
+	upgrades  []skycloak.ClusterUpgrade
+	templates []skycloak.ProviderTemplate
+	routes    []skycloak.DomainRoute
+	app       *skycloak.Application
+	idp       *skycloak.IdentityProvider
+	realm     *skycloak.Realm
+	err       error
 }
 
 func (s stubAPI) ListClusters(context.Context, skycloak.ListClustersParams) ([]skycloak.Cluster, error) {
@@ -319,6 +329,64 @@ func (s stubAPI) RemoveApplicationRole(context.Context, string, string, string, 
 
 func (s stubAPI) ListApplicationSessions(context.Context, string, string, string) ([]skycloak.ApplicationSession, error) {
 	return s.appSess, s.err
+}
+
+func (s stubAPI) GetRealm(context.Context, string, string) (*skycloak.Realm, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.realm == nil {
+		return &skycloak.Realm{Name: "app", Enabled: true}, nil
+	}
+	return s.realm, nil
+}
+
+func (s stubAPI) GetApplication(context.Context, string, string, string) (*skycloak.Application, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.app == nil {
+		return &skycloak.Application{ClientID: "web", Name: "Web", Type: "confidential"}, nil
+	}
+	return s.app, nil
+}
+
+func (s stubAPI) GetIdentityProvider(context.Context, string, string, string) (*skycloak.IdentityProvider, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.idp == nil {
+		return &skycloak.IdentityProvider{ProviderID: "google", Type: "oidc", Enabled: true}, nil
+	}
+	return s.idp, nil
+}
+
+func (s stubAPI) ListClusterLocations(context.Context) ([]skycloak.ClusterLocationInfo, error) {
+	return s.locations, s.err
+}
+
+func (s stubAPI) ListClusterTypes(context.Context) ([]skycloak.ClusterTypeInfo, error) {
+	return s.ctypes, s.err
+}
+
+func (s stubAPI) ListClusterFeatures(context.Context) ([]skycloak.ClusterFeatureInfo, error) {
+	return s.features, s.err
+}
+
+func (s stubAPI) ClusterTypeVersions(context.Context, string) ([]string, error) {
+	return s.versions, s.err
+}
+
+func (s stubAPI) ListClusterUpgrades(context.Context, string) ([]skycloak.ClusterUpgrade, error) {
+	return s.upgrades, s.err
+}
+
+func (s stubAPI) ListIdentityProviderTemplates(context.Context) ([]skycloak.ProviderTemplate, error) {
+	return s.templates, s.err
+}
+
+func (s stubAPI) ListDomainRoutes(context.Context, string, string) ([]skycloak.DomainRoute, error) {
+	return s.routes, s.err
 }
 
 func TestListClustersHandler(t *testing.T) {

@@ -64,6 +64,16 @@ type API interface {
 	AssignApplicationRole(ctx context.Context, clusterID, realm, clientID, roleName, roleClientID string) error
 	RemoveApplicationRole(ctx context.Context, clusterID, realm, clientID, roleName, roleClientID string) error
 	ListApplicationSessions(ctx context.Context, clusterID, realm, clientID string) ([]skycloak.ApplicationSession, error)
+	GetRealm(ctx context.Context, clusterID, realm string) (*skycloak.Realm, error)
+	GetApplication(ctx context.Context, clusterID, realm, clientID string) (*skycloak.Application, error)
+	GetIdentityProvider(ctx context.Context, clusterID, realm, providerID string) (*skycloak.IdentityProvider, error)
+	ListClusterLocations(ctx context.Context) ([]skycloak.ClusterLocationInfo, error)
+	ListClusterTypes(ctx context.Context) ([]skycloak.ClusterTypeInfo, error)
+	ListClusterFeatures(ctx context.Context) ([]skycloak.ClusterFeatureInfo, error)
+	ClusterTypeVersions(ctx context.Context, clusterType string) ([]string, error)
+	ListClusterUpgrades(ctx context.Context, clusterID string) ([]skycloak.ClusterUpgrade, error)
+	ListIdentityProviderTemplates(ctx context.Context) ([]skycloak.ProviderTemplate, error)
+	ListDomainRoutes(ctx context.Context, clusterID, domainID string) ([]skycloak.DomainRoute, error)
 }
 
 // Register adds all tools to the server.
@@ -82,6 +92,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerExportReadTools(s, api)
 	registerRBACReadTools(s, api)
 	registerApplicationRoleReadTools(s, api)
+	registerReadParityTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}
