@@ -103,6 +103,21 @@ type API interface {
 	GetRealmRole(ctx context.Context, clusterID, realm, name string) (*skycloak.RealmRole, error)
 	GetRealmGroup(ctx context.Context, clusterID, realm, groupID string) (*skycloak.RealmGroup, error)
 	ListRealmGroupMembers(ctx context.Context, clusterID, realm, groupID string) ([]skycloak.RealmUser, error)
+	UpdateRealmRole(ctx context.Context, clusterID, realm, name, newName, description string) (*skycloak.RealmRole, error)
+	UpdateRealmGroup(ctx context.Context, clusterID, realm, groupID, name string) (*skycloak.RealmGroup, error)
+	UpdateRealmUser(ctx context.Context, clusterID, realm, userID, email, firstName, lastName string, enabled, emailVerified bool) (*skycloak.RealmUser, error)
+	UpdateDomainRoute(ctx context.Context, clusterID, domainID, routeID string, allowAdminAccess bool, cors []string) (*skycloak.DomainRoute, error)
+	UpdateApplication(ctx context.Context, clusterID, realm, clientID, name, description string, redirectURIs []string) (*skycloak.Application, error)
+	UpdateIdentityProvider(ctx context.Context, clusterID, realm, providerID, displayName string, enabled bool) (*skycloak.IdentityProvider, error)
+	UpdateCluster(ctx context.Context, clusterID, version, size string) (*skycloak.Cluster, error)
+	UpdateExtension(ctx context.Context, extensionID, name, description string) (*skycloak.ExtensionInfo, error)
+	UpdateTheme(ctx context.Context, clusterID, themeID, name, description, version string) (*skycloak.Theme, error)
+	UpsertSMTP(ctx context.Context, clusterID, realm string, req skycloak.UpsertSMTPRequest) (*skycloak.SMTPConfig, error)
+	UpsertLoginBranding(ctx context.Context, clusterID, realm string, req skycloak.UpsertLoginBrandingRequest) (*skycloak.LoginBranding, error)
+	UpsertEmailBranding(ctx context.Context, clusterID, realm string, req skycloak.UpsertEmailBrandingRequest) (*skycloak.EmailBranding, error)
+	DeleteLoginBranding(ctx context.Context, clusterID, realm string) error
+	DeleteEmailBranding(ctx context.Context, clusterID, realm string) error
+	ExportClusterEvents(ctx context.Context, clusterID string) ([]byte, error)
 }
 
 // Register adds all tools to the server.

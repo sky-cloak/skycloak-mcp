@@ -2133,3 +2133,308 @@ func (c *Client) ListRealmGroupMembers(ctx context.Context, clusterID, realm, gr
 	}
 	return out, nil
 }
+
+// ---- Updates, upserts, branding deletes, export ----
+
+// UpdateRealmRole updates a realm role's description (and optionally renames it).
+func (c *Client) UpdateRealmRole(ctx context.Context, clusterID, realm, name, newName, description string) (*RealmRole, error) {
+	body := apiclient.UpdateRealmRoleJSONRequestBody{}
+	if newName != "" && newName != name {
+		body.Name = &newName
+	}
+	if description != "" {
+		body.Description = &description
+	}
+	resp, err := c.gen.UpdateRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), name, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	r := realmRoleFromAPI(resp.JSON200)
+	return &r, nil
+}
+
+// UpdateRealmGroup renames a realm group.
+func (c *Client) UpdateRealmGroup(ctx context.Context, clusterID, realm, groupID, name string) (*RealmGroup, error) {
+	body := apiclient.UpdateRealmGroupJSONRequestBody{Name: &name}
+	resp, err := c.gen.UpdateRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), uid(groupID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	g := realmGroupFromAPI(resp.JSON200)
+	return &g, nil
+}
+
+// UpdateRealmUser updates a realm user's profile fields.
+func (c *Client) UpdateRealmUser(ctx context.Context, clusterID, realm, userID, email, firstName, lastName string, enabled, emailVerified bool) (*RealmUser, error) {
+	en, ev := enabled, emailVerified
+	body := apiclient.UpdateRealmUserJSONRequestBody{Enabled: &en, EmailVerified: &ev}
+	if email != "" {
+		e := openapitypes.Email(email)
+		body.Email = &e
+	}
+	if firstName != "" {
+		body.FirstName = &firstName
+	}
+	if lastName != "" {
+		body.LastName = &lastName
+	}
+	resp, err := c.gen.UpdateRealmUserWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	u := realmUserFromAPI(resp.JSON200)
+	return &u, nil
+}
+
+// UpdateDomainRoute updates a route's mutable fields.
+func (c *Client) UpdateDomainRoute(ctx context.Context, clusterID, domainID, routeID string, allowAdminAccess bool, cors []string) (*DomainRoute, error) {
+	admin := allowAdminAccess
+	body := apiclient.UpdateDomainRouteJSONRequestBody{AllowAdminAccess: &admin}
+	if len(cors) > 0 {
+		body.CorsAllowedOrigins = &cors
+	}
+	resp, err := c.gen.UpdateDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), uid(routeID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	r := resp.JSON200
+	return &DomainRoute{ID: r.Id.String(), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath}, nil
+}
+
+// UpdateApplication updates an application's mutable fields.
+func (c *Client) UpdateApplication(ctx context.Context, clusterID, realm, clientID, name, description string, redirectURIs []string) (*Application, error) {
+	body := apiclient.UpdateApplicationJSONRequestBody{}
+	if name != "" {
+		body.Name = &name
+	}
+	if description != "" {
+		body.Description = &description
+	}
+	if redirectURIs != nil {
+		body.RedirectUris = &redirectURIs
+	}
+	resp, err := c.gen.UpdateApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	a := applicationFromAPI(resp.JSON200)
+	return &a, nil
+}
+
+// UpdateIdentityProvider updates an identity provider's display name and enabled state.
+func (c *Client) UpdateIdentityProvider(ctx context.Context, clusterID, realm, providerID, displayName string, enabled bool) (*IdentityProvider, error) {
+	en := enabled
+	body := apiclient.UpdateIdentityProviderJSONRequestBody{Enabled: &en}
+	if displayName != "" {
+		body.DisplayName = &displayName
+	}
+	resp, err := c.gen.UpdateIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), providerID, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	p := resp.JSON200
+	return &IdentityProvider{ProviderID: string(p.ProviderId), Type: string(p.Type), DisplayName: p.DisplayName, Enabled: p.Enabled}, nil
+}
+
+// UpdateCluster updates a cluster's mutable fields (e.g. version for an upgrade).
+func (c *Client) UpdateCluster(ctx context.Context, clusterID, version, size string) (*Cluster, error) {
+	body := apiclient.UpdateClusterJSONRequestBody{}
+	if version != "" {
+		v := apiclient.KeycloakVersion(version)
+		body.Version = &v
+	}
+	if size != "" {
+		sz := apiclient.ClusterSize(size)
+		body.Size = &sz
+	}
+	resp, err := c.gen.UpdateClusterWithResponse(ctx, cid(clusterID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return clusterFromAPI(resp.JSON200), nil
+}
+
+// UpdateExtension updates a custom extension's name/description.
+func (c *Client) UpdateExtension(ctx context.Context, extensionID, name, description string) (*ExtensionInfo, error) {
+	body := apiclient.UpdateExtensionJSONRequestBody{}
+	if name != "" {
+		body.Name = &name
+	}
+	if description != "" {
+		body.Description = nullable.NewNullableWithValue(description)
+	}
+	resp, err := c.gen.UpdateExtensionWithResponse(ctx, uid(extensionID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	e := extensionInfoFromAPI(resp.JSON200)
+	return &e, nil
+}
+
+// UpdateTheme updates a theme's name/description/version.
+func (c *Client) UpdateTheme(ctx context.Context, clusterID, themeID, name, description, version string) (*Theme, error) {
+	body := apiclient.UpdateThemeJSONRequestBody{}
+	if name != "" {
+		body.Name = &name
+	}
+	if description != "" {
+		body.Description = &description
+	}
+	if version != "" {
+		body.Version = &version
+	}
+	resp, err := c.gen.UpdateThemeWithResponse(ctx, cid(clusterID), uid(themeID), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	t := themeFromAPI(resp.JSON200)
+	return &t, nil
+}
+
+// UpsertSMTPRequest is the body for setting a realm's SMTP config.
+type UpsertSMTPRequest struct {
+	Host       string
+	Port       int64
+	Encryption string
+	FromEmail  string
+	FromName   string
+	AuthType   string
+	Username   string
+	Password   string
+}
+
+// UpsertSMTP creates or updates a realm's SMTP configuration.
+func (c *Client) UpsertSMTP(ctx context.Context, clusterID, realm string, req UpsertSMTPRequest) (*SMTPConfig, error) {
+	body := apiclient.UpsertSmtpConfigJSONRequestBody{
+		Host: apiclient.SmtpHost(req.Host), Port: apiclient.SmtpPort(req.Port),
+		FromEmail: openapitypes.Email(req.FromEmail), AuthType: apiclient.SmtpAuthType(req.AuthType),
+	}
+	if req.Encryption != "" {
+		enc := apiclient.SmtpEncryption(req.Encryption)
+		body.Encryption = &enc
+	}
+	body.FromName = sptr(req.FromName)
+	body.Username = sptr(req.Username)
+	body.Password = sptr(req.Password)
+	resp, err := c.gen.UpsertSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	s := resp.JSON200
+	return &SMTPConfig{Host: string(s.Host), Port: int64(s.Port), Encryption: string(s.Encryption), FromEmail: string(s.FromEmail), AuthType: string(s.AuthType), HasPassword: s.HasPassword, Status: string(s.Status)}, nil
+}
+
+// UpsertLoginBrandingRequest holds the common login-branding fields.
+type UpsertLoginBrandingRequest struct {
+	PrimaryColor        string
+	BackgroundColor     string
+	LogoURL             string
+	RegistrationEnabled *bool
+}
+
+// UpsertLoginBranding creates or updates login-page branding.
+func (c *Client) UpsertLoginBranding(ctx context.Context, clusterID, realm string, req UpsertLoginBrandingRequest) (*LoginBranding, error) {
+	body := apiclient.UpsertLoginBrandingJSONRequestBody{RegistrationEnabled: req.RegistrationEnabled}
+	body.PrimaryColor = sptr(req.PrimaryColor)
+	body.BackgroundColor = sptr(req.BackgroundColor)
+	body.LogoUrl = sptr(req.LogoURL)
+	resp, err := c.gen.UpsertLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	b := resp.JSON200
+	return &LoginBranding{PrimaryColor: strDeref(b.PrimaryColor), BackgroundColor: strDeref(b.BackgroundColor), LogoURL: strDeref(b.LogoUrl), RegistrationEnabled: b.RegistrationEnabled, ForgotPasswordEnabled: b.ForgotPasswordEnabled, Status: string(b.Status)}, nil
+}
+
+// UpsertEmailBrandingRequest holds the common email-branding fields.
+type UpsertEmailBrandingRequest struct {
+	PrimaryColor       string
+	HeaderLogoLightURL string
+	FooterCompanyName  string
+}
+
+// UpsertEmailBranding creates or updates email-template branding.
+func (c *Client) UpsertEmailBranding(ctx context.Context, clusterID, realm string, req UpsertEmailBrandingRequest) (*EmailBranding, error) {
+	body := apiclient.UpsertEmailBrandingJSONRequestBody{}
+	body.PrimaryColor = sptr(req.PrimaryColor)
+	body.HeaderLogoLightUrl = sptr(req.HeaderLogoLightURL)
+	body.FooterCompanyName = sptr(req.FooterCompanyName)
+	resp, err := c.gen.UpsertEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	b := resp.JSON200
+	return &EmailBranding{PrimaryColor: strDeref(b.PrimaryColor), HeaderLogoLightURL: strDeref(b.HeaderLogoLightUrl), FooterCompanyName: strDeref(b.FooterCompanyName), Status: string(b.Status)}, nil
+}
+
+// DeleteLoginBranding reverts login branding to defaults.
+func (c *Client) DeleteLoginBranding(ctx context.Context, clusterID, realm string) error {
+	resp, err := c.gen.DeleteLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// DeleteEmailBranding reverts email branding to defaults.
+func (c *Client) DeleteEmailBranding(ctx context.Context, clusterID, realm string) error {
+	resp, err := c.gen.DeleteEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
+
+// ExportClusterEvents exports a cluster's events as a raw document (CSV/JSON).
+func (c *Client) ExportClusterEvents(ctx context.Context, clusterID string) ([]byte, error) {
+	resp, err := c.gen.ExportClusterEventsWithResponse(ctx, cid(clusterID), nil)
+	if err != nil {
+		return nil, err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return resp.Body, nil
+}

@@ -554,6 +554,103 @@ func (s stubAPI) ListRealmGroupMembers(context.Context, string, string, string) 
 	return s.rusers, s.err
 }
 
+func (s stubAPI) UpdateRealmRole(_ context.Context, _, _, name, newName, _ string) (*skycloak.RealmRole, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if newName != "" {
+		name = newName
+	}
+	return &skycloak.RealmRole{Name: name}, nil
+}
+
+func (s stubAPI) UpdateRealmGroup(_ context.Context, _, _, _, name string) (*skycloak.RealmGroup, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmGroup{ID: "g1", Name: name}, nil
+}
+
+func (s stubAPI) UpdateRealmUser(_ context.Context, _, _, _, email string, _, _ string, _, _ bool) (*skycloak.RealmUser, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmUser{ID: "u1", Username: "jdoe", Email: email}, nil
+}
+
+func (s stubAPI) UpdateDomainRoute(_ context.Context, _, _, _ string, admin bool, _ []string) (*skycloak.DomainRoute, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.DomainRoute{ID: "r1", Realm: "app", AllowAdminAccess: admin}, nil
+}
+
+func (s stubAPI) UpdateApplication(_ context.Context, _, _, clientID, _, _ string, _ []string) (*skycloak.Application, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.Application{ClientID: clientID, Name: "Web"}, nil
+}
+
+func (s stubAPI) UpdateIdentityProvider(_ context.Context, _, _, providerID, _ string, enabled bool) (*skycloak.IdentityProvider, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.IdentityProvider{ProviderID: providerID, Enabled: enabled}, nil
+}
+
+func (s stubAPI) UpdateCluster(_ context.Context, _, version, _ string) (*skycloak.Cluster, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.Cluster{ID: "c1", Name: "prod", Version: version}, nil
+}
+
+func (s stubAPI) UpdateExtension(_ context.Context, _, name, _ string) (*skycloak.ExtensionInfo, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.ExtensionInfo{ID: "e1", Name: name}, nil
+}
+
+func (s stubAPI) UpdateTheme(_ context.Context, _, _, name, _, _ string) (*skycloak.Theme, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.Theme{ID: "t1", Name: name}, nil
+}
+
+func (s stubAPI) UpsertSMTP(_ context.Context, _, _ string, req skycloak.UpsertSMTPRequest) (*skycloak.SMTPConfig, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.SMTPConfig{Host: req.Host, Port: req.Port, FromEmail: req.FromEmail, AuthType: req.AuthType}, nil
+}
+
+func (s stubAPI) UpsertLoginBranding(_ context.Context, _, _ string, req skycloak.UpsertLoginBrandingRequest) (*skycloak.LoginBranding, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.LoginBranding{PrimaryColor: req.PrimaryColor, Status: "applied"}, nil
+}
+
+func (s stubAPI) UpsertEmailBranding(_ context.Context, _, _ string, req skycloak.UpsertEmailBrandingRequest) (*skycloak.EmailBranding, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.EmailBranding{PrimaryColor: req.PrimaryColor, Status: "applied"}, nil
+}
+
+func (s stubAPI) DeleteLoginBranding(context.Context, string, string) error { return s.err }
+func (s stubAPI) DeleteEmailBranding(context.Context, string, string) error { return s.err }
+
+func (s stubAPI) ExportClusterEvents(context.Context, string) ([]byte, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return []byte("id,type\n1,LOGIN\n"), nil
+}
+
 func TestListClustersHandler(t *testing.T) {
 	api := stubAPI{clusters: []skycloak.Cluster{
 		{ID: "c1", Name: "prod", Status: "available", Type: "keycloak", Size: "small", Version: "26.1", Location: "eu"},

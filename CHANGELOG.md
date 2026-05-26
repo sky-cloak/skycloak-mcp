@@ -19,6 +19,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Action tools: `discover_oidc` (read); `test_smtp`, `test_identity_provider`, `cancel_cluster_upgrade` (write). `cancel_cluster_upgrade` requires `confirm=true`.
 - Cluster security tools: `get_cluster_security` (read); `update_cluster_security` (write) — IP allow-listing, rate limiting, WAF, geo-blocking, bot management (CAPTCHA preserved).
 - Read-parity tools: `get_cluster_credentials`, `list_cluster_builds`, `get_cluster_build`, `get_cluster_upgrade_path`, `get_cluster_insights`, `get_realm_role`, `get_realm_group`, `list_realm_group_members`.
+- Update/upsert tools: `update_realm_role`, `update_realm_group`, `update_realm_user`, `update_application`, `update_identity_provider`, `update_cluster`, `update_extension`, `update_theme`, `update_domain_route`, `upsert_smtp`, `upsert_login_branding`, `upsert_email_branding`, `delete_login_branding`, `delete_email_branding`, `export_cluster_events`.
 
 ## [0.1.0] - 2026-05-25
 
