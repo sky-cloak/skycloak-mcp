@@ -491,6 +491,20 @@ func (s stubAPI) TestIdentityProviderConnection(context.Context, string, string,
 
 func (s stubAPI) CancelClusterUpgrade(context.Context, string) error { return s.err }
 
+func (s stubAPI) GetClusterSecurity(context.Context, string) (*skycloak.ClusterSecurity, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.ClusterSecurity{WAF: &skycloak.WAF{Enabled: true, Mode: "block", Preset: "owasp_top_10"}}, nil
+}
+
+func (s stubAPI) UpdateClusterSecurity(_ context.Context, _ string, sec *skycloak.ClusterSecurity) (*skycloak.ClusterSecurity, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return sec, nil
+}
+
 func TestListClustersHandler(t *testing.T) {
 	api := stubAPI{clusters: []skycloak.Cluster{
 		{ID: "c1", Name: "prod", Status: "available", Type: "keycloak", Size: "small", Version: "26.1", Location: "eu"},

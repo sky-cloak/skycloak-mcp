@@ -93,6 +93,8 @@ type API interface {
 	TestSMTP(ctx context.Context, clusterID, realm, email string) (*skycloak.TestResult, error)
 	TestIdentityProviderConnection(ctx context.Context, clusterID, realm, providerID, clientID, clientSecret string) (*skycloak.TestResult, error)
 	CancelClusterUpgrade(ctx context.Context, clusterID string) error
+	GetClusterSecurity(ctx context.Context, clusterID string) (*skycloak.ClusterSecurity, error)
+	UpdateClusterSecurity(ctx context.Context, clusterID string, sec *skycloak.ClusterSecurity) (*skycloak.ClusterSecurity, error)
 }
 
 // Register adds all tools to the server.
@@ -114,6 +116,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerReadParityTools(s, api)
 	registerParityReadTools(s, api)
 	registerActionReadTools(s, api)
+	registerSecurityReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}
