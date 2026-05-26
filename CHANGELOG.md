@@ -16,6 +16,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Application role & session tools: `list_application_roles`, `list_application_sessions` (read); `assign_application_role`, `remove_application_role` (write).
 - Read-parity tools: `get_realm`, `get_application`, `get_identity_provider`, `list_cluster_locations`, `list_cluster_types`, `list_cluster_features`, `list_cluster_versions`, `list_cluster_upgrades`, `list_identity_provider_templates`, `list_domain_routes`.
 - Write/read parity tools: `get_smtp`, `get_theme`, `get_domain_route`, `get_client_theme_assignment`, `list_user_roles`, `list_user_groups` (read); `rotate_application_secret`, `update_realm`, `delete_smtp`, `create_domain_route`, `delete_domain_route`, `set_client_theme_assignment`, `delete_theme`, `delete_extension`, `delete_export` (write). Destructive deletes require `confirm=true`.
+- Action tools: `discover_oidc` (read); `test_smtp`, `test_identity_provider`, `cancel_cluster_upgrade` (write). `cancel_cluster_upgrade` requires `confirm=true`.
 
 ## [0.1.0] - 2026-05-25
 

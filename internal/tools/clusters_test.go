@@ -468,6 +468,29 @@ func (s stubAPI) UpdateRealm(_ context.Context, _, realm, displayName string, en
 	return &skycloak.Realm{Name: realm, DisplayName: displayName, Enabled: enabled}, nil
 }
 
+func (s stubAPI) DiscoverOIDC(context.Context, string) (*skycloak.OIDCDiscovery, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.OIDCDiscovery{Issuer: "https://idp", TokenEndpoint: "https://idp/token", AuthorizationEndpoint: "https://idp/auth"}, nil
+}
+
+func (s stubAPI) TestSMTP(context.Context, string, string, string) (*skycloak.TestResult, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.TestResult{Success: true, Message: "sent"}, nil
+}
+
+func (s stubAPI) TestIdentityProviderConnection(context.Context, string, string, string, string, string) (*skycloak.TestResult, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.TestResult{Success: true, Message: "ok"}, nil
+}
+
+func (s stubAPI) CancelClusterUpgrade(context.Context, string) error { return s.err }
+
 func TestListClustersHandler(t *testing.T) {
 	api := stubAPI{clusters: []skycloak.Cluster{
 		{ID: "c1", Name: "prod", Status: "available", Type: "keycloak", Size: "small", Version: "26.1", Location: "eu"},

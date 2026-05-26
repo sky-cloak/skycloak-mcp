@@ -89,6 +89,10 @@ type API interface {
 	ListRealmUserRoles(ctx context.Context, clusterID, realm, userID string) ([]skycloak.RealmRole, error)
 	ListRealmUserGroups(ctx context.Context, clusterID, realm, userID string) ([]skycloak.RealmGroup, error)
 	UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled bool) (*skycloak.Realm, error)
+	DiscoverOIDC(ctx context.Context, issuerURL string) (*skycloak.OIDCDiscovery, error)
+	TestSMTP(ctx context.Context, clusterID, realm, email string) (*skycloak.TestResult, error)
+	TestIdentityProviderConnection(ctx context.Context, clusterID, realm, providerID, clientID, clientSecret string) (*skycloak.TestResult, error)
+	CancelClusterUpgrade(ctx context.Context, clusterID string) error
 }
 
 // Register adds all tools to the server.
@@ -109,6 +113,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerApplicationRoleReadTools(s, api)
 	registerReadParityTools(s, api)
 	registerParityReadTools(s, api)
+	registerActionReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}

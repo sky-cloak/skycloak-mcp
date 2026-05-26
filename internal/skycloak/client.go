@@ -1881,3 +1881,85 @@ func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName 
 	r := resp.JSON200
 	return &Realm{Name: string(r.Name), DisplayName: string(r.DisplayName), Enabled: r.Enabled}, nil
 }
+
+// ---- Actions: discover, test, cancel upgrade ----
+
+// OIDCDiscovery is the subset of an OIDC discovery document used to pre-fill a provider.
+type OIDCDiscovery struct {
+	Issuer                string   `json:"issuer"`
+	AuthorizationEndpoint string   `json:"authorization_endpoint"`
+	TokenEndpoint         string   `json:"token_endpoint"`
+	UserinfoEndpoint      string   `json:"userinfo_endpoint,omitempty"`
+	JwksURI               string   `json:"jwks_uri,omitempty"`
+	ScopesSupported       []string `json:"scopes_supported,omitempty"`
+}
+
+// DiscoverOIDC fetches the OIDC discovery document for an issuer URL.
+func (c *Client) DiscoverOIDC(ctx context.Context, issuerURL string) (*OIDCDiscovery, error) {
+	resp, err := c.gen.DiscoverOIDCWithResponse(ctx, apiclient.DiscoverOIDCJSONRequestBody{IssuerUrl: issuerURL})
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	d := resp.JSON200
+	out := &OIDCDiscovery{Issuer: d.Issuer, AuthorizationEndpoint: d.AuthorizationEndpoint, TokenEndpoint: d.TokenEndpoint}
+	out.UserinfoEndpoint = strDeref(d.UserinfoEndpoint)
+	out.JwksURI = strDeref(d.JwksUri)
+	if d.ScopesSupported != nil {
+		out.ScopesSupported = *d.ScopesSupported
+	}
+	return out, nil
+}
+
+// TestResult is the outcome of a connectivity/config test.
+type TestResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+}
+
+// TestSMTP sends a test email through a realm's SMTP configuration.
+func (c *Client) TestSMTP(ctx context.Context, clusterID, realm, email string) (*TestResult, error) {
+	body := apiclient.TestSmtpConfigJSONRequestBody{Email: openapitypes.Email(email)}
+	resp, err := c.gen.TestSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return &TestResult{Success: resp.JSON200.Success, Message: strDeref(resp.JSON200.Message)}, nil
+}
+
+// TestIdentityProviderConnection tests connectivity to an identity provider,
+// optionally overriding the client credentials for the test only.
+func (c *Client) TestIdentityProviderConnection(ctx context.Context, clusterID, realm, providerID, clientID, clientSecret string) (*TestResult, error) {
+	body := apiclient.TestIdentityProviderConnectionJSONRequestBody{}
+	if clientID != "" {
+		body.ClientId = &clientID
+	}
+	if clientSecret != "" {
+		body.ClientSecret = &clientSecret
+	}
+	resp, err := c.gen.TestIdentityProviderConnectionWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), providerID, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return &TestResult{Success: resp.JSON200.Success, Message: resp.JSON200.Message}, nil
+}
+
+// CancelClusterUpgrade cancels an in-progress cluster upgrade.
+func (c *Client) CancelClusterUpgrade(ctx context.Context, clusterID string) error {
+	resp, err := c.gen.CancelClusterUpgradeWithResponse(ctx, cid(clusterID))
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
+}
