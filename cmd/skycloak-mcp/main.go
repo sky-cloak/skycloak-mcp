@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/term"
 
 	"github.com/sky-cloak/skycloak-mcp/internal/auth"
 	"github.com/sky-cloak/skycloak-mcp/internal/skycloak"
@@ -99,7 +101,18 @@ func runServer(ctx context.Context, args []string) {
 		return
 	}
 
-	apiKey, err := auth.LoadAPIKey(auth.ConfigFromEnv())
+	cfg := auth.ConfigFromEnv()
+	apiKey, err := auth.LoadAPIKey(cfg)
+	if errors.Is(err, auth.ErrNoCredential) && term.IsTerminal(int(os.Stdin.Fd())) {
+		// A human ran `run` directly with no stored key: sign in inline, then
+		// reload. When an MCP client spawns us (stdin is a pipe, not a TTY) we
+		// skip this and surface the actionable "run init" error instead, since
+		// the browser device flow can't be driven over the protocol pipe.
+		if ierr := auth.Init(ctx, cfg, auth.InitOptions{AllowWrites: *allowWrites, TTL: 90 * 24 * time.Hour}, os.Stderr); ierr != nil {
+			log.Fatalf("sign-in failed: %v", ierr)
+		}
+		apiKey, err = auth.LoadAPIKey(cfg)
+	}
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
