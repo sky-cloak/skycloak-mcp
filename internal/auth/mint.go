@@ -102,6 +102,32 @@ func listWorkspaces(ctx context.Context, hc *http.Client, cfg Config, token stri
 	return parseWorkspaces(raw), nil
 }
 
+// getDefaultWorkspace fetches the signed-in user's default workspace via
+// GET {dashboard}/api/workspaces/default, which returns a bare workspace object.
+// Returns a zero workspace (no error) when unavailable, so the caller can fall
+// back to listing.
+func getDefaultWorkspace(ctx context.Context, hc *http.Client, cfg Config, token string) workspace {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.DashboardURL+"/api/workspaces/default", nil)
+	if err != nil {
+		return workspace{}
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	resp, err := hc.Do(req)
+	if err != nil {
+		return workspace{}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return workspace{}
+	}
+	var w workspace
+	if err := json.NewDecoder(resp.Body).Decode(&w); err != nil {
+		return workspace{}
+	}
+	return w
+}
+
 // parseWorkspaces accepts either a bare array or a {"workspaces": [...]} or
 // {"data": [...]} envelope, keeping only entries that carry an id.
 func parseWorkspaces(raw []byte) []workspace {

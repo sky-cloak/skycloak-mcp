@@ -70,6 +70,12 @@ func resolveWorkspace(ctx context.Context, hc *http.Client, cfg Config, token, e
 	if explicit != "" {
 		return explicit, nil
 	}
+	// Prefer the purpose-built default-workspace endpoint; it returns a single
+	// workspace directly and covers the common single-workspace case.
+	if w := getDefaultWorkspace(ctx, hc, cfg, token); w.ID != "" {
+		fprintf(out, "Using your default workspace %q (%s).\n", w.Name, w.ID)
+		return w.ID, nil
+	}
 	wss, _ := listWorkspaces(ctx, hc, cfg, token)
 	switch len(wss) {
 	case 0:
