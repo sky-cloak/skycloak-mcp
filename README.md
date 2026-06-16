@@ -1,16 +1,17 @@
 # skycloak-mcp
 
-Official [Model Context Protocol](https://modelcontextprotocol.io) server for **Skycloak** — manage your managed-Keycloak environment from any MCP client (Claude Desktop, Claude Code, Cursor). Sign in once with your browser; no API key to copy or paste.
+Official [Model Context Protocol](https://modelcontextprotocol.io) server for **Skycloak** (managed Keycloak): manage your clusters, realms, applications, and SSO from any MCP client (Claude Desktop, Claude Code, Cursor). Sign in once with your browser.
 
 > **Status:** early release. Tool coverage is growing; see the changelog for what's available.
 
 ## Authentication & safety
 
-- **Sign in once:** run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key and stores it in your operating-system keychain — nothing to copy or paste. `skycloak-mcp logout` removes it.
-- **Headless / CI:** set the `SKYCLOAK_API_KEY` environment variable (create a key in the [Skycloak dashboard](https://app.skycloak.io)) to skip the browser entirely. It always takes precedence over the keychain.
+- **Sign in once.** Run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key, stores it in your operating-system keychain, and detects your default workspace automatically (pass `--workspace <id>` to pick another). `skycloak-mcp logout` removes the stored key.
+- **Or just run it.** Started directly in a terminal with no stored key, `skycloak-mcp run` signs you in first, then serves. When an MCP client launches it over a pipe it stays non-interactive, so run `init` once beforehand.
+- **Headless / CI.** Set the `SKYCLOAK_API_KEY` environment variable (create a key in the [Skycloak dashboard](https://app.skycloak.io)) to skip the browser entirely. It always takes precedence over the keychain.
+- **Read-only by default.** Mutating tools are registered only when the server starts with `--allow-writes`.
+- **Destructive tools require confirmation:** deleting a realm, for example, needs an explicit `confirm=true` argument.
 - Requests are rate limited according to your Skycloak plan; on a `429` response the server surfaces `Retry-After`.
-- **Read-only by default.** Mutating tools are only registered when the server is started with `--allow-writes`.
-- **Destructive tools require confirmation** — e.g. deleting a realm requires an explicit `confirm=true` argument.
 
 ## Tools
 
@@ -30,7 +31,7 @@ Read-only tools are always available. **Write** tools are registered only when t
 | SMTP | `get_smtp` | `upsert_smtp`, `delete_smtp`, `test_smtp` |
 | Exports & logs | `list_exports`, `get_export`, `get_logs`, `get_security_logs`, `query_events` | `create_export`, `delete_export`, `export_cluster_events` |
 
-**Conventions:** destructive tools (`delete_*`, `uninstall_extension`, `cancel_cluster_upgrade`) require `confirm=true`. `create_cluster` is asynchronous — poll `get_cluster` until the cluster is `available`. `create_domain` returns the DNS records the customer must create; `verify_domain` triggers a DNS check. `set_theme_assignment` activates a custom theme per Keycloak theme type (empty string resets to the built-in default). `update_cluster_security` leaves CAPTCHA settings untouched.
+**Conventions:** destructive tools (`delete_*`, `uninstall_extension`, `cancel_cluster_upgrade`) require `confirm=true`. `create_cluster` is asynchronous: poll `get_cluster` until the cluster is `available`. `create_domain` returns the DNS records the customer must create; `verify_domain` triggers a DNS check. `set_theme_assignment` activates a custom theme per Keycloak theme type (empty string resets to the built-in default). `update_cluster_security` leaves CAPTCHA settings untouched.
 
 ## Connecting
 
@@ -69,7 +70,7 @@ The server also supports a streamable-HTTP transport (`run --transport http`) fo
 
 | Env var | Default |
 |---|---|
-| `SKYCLOAK_API_KEY` | — (optional; for headless/CI. Otherwise sign in with `skycloak-mcp init`) |
+| `SKYCLOAK_API_KEY` | none (optional; for headless/CI, otherwise sign in with `skycloak-mcp init`) |
 | `SKYCLOAK_ENDPOINT` | `https://api.skycloak.io` |
 | `SKYCLOAK_API_VERSION` | current API version |
 | `SKYCLOAK_ISSUER` | `https://login.app.skycloak.io/realms/skycloak` |
@@ -100,7 +101,7 @@ specification with [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen).
 
 ## Keeping in sync with the API
 
-The client in `internal/apiclient` is generated from `internal/apiclient/openapi.yaml` with [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen) — run `make generate` to refresh it. CI fails if the committed generated code drifts from the spec. Requests are retried on `429`/`5xx` with `Retry-After`-aware backoff.
+The client in `internal/apiclient` is generated from `internal/apiclient/openapi.yaml` with [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen); run `make generate` to refresh it. CI fails if the committed generated code drifts from the spec. Requests are retried on `429`/`5xx` with `Retry-After`-aware backoff.
 
 ## Distribution
 
