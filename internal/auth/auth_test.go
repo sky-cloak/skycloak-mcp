@@ -182,6 +182,29 @@ func TestMintAPIKey_SendsAuthAndWorkspace(t *testing.T) {
 	}
 }
 
+func TestGetDefaultWorkspace(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/workspaces/default" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(workspace{ID: "ws-default", Name: "Acme"})
+	}))
+	defer srv.Close()
+
+	got := getDefaultWorkspace(context.Background(), srv.Client(), Config{DashboardURL: srv.URL}, "tkn")
+	if got.ID != "ws-default" || got.Name != "Acme" {
+		t.Fatalf("default workspace: %+v", got)
+	}
+
+	// Non-200 yields a zero workspace (caller falls back to listing).
+	bad := httptest.NewServer(http.NotFoundHandler())
+	defer bad.Close()
+	if z := getDefaultWorkspace(context.Background(), bad.Client(), Config{DashboardURL: bad.URL}, "tkn"); z.ID != "" {
+		t.Fatalf("expected zero workspace on non-200, got %+v", z)
+	}
+}
+
 func equalSet(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
