@@ -13,6 +13,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - `SKYCLOAK_API_KEY` is now optional: it is the headless/CI path (and still used by the container image) and takes precedence over the keychain when set. Invoking the binary with no subcommand still serves stdio, so existing configurations keep working.
 
+### Removed
+- list_cluster_builds / get_cluster_build tools: the cluster-builds endpoints were removed from the Skycloak public API.
+
 ## [0.2.0] - 2026-05-26
 
 ### Added

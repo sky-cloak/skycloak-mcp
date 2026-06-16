@@ -96,8 +96,6 @@ type API interface {
 	GetClusterSecurity(ctx context.Context, clusterID string) (*skycloak.ClusterSecurity, error)
 	UpdateClusterSecurity(ctx context.Context, clusterID string, sec *skycloak.ClusterSecurity) (*skycloak.ClusterSecurity, error)
 	GetClusterCredentials(ctx context.Context, clusterID string) (*skycloak.ClusterCredentials, error)
-	ListClusterBuilds(ctx context.Context, clusterID string) ([]skycloak.ClusterBuild, error)
-	GetClusterBuild(ctx context.Context, clusterID, buildID string) (*skycloak.ClusterBuild, error)
 	GetClusterUpgradePath(ctx context.Context, clusterID string) ([]skycloak.UpgradePathStep, error)
 	ClusterInsights(ctx context.Context, clusterID, kind string) ([]byte, error)
 	GetRealmRole(ctx context.Context, clusterID, realm, name string) (*skycloak.RealmRole, error)
