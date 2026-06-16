@@ -12,6 +12,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - `SKYCLOAK_API_KEY` is now optional: it is the headless/CI path (and still used by the container image) and takes precedence over the keychain when set. Invoking the binary with no subcommand still serves stdio, so existing configurations keep working.
+- `skycloak-mcp run` signs you in automatically (device flow) when started interactively in a terminal with no stored key. When an MCP client launches it over a pipe it stays non-interactive and surfaces the actionable `run skycloak-mcp init` message instead.
 
 ### Removed
 - list_cluster_builds / get_cluster_build tools: the cluster-builds endpoints were removed from the Skycloak public API.
