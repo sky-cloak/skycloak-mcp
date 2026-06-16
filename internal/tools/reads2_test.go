@@ -9,18 +9,11 @@ import (
 
 func TestReads2Handlers(t *testing.T) {
 	api := stubAPI{
-		builds: []skycloak.ClusterBuild{{ID: "b1", Status: "completed"}},
 		upPath: []skycloak.UpgradePathStep{{Version: "26.1", Required: true}},
 		rusers: []skycloak.RealmUser{{ID: "u1", Username: "jdoe", Email: "j@x.com"}},
 	}
 	if res, out, err := getClusterCredentialsHandler(api)(context.Background(), nil, ListDomainsInput{ClusterID: "c1"}); err != nil || res.IsError || out.AdminUsername != "admin" {
 		t.Fatalf("credentials: err=%v res=%v out=%+v", err, res.IsError, out)
-	}
-	if _, out, err := listClusterBuildsHandler(api)(context.Background(), nil, ListDomainsInput{ClusterID: "c1"}); err != nil || out.Count != 1 {
-		t.Fatalf("builds: %+v %v", out, err)
-	}
-	if res, out, err := getClusterBuildHandler(api)(context.Background(), nil, BuildRef{ClusterID: "c1", BuildID: "b1"}); err != nil || res.IsError || out.ID != "b1" {
-		t.Fatalf("build: err=%v res=%v out=%+v", err, res.IsError, out)
 	}
 	if _, out, err := getClusterUpgradePathHandler(api)(context.Background(), nil, ListDomainsInput{ClusterID: "c1"}); err != nil || len(out.Steps) != 1 {
 		t.Fatalf("upgrade path: %+v %v", out, err)

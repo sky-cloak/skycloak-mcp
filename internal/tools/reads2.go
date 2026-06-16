@@ -18,18 +18,6 @@ func registerReads2Tools(s *mcp.Server, api API) {
 	}, getClusterCredentialsHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "skycloak_list_cluster_builds",
-		Description: "List the image build history for a cluster.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List cluster builds"},
-	}, listClusterBuildsHandler(api))
-
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "skycloak_get_cluster_build",
-		Description: "Get a single cluster image build, including its log lines.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get cluster build"},
-	}, getClusterBuildHandler(api))
-
-	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_upgrade_path",
 		Description: "Get the recommended version-upgrade path for a cluster.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get upgrade path"},
@@ -70,55 +58,6 @@ func getClusterCredentialsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, 
 			return toolError(err), skycloak.ClusterCredentials{}, nil
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "admin_username=" + creds.AdminUsername + " (password in structured output)"}}}, *creds, nil
-	}
-}
-
-// BuildsOutput is the structured build-list result.
-type BuildsOutput struct {
-	Builds []skycloak.ClusterBuild `json:"builds"`
-	Count  int                     `json:"count"`
-}
-
-func listClusterBuildsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, BuildsOutput] {
-	return func(ctx context.Context, _ *mcp.CallToolRequest, in ListDomainsInput) (*mcp.CallToolResult, BuildsOutput, error) {
-		if in.ClusterID == "" {
-			return errResult("cluster_id is required"), BuildsOutput{}, nil
-		}
-		builds, err := api.ListClusterBuilds(ctx, in.ClusterID)
-		if err != nil {
-			return toolError(err), BuildsOutput{}, nil
-		}
-		var b strings.Builder
-		for _, bd := range builds {
-			fmt.Fprintf(&b, "- %s status=%s phase=%s progress=%d%%\n", bd.ID, bd.Status, bd.Phase, bd.Progress)
-		}
-		if len(builds) == 0 {
-			b.WriteString("No builds for this cluster.")
-		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: b.String()}}}, BuildsOutput{Builds: builds, Count: len(builds)}, nil
-	}
-}
-
-// BuildRef identifies a build.
-type BuildRef struct {
-	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
-	BuildID   string `json:"build_id" jsonschema:"the build ID"`
-}
-
-func getClusterBuildHandler(api API) mcp.ToolHandlerFor[BuildRef, skycloak.ClusterBuild] {
-	return func(ctx context.Context, _ *mcp.CallToolRequest, in BuildRef) (*mcp.CallToolResult, skycloak.ClusterBuild, error) {
-		if in.ClusterID == "" || in.BuildID == "" {
-			return errResult("cluster_id and build_id are required"), skycloak.ClusterBuild{}, nil
-		}
-		bd, err := api.GetClusterBuild(ctx, in.ClusterID, in.BuildID)
-		if err != nil {
-			return toolError(err), skycloak.ClusterBuild{}, nil
-		}
-		txt := fmt.Sprintf("%s status=%s phase=%s progress=%d%%", bd.ID, bd.Status, bd.Phase, bd.Progress)
-		if len(bd.Logs) > 0 {
-			txt += "\n" + strings.Join(bd.Logs, "\n")
-		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: txt}}}, *bd, nil
 	}
 }
 

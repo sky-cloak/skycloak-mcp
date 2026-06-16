@@ -6,6 +6,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+- list_cluster_builds / get_cluster_build tools: the cluster-builds endpoints were removed from the Skycloak public API.
+
 ## [0.2.0] - 2026-05-26
 
 ### Added

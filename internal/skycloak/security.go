@@ -201,7 +201,7 @@ func (s *ClusterSecurity) applyToAPI(c *apiclient.ClusterSecurityConfig) {
 
 // GetClusterSecurity returns a cluster's edge-security configuration.
 func (c *Client) GetClusterSecurity(ctx context.Context, clusterID string) (*ClusterSecurity, error) {
-	resp, err := c.gen.GetClusterSecurityWithResponse(ctx, cid(clusterID))
+	resp, err := c.gen.GetClusterSecurityWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +214,7 @@ func (c *Client) GetClusterSecurity(ctx context.Context, clusterID string) (*Clu
 // UpdateClusterSecurity overlays the managed sections onto the cluster's current
 // config (preserving CAPTCHA) and saves it.
 func (c *Client) UpdateClusterSecurity(ctx context.Context, clusterID string, sec *ClusterSecurity) (*ClusterSecurity, error) {
-	cur, err := c.gen.GetClusterSecurityWithResponse(ctx, cid(clusterID))
+	cur, err := c.gen.GetClusterSecurityWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func (c *Client) UpdateClusterSecurity(ctx context.Context, clusterID string, se
 	}
 	body.IpAccessControl, body.RateLimiting, body.Waf, body.GeoBlocking, body.BotManagement = nil, nil, nil, nil, nil
 	sec.applyToAPI(&body)
-	resp, err := c.gen.UpdateClusterSecurityWithResponse(ctx, cid(clusterID), apiclient.UpdateClusterSecurityJSONRequestBody(body))
+	resp, err := c.gen.UpdateClusterSecurityWithResponse(ctx, cid(clusterID), nil, apiclient.UpdateClusterSecurityJSONRequestBody(body))
 	if err != nil {
 		return nil, err
 	}

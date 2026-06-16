@@ -155,7 +155,7 @@ type ListClustersParams struct {
 
 // ListClusters returns the workspace's clusters.
 func (c *Client) ListClusters(ctx context.Context, _ ListClustersParams) ([]Cluster, error) {
-	resp, err := c.gen.ListClustersWithResponse(ctx)
+	resp, err := c.gen.ListClustersWithResponse(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func clusterFromAPI(cl *apiclient.Cluster) *Cluster {
 
 // GetCluster returns a single cluster by ID.
 func (c *Client) GetCluster(ctx context.Context, id string) (*Cluster, error) {
-	resp, err := c.gen.GetClusterWithResponse(ctx, cid(id))
+	resp, err := c.gen.GetClusterWithResponse(ctx, cid(id), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func (c *Client) CreateCluster(ctx context.Context, req CreateClusterRequest) (*
 		t := apiclient.ClusterType(req.Type)
 		body.Type = &t
 	}
-	resp, err := c.gen.CreateClusterWithResponse(ctx, body)
+	resp, err := c.gen.CreateClusterWithResponse(ctx, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +227,7 @@ func (c *Client) CreateCluster(ctx context.Context, req CreateClusterRequest) (*
 
 // DeleteCluster deletes a cluster.
 func (c *Client) DeleteCluster(ctx context.Context, id string) error {
-	resp, err := c.gen.DeleteClusterWithResponse(ctx, cid(id))
+	resp, err := c.gen.DeleteClusterWithResponse(ctx, cid(id), nil)
 	if err != nil {
 		return err
 	}
@@ -246,7 +246,7 @@ type Realm struct {
 
 // ListRealms returns the realms in a cluster.
 func (c *Client) ListRealms(ctx context.Context, clusterID string) ([]Realm, error) {
-	resp, err := c.gen.ListRealmsWithResponse(ctx, cid(clusterID))
+	resp, err := c.gen.ListRealmsWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func (c *Client) CreateRealm(ctx context.Context, clusterID string, r Realm) (*R
 		dn := apiclient.RealmDisplayName(r.DisplayName)
 		body.DisplayName = &dn
 	}
-	resp, err := c.gen.CreateRealmWithResponse(ctx, cid(clusterID), body)
+	resp, err := c.gen.CreateRealmWithResponse(ctx, cid(clusterID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +280,7 @@ func (c *Client) CreateRealm(ctx context.Context, clusterID string, r Realm) (*R
 
 // DeleteRealm deletes a realm and all of its data.
 func (c *Client) DeleteRealm(ctx context.Context, clusterID, name string) error {
-	resp, err := c.gen.DeleteRealmWithResponse(ctx, cid(clusterID), apiclient.RealmName(name))
+	resp, err := c.gen.DeleteRealmWithResponse(ctx, cid(clusterID), apiclient.RealmName(name), nil)
 	if err != nil {
 		return err
 	}
@@ -361,7 +361,7 @@ func (c *Client) CreateApplication(ctx context.Context, clusterID, realm string,
 		ru := req.RedirectURIs
 		body.RedirectUris = &ru
 	}
-	resp, err := c.gen.CreateApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.CreateApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return "", "", err
 	}
@@ -377,7 +377,7 @@ func (c *Client) CreateApplication(ctx context.Context, clusterID, realm string,
 
 // DeleteApplication deletes an application.
 func (c *Client) DeleteApplication(ctx context.Context, clusterID, realm, clientID string) error {
-	resp, err := c.gen.DeleteApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	resp, err := c.gen.DeleteApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), nil)
 	if err != nil {
 		return err
 	}
@@ -423,7 +423,7 @@ func (c *Client) CreateOIDCIdentityProvider(ctx context.Context, clusterID, real
 	if req.ClientSecret != "" {
 		body.ClientSecret = &req.ClientSecret
 	}
-	resp, err := c.gen.CreateIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.CreateIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return err
 	}
@@ -435,7 +435,7 @@ func (c *Client) CreateOIDCIdentityProvider(ctx context.Context, clusterID, real
 
 // DeleteIdentityProvider deletes an identity provider.
 func (c *Client) DeleteIdentityProvider(ctx context.Context, clusterID, realm, providerID string) error {
-	resp, err := c.gen.DeleteIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ProviderId(providerID))
+	resp, err := c.gen.DeleteIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ProviderId(providerID), nil)
 	if err != nil {
 		return err
 	}
@@ -455,7 +455,7 @@ type IdentityProvider struct {
 
 // ListIdentityProviders returns the identity providers in a realm.
 func (c *Client) ListIdentityProviders(ctx context.Context, clusterID, realm string) ([]IdentityProvider, error) {
-	resp, err := c.gen.ListIdentityProvidersWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.ListIdentityProvidersWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -701,7 +701,7 @@ func (c *Client) ListDomains(ctx context.Context, clusterID string) ([]Domain, e
 
 // GetDomain returns a custom domain by ID.
 func (c *Client) GetDomain(ctx context.Context, clusterID, domainID string) (*Domain, error) {
-	resp, err := c.gen.GetDomainWithResponse(ctx, cid(clusterID), uid(domainID))
+	resp, err := c.gen.GetDomainWithResponse(ctx, cid(clusterID), uid(domainID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -718,7 +718,7 @@ func (c *Client) CreateDomain(ctx context.Context, clusterID, domain, subdomain 
 	if subdomain != "" {
 		body.Subdomain = &subdomain
 	}
-	resp, err := c.gen.CreateDomainWithResponse(ctx, cid(clusterID), body)
+	resp, err := c.gen.CreateDomainWithResponse(ctx, cid(clusterID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -731,7 +731,7 @@ func (c *Client) CreateDomain(ctx context.Context, clusterID, domain, subdomain 
 
 // VerifyDomain triggers DNS verification and returns the updated domain.
 func (c *Client) VerifyDomain(ctx context.Context, clusterID, domainID string) (*Domain, error) {
-	resp, err := c.gen.VerifyDomainWithResponse(ctx, cid(clusterID), uid(domainID))
+	resp, err := c.gen.VerifyDomainWithResponse(ctx, cid(clusterID), uid(domainID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -744,7 +744,7 @@ func (c *Client) VerifyDomain(ctx context.Context, clusterID, domainID string) (
 
 // DeleteDomain removes a custom domain.
 func (c *Client) DeleteDomain(ctx context.Context, clusterID, domainID string) error {
-	resp, err := c.gen.DeleteDomainWithResponse(ctx, cid(clusterID), uid(domainID))
+	resp, err := c.gen.DeleteDomainWithResponse(ctx, cid(clusterID), uid(domainID), nil)
 	if err != nil {
 		return err
 	}
@@ -777,7 +777,7 @@ func themeFromAPI(t *apiclient.Theme) Theme {
 
 // ListThemes returns the custom themes uploaded to a cluster.
 func (c *Client) ListThemes(ctx context.Context, clusterID string) ([]Theme, error) {
-	resp, err := c.gen.ListThemesWithResponse(ctx, cid(clusterID))
+	resp, err := c.gen.ListThemesWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -824,7 +824,7 @@ func themeAssignmentFromAPI(a *apiclient.ThemeAssignment) *ThemeAssignment {
 
 // GetThemeAssignment returns the realm-level theme assignment.
 func (c *Client) GetThemeAssignment(ctx context.Context, clusterID, realm string) (*ThemeAssignment, error) {
-	resp, err := c.gen.GetThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.GetThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -841,7 +841,7 @@ func (c *Client) SetThemeAssignment(ctx context.Context, clusterID, realm string
 		Login: themeIDNullable(a.Login), Account: themeIDNullable(a.Account),
 		Admin: themeIDNullable(a.Admin), Email: themeIDNullable(a.Email),
 	}
-	resp, err := c.gen.SetThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.SetThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -863,7 +863,7 @@ type LoginBranding struct {
 
 // GetLoginBranding returns the login-branding configuration for a realm.
 func (c *Client) GetLoginBranding(ctx context.Context, clusterID, realm string) (*LoginBranding, error) {
-	resp, err := c.gen.GetLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.GetLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -887,7 +887,7 @@ type EmailBranding struct {
 
 // GetEmailBranding returns the email-branding configuration for a realm.
 func (c *Client) GetEmailBranding(ctx context.Context, clusterID, realm string) (*EmailBranding, error) {
-	resp, err := c.gen.GetEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.GetEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -933,7 +933,7 @@ func extensionInfoFromAPI(e *apiclient.Extension) ExtensionInfo {
 
 // ListExtensions returns the extension catalog available to the workspace.
 func (c *Client) ListExtensions(ctx context.Context) ([]ExtensionInfo, error) {
-	resp, err := c.gen.ListExtensionsWithResponse(ctx)
+	resp, err := c.gen.ListExtensionsWithResponse(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -949,7 +949,7 @@ func (c *Client) ListExtensions(ctx context.Context) ([]ExtensionInfo, error) {
 
 // GetExtension returns a single catalog extension by ID.
 func (c *Client) GetExtension(ctx context.Context, extensionID string) (*ExtensionInfo, error) {
-	resp, err := c.gen.GetExtensionWithResponse(ctx, uid(extensionID))
+	resp, err := c.gen.GetExtensionWithResponse(ctx, uid(extensionID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -981,7 +981,7 @@ func clusterExtensionFromAPI(e *apiclient.ClusterExtension) ClusterExtension {
 
 // ListClusterExtensions returns the extensions installed on a cluster.
 func (c *Client) ListClusterExtensions(ctx context.Context, clusterID string) ([]ClusterExtension, error) {
-	resp, err := c.gen.ListClusterExtensionsWithResponse(ctx, cid(clusterID))
+	resp, err := c.gen.ListClusterExtensionsWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1001,7 +1001,7 @@ func (c *Client) InstallExtension(ctx context.Context, clusterID, extensionID st
 	if len(params) > 0 {
 		body.Parameters = &params
 	}
-	resp, err := c.gen.InstallExtensionWithResponse(ctx, cid(clusterID), body)
+	resp, err := c.gen.InstallExtensionWithResponse(ctx, cid(clusterID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1014,7 +1014,7 @@ func (c *Client) InstallExtension(ctx context.Context, clusterID, extensionID st
 
 // UpgradeExtension upgrades an installed extension to the latest version (asynchronous).
 func (c *Client) UpgradeExtension(ctx context.Context, clusterID, extensionID string) (*ClusterExtension, error) {
-	resp, err := c.gen.UpgradeClusterExtensionWithResponse(ctx, cid(clusterID), uid(extensionID))
+	resp, err := c.gen.UpgradeClusterExtensionWithResponse(ctx, cid(clusterID), uid(extensionID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1027,7 +1027,7 @@ func (c *Client) UpgradeExtension(ctx context.Context, clusterID, extensionID st
 
 // UninstallExtension removes an extension from a cluster.
 func (c *Client) UninstallExtension(ctx context.Context, clusterID, extensionID string) error {
-	resp, err := c.gen.UninstallExtensionWithResponse(ctx, cid(clusterID), uid(extensionID))
+	resp, err := c.gen.UninstallExtensionWithResponse(ctx, cid(clusterID), uid(extensionID), nil)
 	if err != nil {
 		return err
 	}
@@ -1085,7 +1085,7 @@ func exportFromAPI(e *apiclient.Export) Export {
 
 // ListExports returns the export jobs for a cluster.
 func (c *Client) ListExports(ctx context.Context, clusterID string) ([]Export, error) {
-	resp, err := c.gen.ListExportsWithResponse(ctx, cid(clusterID))
+	resp, err := c.gen.ListExportsWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1101,7 +1101,7 @@ func (c *Client) ListExports(ctx context.Context, clusterID string) ([]Export, e
 
 // GetExport returns a single export job by ID.
 func (c *Client) GetExport(ctx context.Context, clusterID, exportID string) (*Export, error) {
-	resp, err := c.gen.GetExportWithResponse(ctx, cid(clusterID), uid(exportID))
+	resp, err := c.gen.GetExportWithResponse(ctx, cid(clusterID), uid(exportID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1122,7 +1122,7 @@ func (c *Client) CreateExport(ctx context.Context, clusterID, format string, inc
 	if encryptionPassword != "" {
 		body.EncryptionPassword = &encryptionPassword
 	}
-	resp, err := c.gen.CreateExportWithResponse(ctx, cid(clusterID), body)
+	resp, err := c.gen.CreateExportWithResponse(ctx, cid(clusterID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1152,7 +1152,7 @@ func realmRoleFromAPI(r *apiclient.RealmRole) RealmRole {
 
 // ListRealmRoles returns the realm-scoped roles of a realm.
 func (c *Client) ListRealmRoles(ctx context.Context, clusterID, realm string) ([]RealmRole, error) {
-	resp, err := c.gen.ListRealmRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.ListRealmRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1172,7 +1172,7 @@ func (c *Client) CreateRealmRole(ctx context.Context, clusterID, realm, name, de
 	if description != "" {
 		body.Description = &description
 	}
-	resp, err := c.gen.CreateRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.CreateRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1185,7 +1185,7 @@ func (c *Client) CreateRealmRole(ctx context.Context, clusterID, realm, name, de
 
 // DeleteRealmRole removes a realm role.
 func (c *Client) DeleteRealmRole(ctx context.Context, clusterID, realm, name string) error {
-	resp, err := c.gen.DeleteRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), name)
+	resp, err := c.gen.DeleteRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), name, nil)
 	if err != nil {
 		return err
 	}
@@ -1229,7 +1229,7 @@ func (c *Client) CreateRealmGroup(ctx context.Context, clusterID, realm, name, p
 		pid := uid(parentID)
 		body.ParentId = &pid
 	}
-	resp, err := c.gen.CreateRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.CreateRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1242,7 +1242,7 @@ func (c *Client) CreateRealmGroup(ctx context.Context, clusterID, realm, name, p
 
 // DeleteRealmGroup removes a realm group.
 func (c *Client) DeleteRealmGroup(ctx context.Context, clusterID, realm, groupID string) error {
-	resp, err := c.gen.DeleteRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), uid(groupID))
+	resp, err := c.gen.DeleteRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), uid(groupID), nil)
 	if err != nil {
 		return err
 	}
@@ -1291,7 +1291,7 @@ func (c *Client) ListRealmUsers(ctx context.Context, clusterID, realm string) ([
 
 // GetRealmUser returns a single realm user by ID.
 func (c *Client) GetRealmUser(ctx context.Context, clusterID, realm, userID string) (*RealmUser, error) {
-	resp, err := c.gen.GetRealmUserWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID)
+	resp, err := c.gen.GetRealmUserWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1312,7 +1312,7 @@ func (c *Client) CreateRealmUser(ctx context.Context, clusterID, realm, username
 	if lastName != "" {
 		body.LastName = &lastName
 	}
-	resp, err := c.gen.CreateRealmUserWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.CreateRealmUserWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1325,7 +1325,7 @@ func (c *Client) CreateRealmUser(ctx context.Context, clusterID, realm, username
 
 // DeleteRealmUser removes a realm user.
 func (c *Client) DeleteRealmUser(ctx context.Context, clusterID, realm, userID string) error {
-	resp, err := c.gen.DeleteRealmUserWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID)
+	resp, err := c.gen.DeleteRealmUserWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, nil)
 	if err != nil {
 		return err
 	}
@@ -1338,7 +1338,7 @@ func (c *Client) DeleteRealmUser(ctx context.Context, clusterID, realm, userID s
 // AssignRealmUserRole assigns a realm role to a user.
 func (c *Client) AssignRealmUserRole(ctx context.Context, clusterID, realm, userID, roleName string) error {
 	body := apiclient.AssignRealmUserRolesJSONRequestBody{RoleNames: []apiclient.RealmRoleName{roleName}}
-	resp, err := c.gen.AssignRealmUserRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, body)
+	resp, err := c.gen.AssignRealmUserRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, nil, body)
 	if err != nil {
 		return err
 	}
@@ -1350,7 +1350,7 @@ func (c *Client) AssignRealmUserRole(ctx context.Context, clusterID, realm, user
 
 // RemoveRealmUserRole removes a realm role from a user.
 func (c *Client) RemoveRealmUserRole(ctx context.Context, clusterID, realm, userID, roleName string) error {
-	resp, err := c.gen.RemoveRealmUserRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, roleName)
+	resp, err := c.gen.RemoveRealmUserRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, roleName, nil)
 	if err != nil {
 		return err
 	}
@@ -1362,7 +1362,7 @@ func (c *Client) RemoveRealmUserRole(ctx context.Context, clusterID, realm, user
 
 // AddRealmUserToGroup adds a user to a group.
 func (c *Client) AddRealmUserToGroup(ctx context.Context, clusterID, realm, userID, groupID string) error {
-	resp, err := c.gen.AddRealmUserToGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, uid(groupID))
+	resp, err := c.gen.AddRealmUserToGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, uid(groupID), nil)
 	if err != nil {
 		return err
 	}
@@ -1374,7 +1374,7 @@ func (c *Client) AddRealmUserToGroup(ctx context.Context, clusterID, realm, user
 
 // RemoveRealmUserFromGroup removes a user from a group.
 func (c *Client) RemoveRealmUserFromGroup(ctx context.Context, clusterID, realm, userID, groupID string) error {
-	resp, err := c.gen.RemoveRealmUserFromGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, uid(groupID))
+	resp, err := c.gen.RemoveRealmUserFromGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, uid(groupID), nil)
 	if err != nil {
 		return err
 	}
@@ -1395,7 +1395,7 @@ type ApplicationRole struct {
 
 // ListApplicationRoles returns the roles on an application's service account.
 func (c *Client) ListApplicationRoles(ctx context.Context, clusterID, realm, clientID string) ([]ApplicationRole, error) {
-	resp, err := c.gen.ListApplicationRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	resp, err := c.gen.ListApplicationRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1415,7 +1415,7 @@ func (c *Client) AssignApplicationRole(ctx context.Context, clusterID, realm, cl
 	if roleClientID != "" {
 		body.RoleClientId = &roleClientID
 	}
-	resp, err := c.gen.AssignApplicationRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), body)
+	resp, err := c.gen.AssignApplicationRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), nil, body)
 	if err != nil {
 		return err
 	}
@@ -1452,7 +1452,7 @@ type ApplicationSession struct {
 
 // ListApplicationSessions returns active user sessions for an application.
 func (c *Client) ListApplicationSessions(ctx context.Context, clusterID, realm, clientID string) ([]ApplicationSession, error) {
-	resp, err := c.gen.ListApplicationSessionsWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	resp, err := c.gen.ListApplicationSessionsWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1470,7 +1470,7 @@ func (c *Client) ListApplicationSessions(ctx context.Context, clusterID, realm, 
 
 // GetRealm returns a single realm by name.
 func (c *Client) GetRealm(ctx context.Context, clusterID, realm string) (*Realm, error) {
-	resp, err := c.gen.GetRealmWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.GetRealmWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1483,7 +1483,7 @@ func (c *Client) GetRealm(ctx context.Context, clusterID, realm string) (*Realm,
 
 // GetApplication returns a single application by client ID.
 func (c *Client) GetApplication(ctx context.Context, clusterID, realm, clientID string) (*Application, error) {
-	resp, err := c.gen.GetApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	resp, err := c.gen.GetApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1496,7 +1496,7 @@ func (c *Client) GetApplication(ctx context.Context, clusterID, realm, clientID 
 
 // GetIdentityProvider returns a single identity provider by provider ID.
 func (c *Client) GetIdentityProvider(ctx context.Context, clusterID, realm, providerID string) (*IdentityProvider, error) {
-	resp, err := c.gen.GetIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), providerID)
+	resp, err := c.gen.GetIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), providerID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1516,7 +1516,7 @@ type ClusterLocationInfo struct {
 
 // ListClusterLocations returns the supported deployment regions.
 func (c *Client) ListClusterLocations(ctx context.Context) ([]ClusterLocationInfo, error) {
-	resp, err := c.gen.ListClusterLocationsWithResponse(ctx)
+	resp, err := c.gen.ListClusterLocationsWithResponse(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1539,7 +1539,7 @@ type ClusterTypeInfo struct {
 
 // ListClusterTypes returns the supported cluster types.
 func (c *Client) ListClusterTypes(ctx context.Context) ([]ClusterTypeInfo, error) {
-	resp, err := c.gen.ListClusterTypesWithResponse(ctx)
+	resp, err := c.gen.ListClusterTypesWithResponse(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1563,7 +1563,7 @@ type ClusterFeatureInfo struct {
 
 // ListClusterFeatures returns the available Keycloak feature flags.
 func (c *Client) ListClusterFeatures(ctx context.Context) ([]ClusterFeatureInfo, error) {
-	resp, err := c.gen.ListClusterFeaturesWithResponse(ctx)
+	resp, err := c.gen.ListClusterFeaturesWithResponse(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1579,7 +1579,7 @@ func (c *Client) ListClusterFeatures(ctx context.Context) ([]ClusterFeatureInfo,
 
 // ClusterTypeVersions returns the Keycloak versions available for a cluster type.
 func (c *Client) ClusterTypeVersions(ctx context.Context, clusterType string) ([]string, error) {
-	resp, err := c.gen.GetClusterTypeVersionsWithResponse(ctx, apiclient.ClusterType(clusterType))
+	resp, err := c.gen.GetClusterTypeVersionsWithResponse(ctx, apiclient.ClusterType(clusterType), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1599,7 +1599,7 @@ type ClusterUpgrade struct {
 
 // ListClusterUpgrades returns the upgrade history for a cluster.
 func (c *Client) ListClusterUpgrades(ctx context.Context, clusterID string) ([]ClusterUpgrade, error) {
-	resp, err := c.gen.ListClusterUpgradesWithResponse(ctx, cid(clusterID))
+	resp, err := c.gen.ListClusterUpgradesWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1623,7 +1623,7 @@ type ProviderTemplate struct {
 
 // ListIdentityProviderTemplates returns the identity-provider template catalog.
 func (c *Client) ListIdentityProviderTemplates(ctx context.Context) ([]ProviderTemplate, error) {
-	resp, err := c.gen.ListIdentityProviderTemplatesWithResponse(ctx)
+	resp, err := c.gen.ListIdentityProviderTemplatesWithResponse(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1647,7 +1647,7 @@ type DomainRoute struct {
 
 // ListDomainRoutes returns the routes configured on a custom domain.
 func (c *Client) ListDomainRoutes(ctx context.Context, clusterID, domainID string) ([]DomainRoute, error) {
-	resp, err := c.gen.ListDomainRoutesWithResponse(ctx, cid(clusterID), uid(domainID))
+	resp, err := c.gen.ListDomainRoutesWithResponse(ctx, cid(clusterID), uid(domainID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1677,7 +1677,7 @@ type SMTPConfig struct {
 
 // GetSMTP returns the SMTP configuration for a realm.
 func (c *Client) GetSMTP(ctx context.Context, clusterID, realm string) (*SMTPConfig, error) {
-	resp, err := c.gen.GetSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.GetSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1695,7 +1695,7 @@ func (c *Client) GetSMTP(ctx context.Context, clusterID, realm string) (*SMTPCon
 
 // DeleteSMTP removes the SMTP configuration for a realm.
 func (c *Client) DeleteSMTP(ctx context.Context, clusterID, realm string) error {
-	resp, err := c.gen.DeleteSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.DeleteSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return err
 	}
@@ -1707,7 +1707,7 @@ func (c *Client) DeleteSMTP(ctx context.Context, clusterID, realm string) error 
 
 // RotateApplicationSecret regenerates and returns an application's client secret.
 func (c *Client) RotateApplicationSecret(ctx context.Context, clusterID, realm, clientID string) (string, error) {
-	resp, err := c.gen.RotateApplicationSecretWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	resp, err := c.gen.RotateApplicationSecretWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), nil)
 	if err != nil {
 		return "", err
 	}
@@ -1719,7 +1719,7 @@ func (c *Client) RotateApplicationSecret(ctx context.Context, clusterID, realm, 
 
 // GetTheme returns a single custom theme by ID.
 func (c *Client) GetTheme(ctx context.Context, clusterID, themeID string) (*Theme, error) {
-	resp, err := c.gen.GetThemeWithResponse(ctx, cid(clusterID), uid(themeID))
+	resp, err := c.gen.GetThemeWithResponse(ctx, cid(clusterID), uid(themeID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1732,7 +1732,7 @@ func (c *Client) GetTheme(ctx context.Context, clusterID, themeID string) (*Them
 
 // DeleteTheme removes a custom theme from a cluster.
 func (c *Client) DeleteTheme(ctx context.Context, clusterID, themeID string) error {
-	resp, err := c.gen.DeleteThemeWithResponse(ctx, cid(clusterID), uid(themeID))
+	resp, err := c.gen.DeleteThemeWithResponse(ctx, cid(clusterID), uid(themeID), nil)
 	if err != nil {
 		return err
 	}
@@ -1744,7 +1744,7 @@ func (c *Client) DeleteTheme(ctx context.Context, clusterID, themeID string) err
 
 // DeleteExtension removes a custom extension from the workspace catalog.
 func (c *Client) DeleteExtension(ctx context.Context, extensionID string) error {
-	resp, err := c.gen.DeleteExtensionWithResponse(ctx, uid(extensionID))
+	resp, err := c.gen.DeleteExtensionWithResponse(ctx, uid(extensionID), nil)
 	if err != nil {
 		return err
 	}
@@ -1756,7 +1756,7 @@ func (c *Client) DeleteExtension(ctx context.Context, extensionID string) error 
 
 // DeleteExport removes an export archive.
 func (c *Client) DeleteExport(ctx context.Context, clusterID, exportID string) error {
-	resp, err := c.gen.DeleteExportWithResponse(ctx, cid(clusterID), uid(exportID))
+	resp, err := c.gen.DeleteExportWithResponse(ctx, cid(clusterID), uid(exportID), nil)
 	if err != nil {
 		return err
 	}
@@ -1768,7 +1768,7 @@ func (c *Client) DeleteExport(ctx context.Context, clusterID, exportID string) e
 
 // GetDomainRoute returns a single domain route.
 func (c *Client) GetDomainRoute(ctx context.Context, clusterID, domainID, routeID string) (*DomainRoute, error) {
-	resp, err := c.gen.GetDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), uid(routeID))
+	resp, err := c.gen.GetDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), uid(routeID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1783,7 +1783,7 @@ func (c *Client) GetDomainRoute(ctx context.Context, clusterID, domainID, routeI
 func (c *Client) CreateDomainRoute(ctx context.Context, clusterID, domainID, realm string, allowAdminAccess, hideRealmPath bool) (*DomainRoute, error) {
 	admin, hide := allowAdminAccess, hideRealmPath
 	body := apiclient.CreateDomainRouteJSONRequestBody{Realm: apiclient.RealmName(realm), AllowAdminAccess: &admin, HideRealmPath: &hide}
-	resp, err := c.gen.CreateDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), body)
+	resp, err := c.gen.CreateDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1796,7 +1796,7 @@ func (c *Client) CreateDomainRoute(ctx context.Context, clusterID, domainID, rea
 
 // DeleteDomainRoute removes a route from a domain.
 func (c *Client) DeleteDomainRoute(ctx context.Context, clusterID, domainID, routeID string) error {
-	resp, err := c.gen.DeleteDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), uid(routeID))
+	resp, err := c.gen.DeleteDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), uid(routeID), nil)
 	if err != nil {
 		return err
 	}
@@ -1808,7 +1808,7 @@ func (c *Client) DeleteDomainRoute(ctx context.Context, clusterID, domainID, rou
 
 // GetClientThemeAssignment returns a client's login-theme override ("" = realm default).
 func (c *Client) GetClientThemeAssignment(ctx context.Context, clusterID, realm, clientID string) (string, error) {
-	resp, err := c.gen.GetClientThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID))
+	resp, err := c.gen.GetClientThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), nil)
 	if err != nil {
 		return "", err
 	}
@@ -1821,7 +1821,7 @@ func (c *Client) GetClientThemeAssignment(ctx context.Context, clusterID, realm,
 // SetClientThemeAssignment sets a client's login-theme override; "" resets to the realm default.
 func (c *Client) SetClientThemeAssignment(ctx context.Context, clusterID, realm, clientID, login string) (string, error) {
 	body := apiclient.SetClientThemeAssignmentJSONRequestBody{Login: themeIDNullable(login)}
-	resp, err := c.gen.SetClientThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), body)
+	resp, err := c.gen.SetClientThemeAssignmentWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), nil, body)
 	if err != nil {
 		return "", err
 	}
@@ -1833,7 +1833,7 @@ func (c *Client) SetClientThemeAssignment(ctx context.Context, clusterID, realm,
 
 // ListRealmUserRoles returns the realm roles assigned to a user.
 func (c *Client) ListRealmUserRoles(ctx context.Context, clusterID, realm, userID string) ([]RealmRole, error) {
-	resp, err := c.gen.ListRealmUserRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID)
+	resp, err := c.gen.ListRealmUserRolesWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1849,7 +1849,7 @@ func (c *Client) ListRealmUserRoles(ctx context.Context, clusterID, realm, userI
 
 // ListRealmUserGroups returns the groups a user belongs to.
 func (c *Client) ListRealmUserGroups(ctx context.Context, clusterID, realm, userID string) ([]RealmGroup, error) {
-	resp, err := c.gen.ListRealmUserGroupsWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID)
+	resp, err := c.gen.ListRealmUserGroupsWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1871,7 +1871,7 @@ func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName 
 		dn := apiclient.RealmDisplayName(displayName)
 		body.DisplayName = &dn
 	}
-	resp, err := c.gen.UpdateRealmWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.UpdateRealmWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1896,7 +1896,7 @@ type OIDCDiscovery struct {
 
 // DiscoverOIDC fetches the OIDC discovery document for an issuer URL.
 func (c *Client) DiscoverOIDC(ctx context.Context, issuerURL string) (*OIDCDiscovery, error) {
-	resp, err := c.gen.DiscoverOIDCWithResponse(ctx, apiclient.DiscoverOIDCJSONRequestBody{IssuerUrl: issuerURL})
+	resp, err := c.gen.DiscoverOIDCWithResponse(ctx, nil, apiclient.DiscoverOIDCJSONRequestBody{IssuerUrl: issuerURL})
 	if err != nil {
 		return nil, err
 	}
@@ -1922,7 +1922,7 @@ type TestResult struct {
 // TestSMTP sends a test email through a realm's SMTP configuration.
 func (c *Client) TestSMTP(ctx context.Context, clusterID, realm, email string) (*TestResult, error) {
 	body := apiclient.TestSmtpConfigJSONRequestBody{Email: openapitypes.Email(email)}
-	resp, err := c.gen.TestSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.TestSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1942,7 +1942,7 @@ func (c *Client) TestIdentityProviderConnection(ctx context.Context, clusterID, 
 	if clientSecret != "" {
 		body.ClientSecret = &clientSecret
 	}
-	resp, err := c.gen.TestIdentityProviderConnectionWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), providerID, body)
+	resp, err := c.gen.TestIdentityProviderConnectionWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), providerID, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1954,7 +1954,7 @@ func (c *Client) TestIdentityProviderConnection(ctx context.Context, clusterID, 
 
 // CancelClusterUpgrade cancels an in-progress cluster upgrade.
 func (c *Client) CancelClusterUpgrade(ctx context.Context, clusterID string) error {
-	resp, err := c.gen.CancelClusterUpgradeWithResponse(ctx, cid(clusterID))
+	resp, err := c.gen.CancelClusterUpgradeWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return err
 	}
@@ -1974,7 +1974,7 @@ type ClusterCredentials struct {
 
 // GetClusterCredentials returns a cluster's admin credentials.
 func (c *Client) GetClusterCredentials(ctx context.Context, clusterID string) (*ClusterCredentials, error) {
-	resp, err := c.gen.GetClusterCredentialsWithResponse(ctx, cid(clusterID))
+	resp, err := c.gen.GetClusterCredentialsWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1982,44 +1982,6 @@ func (c *Client) GetClusterCredentials(ctx context.Context, clusterID string) (*
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
 	return &ClusterCredentials{AdminUsername: resp.JSON200.AdminUsername, AdminPassword: resp.JSON200.AdminPassword}, nil
-}
-
-// ClusterBuild is a cluster image build summary.
-type ClusterBuild struct {
-	ID       string   `json:"id"`
-	Status   string   `json:"status"`
-	Phase    string   `json:"phase"`
-	Progress int64    `json:"progress"`
-	Logs     []string `json:"logs,omitempty"`
-}
-
-// ListClusterBuilds returns the image build history for a cluster.
-func (c *Client) ListClusterBuilds(ctx context.Context, clusterID string) ([]ClusterBuild, error) {
-	resp, err := c.gen.ListClusterBuildsWithResponse(ctx, cid(clusterID))
-	if err != nil {
-		return nil, err
-	}
-	if resp.JSON200 == nil {
-		return nil, statusError(resp.HTTPResponse, resp.Body)
-	}
-	out := make([]ClusterBuild, 0, len(*resp.JSON200))
-	for _, b := range *resp.JSON200 {
-		out = append(out, ClusterBuild{ID: b.Id.String(), Status: string(b.Status), Phase: b.Phase, Progress: int64(b.Progress)})
-	}
-	return out, nil
-}
-
-// GetClusterBuild returns a single image build, including its logs.
-func (c *Client) GetClusterBuild(ctx context.Context, clusterID, buildID string) (*ClusterBuild, error) {
-	resp, err := c.gen.GetClusterBuildWithResponse(ctx, cid(clusterID), uid(buildID))
-	if err != nil {
-		return nil, err
-	}
-	if resp.JSON200 == nil {
-		return nil, statusError(resp.HTTPResponse, resp.Body)
-	}
-	b := resp.JSON200
-	return &ClusterBuild{ID: b.Id.String(), Status: string(b.Status), Phase: b.Phase, Progress: int64(b.Progress), Logs: b.Logs}, nil
 }
 
 // UpgradePathStep is one step in a cluster's recommended upgrade path.
@@ -2030,7 +1992,7 @@ type UpgradePathStep struct {
 
 // GetClusterUpgradePath returns the recommended version-upgrade path.
 func (c *Client) GetClusterUpgradePath(ctx context.Context, clusterID string) ([]UpgradePathStep, error) {
-	resp, err := c.gen.GetClusterUpgradePathWithResponse(ctx, cid(clusterID))
+	resp, err := c.gen.GetClusterUpgradePathWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2094,7 +2056,7 @@ func (c *Client) ClusterInsights(ctx context.Context, clusterID, kind string) ([
 
 // GetRealmRole returns a single realm role by name.
 func (c *Client) GetRealmRole(ctx context.Context, clusterID, realm, name string) (*RealmRole, error) {
-	resp, err := c.gen.GetRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), name)
+	resp, err := c.gen.GetRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), name, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2107,7 +2069,7 @@ func (c *Client) GetRealmRole(ctx context.Context, clusterID, realm, name string
 
 // GetRealmGroup returns a single realm group by ID.
 func (c *Client) GetRealmGroup(ctx context.Context, clusterID, realm, groupID string) (*RealmGroup, error) {
-	resp, err := c.gen.GetRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), uid(groupID))
+	resp, err := c.gen.GetRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), uid(groupID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2145,7 +2107,7 @@ func (c *Client) UpdateRealmRole(ctx context.Context, clusterID, realm, name, ne
 	if description != "" {
 		body.Description = &description
 	}
-	resp, err := c.gen.UpdateRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), name, body)
+	resp, err := c.gen.UpdateRealmRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), name, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2159,7 +2121,7 @@ func (c *Client) UpdateRealmRole(ctx context.Context, clusterID, realm, name, ne
 // UpdateRealmGroup renames a realm group.
 func (c *Client) UpdateRealmGroup(ctx context.Context, clusterID, realm, groupID, name string) (*RealmGroup, error) {
 	body := apiclient.UpdateRealmGroupJSONRequestBody{Name: &name}
-	resp, err := c.gen.UpdateRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), uid(groupID), body)
+	resp, err := c.gen.UpdateRealmGroupWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), uid(groupID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2184,7 +2146,7 @@ func (c *Client) UpdateRealmUser(ctx context.Context, clusterID, realm, userID, 
 	if lastName != "" {
 		body.LastName = &lastName
 	}
-	resp, err := c.gen.UpdateRealmUserWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, body)
+	resp, err := c.gen.UpdateRealmUserWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), userID, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2202,7 +2164,7 @@ func (c *Client) UpdateDomainRoute(ctx context.Context, clusterID, domainID, rou
 	if len(cors) > 0 {
 		body.CorsAllowedOrigins = &cors
 	}
-	resp, err := c.gen.UpdateDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), uid(routeID), body)
+	resp, err := c.gen.UpdateDomainRouteWithResponse(ctx, cid(clusterID), uid(domainID), uid(routeID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2225,7 +2187,7 @@ func (c *Client) UpdateApplication(ctx context.Context, clusterID, realm, client
 	if redirectURIs != nil {
 		body.RedirectUris = &redirectURIs
 	}
-	resp, err := c.gen.UpdateApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), body)
+	resp, err := c.gen.UpdateApplicationWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.ApplicationClientId(clientID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2243,7 +2205,7 @@ func (c *Client) UpdateIdentityProvider(ctx context.Context, clusterID, realm, p
 	if displayName != "" {
 		body.DisplayName = &displayName
 	}
-	resp, err := c.gen.UpdateIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), providerID, body)
+	resp, err := c.gen.UpdateIdentityProviderWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), providerID, nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2265,7 +2227,7 @@ func (c *Client) UpdateCluster(ctx context.Context, clusterID, version, size str
 		sz := apiclient.ClusterSize(size)
 		body.Size = &sz
 	}
-	resp, err := c.gen.UpdateClusterWithResponse(ctx, cid(clusterID), body)
+	resp, err := c.gen.UpdateClusterWithResponse(ctx, cid(clusterID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2284,7 +2246,7 @@ func (c *Client) UpdateExtension(ctx context.Context, extensionID, name, descrip
 	if description != "" {
 		body.Description = nullable.NewNullableWithValue(description)
 	}
-	resp, err := c.gen.UpdateExtensionWithResponse(ctx, uid(extensionID), body)
+	resp, err := c.gen.UpdateExtensionWithResponse(ctx, uid(extensionID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2307,7 +2269,7 @@ func (c *Client) UpdateTheme(ctx context.Context, clusterID, themeID, name, desc
 	if version != "" {
 		body.Version = &version
 	}
-	resp, err := c.gen.UpdateThemeWithResponse(ctx, cid(clusterID), uid(themeID), body)
+	resp, err := c.gen.UpdateThemeWithResponse(ctx, cid(clusterID), uid(themeID), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2343,7 +2305,7 @@ func (c *Client) UpsertSMTP(ctx context.Context, clusterID, realm string, req Up
 	body.FromName = sptr(req.FromName)
 	body.Username = sptr(req.Username)
 	body.Password = sptr(req.Password)
-	resp, err := c.gen.UpsertSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.UpsertSmtpConfigWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2368,7 +2330,7 @@ func (c *Client) UpsertLoginBranding(ctx context.Context, clusterID, realm strin
 	body.PrimaryColor = sptr(req.PrimaryColor)
 	body.BackgroundColor = sptr(req.BackgroundColor)
 	body.LogoUrl = sptr(req.LogoURL)
-	resp, err := c.gen.UpsertLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.UpsertLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2392,7 +2354,7 @@ func (c *Client) UpsertEmailBranding(ctx context.Context, clusterID, realm strin
 	body.PrimaryColor = sptr(req.PrimaryColor)
 	body.HeaderLogoLightUrl = sptr(req.HeaderLogoLightURL)
 	body.FooterCompanyName = sptr(req.FooterCompanyName)
-	resp, err := c.gen.UpsertEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), body)
+	resp, err := c.gen.UpsertEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2405,7 +2367,7 @@ func (c *Client) UpsertEmailBranding(ctx context.Context, clusterID, realm strin
 
 // DeleteLoginBranding reverts login branding to defaults.
 func (c *Client) DeleteLoginBranding(ctx context.Context, clusterID, realm string) error {
-	resp, err := c.gen.DeleteLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.DeleteLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return err
 	}
@@ -2417,7 +2379,7 @@ func (c *Client) DeleteLoginBranding(ctx context.Context, clusterID, realm strin
 
 // DeleteEmailBranding reverts email branding to defaults.
 func (c *Client) DeleteEmailBranding(ctx context.Context, clusterID, realm string) error {
-	resp, err := c.gen.DeleteEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm))
+	resp, err := c.gen.DeleteEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
 	if err != nil {
 		return err
 	}

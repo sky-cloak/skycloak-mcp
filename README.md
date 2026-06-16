@@ -17,7 +17,7 @@ Read-only tools are always available. **Write** tools are registered only when t
 
 | Area | Read-only | Write (`--allow-writes`) |
 |---|---|---|
-| Clusters | `list_clusters`, `get_cluster`, `list_cluster_locations`, `list_cluster_types`, `list_cluster_features`, `list_cluster_versions`, `list_cluster_builds`, `get_cluster_build`, `list_cluster_upgrades`, `get_cluster_upgrade_path`, `get_cluster_credentials`, `get_cluster_insights` | `create_cluster`, `update_cluster`, `delete_cluster`, `cancel_cluster_upgrade` |
+| Clusters | `list_clusters`, `get_cluster`, `list_cluster_locations`, `list_cluster_types`, `list_cluster_features`, `list_cluster_versions`, `list_cluster_upgrades`, `get_cluster_upgrade_path`, `get_cluster_credentials`, `get_cluster_insights` | `create_cluster`, `update_cluster`, `delete_cluster`, `cancel_cluster_upgrade` |
 | Edge security | `get_cluster_security` | `update_cluster_security` |
 | Realms | `list_realms`, `get_realm` | `create_realm`, `update_realm`, `delete_realm` |
 | Applications | `list_applications`, `get_application`, `list_application_roles`, `list_application_sessions` | `create_application`, `update_application`, `delete_application`, `assign_application_role`, `remove_application_role`, `rotate_application_secret` |
