@@ -17,8 +17,8 @@
       "environmentVariables": [
         {
           "name": "SKYCLOAK_API_KEY",
-          "description": "Skycloak API key, created in the Skycloak dashboard (https://app.skycloak.io). Scopes the connection to that key's workspace.",
-          "isRequired": true,
+          "description": "Optional. Skycloak API key for headless/CI use (and the container image, which has no OS keychain); takes precedence over the keychain. On a local install, run `skycloak-mcp init` instead to sign in via the browser (OAuth device flow), which mints and stores a workspace-scoped key. Create keys in the Skycloak dashboard (https://app.skycloak.io).",
+          "isRequired": false,
           "isSecret": true
         },
         {
