@@ -1,6 +1,17 @@
 // Command skycloak-mcp is the official Skycloak Model Context Protocol server.
 // It exposes the Skycloak public API as MCP tools so an AI assistant can manage
-// a customer's managed-Keycloak environment, authenticated with their API key.
+// a customer's managed-Keycloak environment.
+//
+// Authentication uses an OAuth 2.0 device sign-in:
+//
+//	skycloak-mcp init     sign in once (device flow); stores a workspace-scoped
+//	                      API key in the OS keychain
+//	skycloak-mcp run      run the MCP server (stdio | http) using the stored key
+//	skycloak-mcp logout   remove the stored key
+//
+// Setting SKYCLOAK_API_KEY skips the keychain entirely (for CI / headless use),
+// and invoking with server flags but no subcommand behaves like `run`, so
+// existing `skycloak-mcp --transport stdio` configurations keep working.
 package main
 
 import (
@@ -10,9 +21,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/sky-cloak/skycloak-mcp/internal/auth"
 	"github.com/sky-cloak/skycloak-mcp/internal/skycloak"
 	"github.com/sky-cloak/skycloak-mcp/internal/tools"
 )
@@ -21,20 +34,74 @@ import (
 var version = "dev"
 
 func main() {
-	transport := flag.String("transport", "stdio", "transport: stdio | http")
-	httpAddr := flag.String("http-addr", ":8080", "listen address for the http transport")
-	allowWrites := flag.Bool("allow-writes", false, "enable mutating tools (requires a write-scoped API key)")
-	showVersion := flag.Bool("version", false, "print version and exit")
-	flag.Parse()
+	ctx := context.Background()
+	args := os.Args[1:]
+
+	if len(args) > 0 {
+		switch args[0] {
+		case "--version", "-version", "version":
+			fmt.Println(version)
+			return
+		case "init":
+			os.Exit(runInit(ctx, args[1:]))
+		case "logout":
+			os.Exit(runLogout())
+		case "run":
+			args = args[1:] // fall through to the server with the rest of the flags
+		}
+	}
+	runServer(ctx, args)
+}
+
+// runInit performs the interactive device sign-in and stores the minted key.
+func runInit(ctx context.Context, args []string) int {
+	fs := flag.NewFlagSet("skycloak-mcp init", flag.ExitOnError)
+	workspace := fs.String("workspace", "", "workspace ID to scope the key to (auto-detected if omitted)")
+	allowWrites := fs.Bool("allow-writes", false, "also request write scopes (for `run --allow-writes`)")
+	ttlDays := fs.Int("ttl-days", 90, "lifetime of the minted key in days (0 = no expiry)")
+	_ = fs.Parse(args)
+
+	cfg := auth.ConfigFromEnv()
+	opts := auth.InitOptions{
+		WorkspaceID: *workspace,
+		AllowWrites: *allowWrites,
+		TTL:         time.Duration(*ttlDays) * 24 * time.Hour,
+	}
+	if err := auth.Init(ctx, cfg, opts, os.Stderr); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "init failed: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+// runLogout removes the stored credential.
+func runLogout() int {
+	if err := auth.Logout(auth.ConfigFromEnv()); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "logout failed: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintln(os.Stderr, "Signed out; stored key removed.")
+	return 0
+}
+
+// runServer parses the server flags, loads the API key, and serves the chosen
+// transport.
+func runServer(ctx context.Context, args []string) {
+	fs := flag.NewFlagSet("skycloak-mcp", flag.ExitOnError)
+	transport := fs.String("transport", "stdio", "transport: stdio | http")
+	httpAddr := fs.String("http-addr", ":8080", "listen address for the http transport")
+	allowWrites := fs.Bool("allow-writes", false, "enable mutating tools (requires a write-scoped key)")
+	showVersion := fs.Bool("version", false, "print version and exit")
+	_ = fs.Parse(args)
 
 	if *showVersion {
 		fmt.Println(version)
 		return
 	}
 
-	apiKey := os.Getenv("SKYCLOAK_API_KEY")
-	if apiKey == "" {
-		log.Fatal("SKYCLOAK_API_KEY is required")
+	apiKey, err := auth.LoadAPIKey(auth.ConfigFromEnv())
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
 	endpoint := getenv("SKYCLOAK_ENDPOINT", "https://api.skycloak.io")
 	apiVersion := os.Getenv("SKYCLOAK_API_VERSION")
@@ -44,7 +111,6 @@ func main() {
 	server := mcp.NewServer(&mcp.Implementation{Name: "skycloak-mcp", Version: version}, nil)
 	tools.Register(server, client, *allowWrites)
 
-	ctx := context.Background()
 	switch *transport {
 	case "stdio":
 		if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
