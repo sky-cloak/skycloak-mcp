@@ -11,8 +11,8 @@ import (
 
 // InitOptions tunes the interactive sign-in.
 type InitOptions struct {
-	// WorkspaceID, if set, is used directly. Otherwise init tries to discover
-	// the user's workspaces and uses the only one (or asks the user to pick).
+	// WorkspaceID, if set, overrides the server's default-workspace resolution.
+	// Otherwise the server scopes the key to the caller's default workspace.
 	WorkspaceID string
 	// AllowWrites requests write scopes in addition to read scopes, so the
 	// minted key can back `skycloak-mcp run --allow-writes`.
@@ -23,9 +23,9 @@ type InitOptions struct {
 	NoBrowser bool
 }
 
-// Init runs the interactive device sign-in: device authorization, workspace
-// resolution, scope selection, API-key mint, and keychain storage. Human-facing
-// progress is written to out; the API key itself is never printed.
+// Init runs the interactive device sign-in: device authorization, then mints a
+// workspace-scoped key via the dashboard's Bearer endpoint and stores it in the
+// keychain. Human-facing progress is written to out; the key is never printed.
 func Init(ctx context.Context, cfg Config, opts InitOptions, out io.Writer) error {
 	// One client for both polling and the API calls. Timeout is per-request, so
 	// it bounds each device poll and each REST call without capping the overall
@@ -50,21 +50,11 @@ func Init(ctx context.Context, cfg Config, opts InitOptions, out io.Writer) erro
 	}
 	fprintln(out, "Approved.")
 
-	wsID, err := resolveWorkspace(ctx, hc, cfg, tok.AccessToken, opts.WorkspaceID, out)
+	fullKey, wsID, err := mintCLIKey(ctx, hc, cfg, tok.AccessToken, opts)
 	if err != nil {
 		return err
 	}
-
-	scopes := resolveScopes(ctx, hc, cfg, tok.AccessToken, opts.AllowWrites)
-	if len(scopes) == 0 {
-		return fmt.Errorf("no scopes resolved; cannot create a key")
-	}
-
-	key, err := mintAPIKey(ctx, hc, cfg, tok.AccessToken, wsID, scopes, keyName(), opts.TTL)
-	if err != nil {
-		return err
-	}
-	if err := storeAPIKey(cfg, key); err != nil {
+	if err := storeAPIKey(cfg, fullKey); err != nil {
 		return fmt.Errorf("store key in keychain: %w", err)
 	}
 
@@ -72,37 +62,13 @@ func Init(ctx context.Context, cfg Config, opts InitOptions, out io.Writer) erro
 	if opts.AllowWrites {
 		mode = "read + write"
 	}
-	fprintf(out, "Done. Created a %s API key for workspace %s and saved it to your keychain.\n", mode, wsID)
+	if wsID != "" {
+		fprintf(out, "Done. Created a %s API key for workspace %s and saved it to your keychain.\n", mode, wsID)
+	} else {
+		fprintf(out, "Done. Created a %s API key and saved it to your keychain.\n", mode)
+	}
 	fprintln(out, "You can now run `skycloak-mcp run` (or point your MCP client at it). No key to paste.")
 	return nil
-}
-
-// resolveWorkspace returns the workspace to scope the key to: the explicit id
-// if given, the single discovered workspace, or an error listing the options.
-func resolveWorkspace(ctx context.Context, hc *http.Client, cfg Config, token, explicit string, out io.Writer) (string, error) {
-	if explicit != "" {
-		return explicit, nil
-	}
-	// Prefer the purpose-built default-workspace endpoint; it returns a single
-	// workspace directly and covers the common single-workspace case.
-	if w := getDefaultWorkspace(ctx, hc, cfg, token); w.ID != "" {
-		fprintf(out, "Using your default workspace %q (%s).\n", w.Name, w.ID)
-		return w.ID, nil
-	}
-	wss, _ := listWorkspaces(ctx, hc, cfg, token)
-	switch len(wss) {
-	case 0:
-		return "", fmt.Errorf("could not determine your workspace automatically; re-run with --workspace <id>")
-	case 1:
-		fprintf(out, "Using workspace %q (%s).\n", wss[0].Name, wss[0].ID)
-		return wss[0].ID, nil
-	default:
-		fprintln(out, "You have multiple workspaces; re-run with --workspace <id>:")
-		for _, w := range wss {
-			fprintf(out, "  %s  %s\n", w.ID, w.Name)
-		}
-		return "", fmt.Errorf("multiple workspaces; choose one with --workspace <id>")
-	}
 }
 
 // printPrompt shows the verification URL and user code. It prefers the complete

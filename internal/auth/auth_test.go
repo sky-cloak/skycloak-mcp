@@ -71,27 +71,6 @@ func TestLoadAPIKey_KeychainRoundTrip(t *testing.T) {
 	}
 }
 
-func TestParseWorkspaces(t *testing.T) {
-	cases := map[string]struct {
-		in   string
-		want int
-	}{
-		"bare array":          {`[{"id":"a","name":"A"},{"id":"b","name":"B"}]`, 2},
-		"workspaces envelope": {`{"workspaces":[{"id":"a","name":"A"}]}`, 1},
-		"data envelope":       {`{"data":[{"id":"a","name":"A"}]}`, 1},
-		"drops empty ids":     {`[{"id":"a"},{"name":"no id"}]`, 1},
-		"empty":               {`[]`, 0},
-		"garbage":             {`not json`, 0},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			if got := parseWorkspaces([]byte(tc.in)); len(got) != tc.want {
-				t.Fatalf("got %d workspaces, want %d (%v)", len(got), tc.want, got)
-			}
-		})
-	}
-}
-
 func TestDiscover(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/openid-configuration" {
@@ -123,103 +102,48 @@ func TestDiscover(t *testing.T) {
 	}
 }
 
-func TestResolveScopes_FiltersWritesAndCredentials(t *testing.T) {
+func TestMintCLIKey(t *testing.T) {
+	var gotAuth string
+	var gotBody cliKeyRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/api-keys/scopes" {
-			http.NotFound(w, r)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(scopesResponse{Scopes: []string{
-			"clusters:read", "clusters:write", "clusters:credentials:read", "realms:read",
-		}})
-	}))
-	defer srv.Close()
-	cfg := Config{DashboardURL: srv.URL}
-
-	ro := resolveScopes(context.Background(), srv.Client(), cfg, "tkn", false)
-	if !equalSet(ro, []string{"clusters:read", "realms:read"}) {
-		t.Fatalf("read-only scopes wrong: %v", ro)
-	}
-	rw := resolveScopes(context.Background(), srv.Client(), cfg, "tkn", true)
-	if !equalSet(rw, []string{"clusters:read", "clusters:write", "realms:read"}) {
-		t.Fatalf("read+write scopes wrong (credentials must still be excluded): %v", rw)
-	}
-}
-
-func TestMintAPIKey_SendsAuthAndWorkspace(t *testing.T) {
-	var gotAuth, gotWS string
-	var gotBody mintRequest
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/api-keys" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/cli/keys" {
 			http.Error(w, "bad route", http.StatusNotFound)
 			return
 		}
 		gotAuth = r.Header.Get("Authorization")
-		gotWS = r.Header.Get("X-Workspace-ID")
 		body, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(body, &gotBody)
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(mintResponse{FullKey: "sk_sc_minted"})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"full_key": "sk_sc_cli",
+			"api_key":  map[string]any{"workspace_id": "ws-7"},
+		})
 	}))
 	defer srv.Close()
 	cfg := Config{DashboardURL: srv.URL}
 
-	key, err := mintAPIKey(context.Background(), srv.Client(), cfg, "tkn", "ws-123", []string{"clusters:read"}, "skycloak-mcp@host", 0)
-	if err != nil {
-		t.Fatalf("mint: %v", err)
-	}
-	if key != "sk_sc_minted" {
-		t.Fatalf("key: %q", key)
+	// Read-only: no scopes sent (the server applies its read-only default).
+	key, ws, err := mintCLIKey(context.Background(), srv.Client(), cfg, "tkn", InitOptions{})
+	if err != nil || key != "sk_sc_cli" || ws != "ws-7" {
+		t.Fatalf("mint: key=%q ws=%q err=%v", key, ws, err)
 	}
 	if gotAuth != "Bearer tkn" {
 		t.Fatalf("auth header: %q", gotAuth)
 	}
-	if gotWS != "ws-123" {
-		t.Fatalf("workspace header: %q", gotWS)
-	}
-	if gotBody.Name == "" || len(gotBody.Scopes) != 1 {
-		t.Fatalf("body: %+v", gotBody)
-	}
-}
-
-func TestGetDefaultWorkspace(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/workspaces/default" {
-			http.NotFound(w, r)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(workspace{ID: "ws-default", Name: "Acme"})
-	}))
-	defer srv.Close()
-
-	got := getDefaultWorkspace(context.Background(), srv.Client(), Config{DashboardURL: srv.URL}, "tkn")
-	if got.ID != "ws-default" || got.Name != "Acme" {
-		t.Fatalf("default workspace: %+v", got)
+	if len(gotBody.Scopes) != 0 {
+		t.Fatalf("read-only must send no scopes, got %v", gotBody.Scopes)
 	}
 
-	// Non-200 yields a zero workspace (caller falls back to listing).
-	bad := httptest.NewServer(http.NotFoundHandler())
-	defer bad.Close()
-	if z := getDefaultWorkspace(context.Background(), bad.Client(), Config{DashboardURL: bad.URL}, "tkn"); z.ID != "" {
-		t.Fatalf("expected zero workspace on non-200, got %+v", z)
+	// --allow-writes: write scopes sent and workspace_id forwarded; never credentials.
+	if _, _, err = mintCLIKey(context.Background(), srv.Client(), cfg, "tkn", InitOptions{AllowWrites: true, WorkspaceID: "ws-x"}); err != nil {
+		t.Fatalf("mint writes: %v", err)
 	}
-}
-
-func equalSet(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
+	if len(gotBody.Scopes) == 0 || gotBody.WorkspaceID != "ws-x" {
+		t.Fatalf("writes/workspace not forwarded: %+v", gotBody)
 	}
-	m := make(map[string]int, len(a))
-	for _, s := range a {
-		m[s]++
-	}
-	for _, s := range b {
-		m[s]--
-	}
-	for _, n := range m {
-		if n != 0 {
-			return false
+	for _, s := range gotBody.Scopes {
+		if s == "clusters:credentials:read" {
+			t.Fatalf("must never request clusters:credentials:read")
 		}
 	}
-	return true
 }
