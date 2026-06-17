@@ -9,6 +9,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - Browser sign-in: `skycloak-mcp init` runs the OAuth 2.0 device authorization flow (RFC 8628) against the Skycloak realm, mints a workspace-scoped API key, and stores it in the OS keychain. `skycloak-mcp run` loads it; `skycloak-mcp logout` removes it. No API key to copy or paste.
 - `--workspace`, `--allow-writes`, and `--ttl-days` flags on `init`; `SKYCLOAK_ISSUER`, `SKYCLOAK_CLIENT_ID`, and `SKYCLOAK_DASHBOARD_URL` env vars to target dev / self-hosted control planes.
+- `init` opens your browser to the verification page automatically (code pre-filled), and still prints the URL/code as a fallback. `--no-browser` disables the auto-open for SSH / headless terminals.
 
 ### Changed
 - `SKYCLOAK_API_KEY` is now optional: it is the headless/CI path (and still used by the container image) and takes precedence over the keychain when set. Invoking the binary with no subcommand still serves stdio, so existing configurations keep working.

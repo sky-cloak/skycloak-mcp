@@ -19,6 +19,8 @@ type InitOptions struct {
 	AllowWrites bool
 	// TTL is the minted key's lifetime. Zero means no expiry.
 	TTL time.Duration
+	// NoBrowser prints the verification URL instead of opening it in a browser.
+	NoBrowser bool
 }
 
 // Init runs the interactive device sign-in: device authorization, workspace
@@ -31,7 +33,18 @@ func Init(ctx context.Context, cfg Config, opts InitOptions, out io.Writer) erro
 	hc := &http.Client{Timeout: 30 * time.Second}
 
 	fprintf(out, "Signing in to %s\n", cfg.Issuer)
-	tok, err := deviceLogin(ctx, hc, cfg, func(p DevicePrompt) { printPrompt(out, p) })
+	tok, err := deviceLogin(ctx, hc, cfg, func(p DevicePrompt) {
+		url := p.VerificationURIComplete
+		if url == "" {
+			url = p.VerificationURI
+		}
+		if !opts.NoBrowser && openBrowser(url) == nil {
+			fprintln(out, "\nOpened your browser to approve the sign-in. If it did not open, use:")
+		} else {
+			fprintln(out, "\nTo authorize, open this URL in your browser and confirm the code:")
+		}
+		printPrompt(out, p)
+	})
 	if err != nil {
 		return err
 	}
@@ -96,7 +109,6 @@ func resolveWorkspace(ctx context.Context, hc *http.Client, cfg Config, token, e
 // URL (code embedded) so the user can one-click, and always prints the code as
 // a fallback.
 func printPrompt(out io.Writer, p DevicePrompt) {
-	fprintln(out, "\nTo authorize, open this URL in your browser and confirm the code:")
 	if p.VerificationURIComplete != "" {
 		fprintf(out, "  %s\n", p.VerificationURIComplete)
 	}

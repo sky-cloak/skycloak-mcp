@@ -61,6 +61,7 @@ func runInit(ctx context.Context, args []string) int {
 	workspace := fs.String("workspace", "", "workspace ID to scope the key to (auto-detected if omitted)")
 	allowWrites := fs.Bool("allow-writes", false, "also request write scopes (for `run --allow-writes`)")
 	ttlDays := fs.Int("ttl-days", 90, "lifetime of the minted key in days (0 = no expiry)")
+	noBrowser := fs.Bool("no-browser", false, "print the verification URL instead of opening a browser")
 	_ = fs.Parse(args)
 
 	cfg := auth.ConfigFromEnv()
@@ -68,6 +69,7 @@ func runInit(ctx context.Context, args []string) int {
 		WorkspaceID: *workspace,
 		AllowWrites: *allowWrites,
 		TTL:         time.Duration(*ttlDays) * 24 * time.Hour,
+		NoBrowser:   *noBrowser,
 	}
 	if err := auth.Init(ctx, cfg, opts, os.Stderr); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "init failed: %v\n", err)
