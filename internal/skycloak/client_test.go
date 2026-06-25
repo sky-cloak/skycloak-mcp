@@ -21,8 +21,8 @@ func writeJSON(w http.ResponseWriter, status int, body string) {
 
 func TestListClusters(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("apikey"); got != "sk_sc_test_aaa_bbb" {
-			t.Errorf("apikey header = %q", got)
+		if got := r.Header.Get("API-Key"); got != "sk_sc_test_aaa_bbb" {
+			t.Errorf("API-Key header = %q", got)
 		}
 		if r.URL.Path != "/clusters" {
 			t.Errorf("path = %q", r.URL.Path)

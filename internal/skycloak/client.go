@@ -54,7 +54,7 @@ func New(endpoint, apiKey, apiVersion string, opts ...Option) *Client {
 	cfg.httpClient.Transport = &retryTransport{base: cfg.httpClient.Transport, maxRetries: 4}
 
 	editor := func(_ context.Context, req *http.Request) error {
-		req.Header.Set("apikey", apiKey)
+		req.Header.Set("API-Key", apiKey)
 		req.Header.Set("Accept", "application/json")
 		if apiVersion != "" {
 			req.Header.Set("API-Version", apiVersion)

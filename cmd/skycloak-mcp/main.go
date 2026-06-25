@@ -119,7 +119,7 @@ func runServer(ctx context.Context, args []string) {
 		log.Fatalf("%v", err)
 	}
 	endpoint := getenv("SKYCLOAK_ENDPOINT", "https://api.skycloak.io")
-	apiVersion := os.Getenv("SKYCLOAK_API_VERSION")
+	apiVersion := getenv("SKYCLOAK_API_VERSION", "2026-06-01.beta")
 
 	client := skycloak.New(endpoint, apiKey, apiVersion, skycloak.WithUserAgent("skycloak-mcp/"+version))
 

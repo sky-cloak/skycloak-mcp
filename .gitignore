@@ -1,5 +1,6 @@
 # Binaries (anchored to repo root so cmd/skycloak-mcp/ is not ignored)
 /skycloak-mcp
+bin/
 dist/
 bin/
 *.exe
