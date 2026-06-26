@@ -23,6 +23,8 @@ func registerWriteTools(s *mcp.Server, api API) {
 	registerParityWriteTools(s, api)
 	registerActionWriteTools(s, api)
 	registerSecurityWriteTools(s, api)
+	registerSIEMWriteTools(s, api)
+	registerWebhookWriteTools(s, api)
 	registerWrites2Tools(s, api)
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_cluster",

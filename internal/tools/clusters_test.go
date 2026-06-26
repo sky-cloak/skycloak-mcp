@@ -49,6 +49,12 @@ type stubAPI struct {
 	theme     *skycloak.Theme
 	route     *skycloak.DomainRoute
 	upPath    []skycloak.UpgradePathStep
+	captcha   *skycloak.CAPTCHADomainsInfo
+	siem      *skycloak.SIEMDestination
+	siems     []skycloak.SIEMDestination
+	whEvent   []skycloak.WebhookEventType
+	webhook   *skycloak.WebhookSubscription
+	webhooks  []skycloak.WebhookSubscription
 	err       error
 }
 
@@ -510,6 +516,25 @@ func (s stubAPI) UpdateClusterSecurity(_ context.Context, _ string, sec *skycloa
 	return sec, nil
 }
 
+func (s stubAPI) ListClusterCAPTCHADomains(context.Context, string) (*skycloak.CAPTCHADomainsInfo, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.captcha != nil {
+		return s.captcha, nil
+	}
+	return &skycloak.CAPTCHADomainsInfo{Domains: []skycloak.CAPTCHADomain{{Hostname: "login.example.com", CreatedAt: "2026-01-01T00:00:00Z"}}, MaxAllowed: 10}, nil
+}
+
+func (s stubAPI) AddClusterCAPTCHADomain(_ context.Context, _, hostname string) (*skycloak.CAPTCHADomain, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.CAPTCHADomain{Hostname: hostname, CreatedAt: "2026-01-01T00:00:00Z"}, nil
+}
+
+func (s stubAPI) RemoveClusterCAPTCHADomain(context.Context, string, string) error { return s.err }
+
 func (s stubAPI) GetClusterCredentials(context.Context, string) (*skycloak.ClusterCredentials, error) {
 	if s.err != nil {
 		return nil, s.err
@@ -663,6 +688,109 @@ func (s stubAPI) SetClusterMaintenanceWindow(_ context.Context, _ string, window
 
 func (s stubAPI) DeleteClusterMaintenanceWindow(context.Context, string) error {
 	return s.err
+}
+
+func (s stubAPI) ListSIEMDestinations(context.Context) ([]skycloak.SIEMDestination, error) {
+	if s.siems != nil {
+		return s.siems, s.err
+	}
+	return []skycloak.SIEMDestination{{ID: "11111111-1111-1111-1111-111111111111", Name: "splunk", Type: "http", Enabled: true, HealthStatus: "healthy"}}, s.err
+}
+
+func (s stubAPI) CreateSIEMDestination(_ context.Context, req skycloak.CreateSIEMDestinationRequest) (*skycloak.SIEMDestination, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.SIEMDestination{ID: "11111111-1111-1111-1111-111111111111", Name: req.Name, Type: req.Type, Enabled: true, HealthStatus: "healthy", Source: req.Source}, nil
+}
+
+func (s stubAPI) GetSIEMDestination(context.Context, string) (*skycloak.SIEMDestination, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.siem != nil {
+		return s.siem, nil
+	}
+	return &skycloak.SIEMDestination{ID: "11111111-1111-1111-1111-111111111111", Name: "splunk", Type: "http", Enabled: true, HealthStatus: "healthy"}, nil
+}
+
+func (s stubAPI) UpdateSIEMDestination(_ context.Context, id string, req skycloak.UpdateSIEMDestinationRequest) (*skycloak.SIEMDestination, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	name := "splunk"
+	if req.Name != nil {
+		name = *req.Name
+	}
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	return &skycloak.SIEMDestination{ID: id, Name: name, Type: "http", Enabled: enabled, HealthStatus: "healthy"}, nil
+}
+
+func (s stubAPI) DeleteSIEMDestination(context.Context, string) error { return s.err }
+
+func (s stubAPI) TestSIEMDestination(context.Context, string) (*skycloak.SIEMDestinationTestResult, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.SIEMDestinationTestResult{Success: true, Message: "ok"}, nil
+}
+
+func (s stubAPI) ListWebhookEventTypes(context.Context, string) ([]skycloak.WebhookEventType, error) {
+	if s.whEvent != nil {
+		return s.whEvent, s.err
+	}
+	return []skycloak.WebhookEventType{{Type: "cluster.created", Category: "cluster", Description: "Cluster created"}}, s.err
+}
+
+func (s stubAPI) ListWebhookSubscriptions(context.Context, skycloak.ListWebhookSubscriptionsFilter) ([]skycloak.WebhookSubscription, error) {
+	if s.webhooks != nil {
+		return s.webhooks, s.err
+	}
+	return []skycloak.WebhookSubscription{{ID: "22222222-2222-2222-2222-222222222222", Name: "ops", URL: "https://hooks.example.com", Source: "platform", Enabled: true, EventTypes: []string{"cluster.created"}}}, s.err
+}
+
+func (s stubAPI) CreateWebhookSubscription(_ context.Context, req skycloak.CreateWebhookSubscriptionRequest) (*skycloak.WebhookSubscription, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.WebhookSubscription{ID: "22222222-2222-2222-2222-222222222222", Name: req.Name, URL: req.URL, Source: req.Source, Enabled: true, EventTypes: req.EventTypes}, nil
+}
+
+func (s stubAPI) GetWebhookSubscription(context.Context, string) (*skycloak.WebhookSubscription, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.webhook != nil {
+		return s.webhook, nil
+	}
+	return &skycloak.WebhookSubscription{ID: "22222222-2222-2222-2222-222222222222", Name: "ops", URL: "https://hooks.example.com", Source: "platform", Enabled: true, EventTypes: []string{"cluster.created"}}, nil
+}
+
+func (s stubAPI) UpdateWebhookSubscription(_ context.Context, id string, req skycloak.UpdateWebhookSubscriptionRequest) (*skycloak.WebhookSubscription, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	name := "ops"
+	if req.Name != nil {
+		name = *req.Name
+	}
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	return &skycloak.WebhookSubscription{ID: id, Name: name, URL: "https://hooks.example.com", Source: "platform", Enabled: enabled, EventTypes: []string{"cluster.created"}}, nil
+}
+
+func (s stubAPI) DeleteWebhookSubscription(context.Context, string) error { return s.err }
+
+func (s stubAPI) TestWebhookSubscription(context.Context, string, skycloak.TestWebhookSubscriptionRequest) (*skycloak.WebhookTestResult, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.WebhookTestResult{Success: true, DeliveryID: "del_1"}, nil
 }
 
 func TestListClustersHandler(t *testing.T) {

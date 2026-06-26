@@ -95,6 +95,9 @@ type API interface {
 	CancelClusterUpgrade(ctx context.Context, clusterID string) error
 	GetClusterSecurity(ctx context.Context, clusterID string) (*skycloak.ClusterSecurity, error)
 	UpdateClusterSecurity(ctx context.Context, clusterID string, sec *skycloak.ClusterSecurity) (*skycloak.ClusterSecurity, error)
+	ListClusterCAPTCHADomains(ctx context.Context, clusterID string) (*skycloak.CAPTCHADomainsInfo, error)
+	AddClusterCAPTCHADomain(ctx context.Context, clusterID, hostname string) (*skycloak.CAPTCHADomain, error)
+	RemoveClusterCAPTCHADomain(ctx context.Context, clusterID, hostname string) error
 	GetClusterCredentials(ctx context.Context, clusterID string) (*skycloak.ClusterCredentials, error)
 	GetClusterUpgradePath(ctx context.Context, clusterID string) ([]skycloak.UpgradePathStep, error)
 	ClusterInsights(ctx context.Context, clusterID, kind string) ([]byte, error)
@@ -119,6 +122,19 @@ type API interface {
 	GetClusterMaintenanceWindow(ctx context.Context, clusterID string) (*skycloak.MaintenanceWindow, error)
 	SetClusterMaintenanceWindow(ctx context.Context, clusterID string, window skycloak.MaintenanceWindow) (*skycloak.MaintenanceWindow, error)
 	DeleteClusterMaintenanceWindow(ctx context.Context, clusterID string) error
+	ListSIEMDestinations(ctx context.Context) ([]skycloak.SIEMDestination, error)
+	CreateSIEMDestination(ctx context.Context, req skycloak.CreateSIEMDestinationRequest) (*skycloak.SIEMDestination, error)
+	GetSIEMDestination(ctx context.Context, destinationID string) (*skycloak.SIEMDestination, error)
+	UpdateSIEMDestination(ctx context.Context, destinationID string, req skycloak.UpdateSIEMDestinationRequest) (*skycloak.SIEMDestination, error)
+	DeleteSIEMDestination(ctx context.Context, destinationID string) error
+	TestSIEMDestination(ctx context.Context, destinationID string) (*skycloak.SIEMDestinationTestResult, error)
+	ListWebhookEventTypes(ctx context.Context, source string) ([]skycloak.WebhookEventType, error)
+	ListWebhookSubscriptions(ctx context.Context, filter skycloak.ListWebhookSubscriptionsFilter) ([]skycloak.WebhookSubscription, error)
+	CreateWebhookSubscription(ctx context.Context, req skycloak.CreateWebhookSubscriptionRequest) (*skycloak.WebhookSubscription, error)
+	GetWebhookSubscription(ctx context.Context, webhookID string) (*skycloak.WebhookSubscription, error)
+	UpdateWebhookSubscription(ctx context.Context, webhookID string, req skycloak.UpdateWebhookSubscriptionRequest) (*skycloak.WebhookSubscription, error)
+	DeleteWebhookSubscription(ctx context.Context, webhookID string) error
+	TestWebhookSubscription(ctx context.Context, webhookID string, req skycloak.TestWebhookSubscriptionRequest) (*skycloak.WebhookTestResult, error)
 }
 
 // Register adds all tools to the server.
@@ -141,6 +157,8 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerParityReadTools(s, api)
 	registerActionReadTools(s, api)
 	registerSecurityReadTools(s, api)
+	registerSIEMReadTools(s, api)
+	registerWebhookReadTools(s, api)
 	registerReads2Tools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
