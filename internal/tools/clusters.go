@@ -18,13 +18,14 @@ type ListClustersInput struct {
 
 // ClusterSummary is one row of the list output.
 type ClusterSummary struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Status   string `json:"status"`
-	Type     string `json:"type"`
-	Size     string `json:"size"`
-	Version  string `json:"version"`
-	Location string `json:"location"`
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	Status             string `json:"status"`
+	Type               string `json:"type"`
+	Size               string `json:"size"`
+	Version            string `json:"version"`
+	Location           string `json:"location"`
+	AutoUpgradeEnabled bool   `json:"auto_upgrade_enabled"`
 }
 
 // ListClustersOutput is the structured result of skycloak_list_clusters.
@@ -35,16 +36,17 @@ type ListClustersOutput struct {
 
 // ClusterDetail is the structured result of skycloak_get_cluster.
 type ClusterDetail struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	Type      string `json:"type"`
-	Size      string `json:"size"`
-	Version   string `json:"version"`
-	Location  string `json:"location"`
-	URL       string `json:"url,omitempty"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	Status             string `json:"status"`
+	Type               string `json:"type"`
+	Size               string `json:"size"`
+	Version            string `json:"version"`
+	Location           string `json:"location"`
+	URL                string `json:"url,omitempty"`
+	CreatedAt          string `json:"created_at,omitempty"`
+	UpdatedAt          string `json:"updated_at,omitempty"`
+	AutoUpgradeEnabled bool   `json:"auto_upgrade_enabled"`
 }
 
 // GetClusterInput is the input schema for skycloak_get_cluster.
@@ -78,7 +80,7 @@ func getClusterHandler(api API) mcp.ToolHandlerFor[GetClusterInput, ClusterDetai
 		detail := ClusterDetail{
 			ID: c.ID, Name: c.Name, Status: c.Status, Type: c.Type, Size: c.Size,
 			Version: c.Version, Location: c.Location, URL: c.URL,
-			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
+			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, AutoUpgradeEnabled: c.AutoUpgradeEnabled,
 		}
 		text := fmt.Sprintf("%s (%s)\n  status: %s\n  type/size: %s/%s\n  version: %s\n  location: %s\n  url: %s",
 			c.Name, c.ID, c.Status, c.Type, c.Size, c.Version, c.Location, c.URL)
@@ -99,6 +101,7 @@ func listClustersHandler(api API) mcp.ToolHandlerFor[ListClustersInput, ListClus
 			out.Clusters = append(out.Clusters, ClusterSummary{
 				ID: c.ID, Name: c.Name, Status: c.Status, Type: c.Type,
 				Size: c.Size, Version: c.Version, Location: c.Location,
+				AutoUpgradeEnabled: c.AutoUpgradeEnabled,
 			})
 			fmt.Fprintf(&b, "- %s (%s) — %s · %s/%s · v%s @ %s\n",
 				c.Name, c.ID, c.Status, c.Type, c.Size, c.Version, c.Location)

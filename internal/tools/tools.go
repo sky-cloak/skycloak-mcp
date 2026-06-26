@@ -107,7 +107,7 @@ type API interface {
 	UpdateDomainRoute(ctx context.Context, clusterID, domainID, routeID string, allowAdminAccess bool, cors []string) (*skycloak.DomainRoute, error)
 	UpdateApplication(ctx context.Context, clusterID, realm, clientID, name, description string, redirectURIs []string) (*skycloak.Application, error)
 	UpdateIdentityProvider(ctx context.Context, clusterID, realm, providerID, displayName string, enabled bool) (*skycloak.IdentityProvider, error)
-	UpdateCluster(ctx context.Context, clusterID, version, size string) (*skycloak.Cluster, error)
+	UpdateCluster(ctx context.Context, clusterID, version, size string, autoUpgradeEnabled *bool) (*skycloak.Cluster, error)
 	UpdateExtension(ctx context.Context, extensionID, name, description string) (*skycloak.ExtensionInfo, error)
 	UpdateTheme(ctx context.Context, clusterID, themeID, name, description, version string) (*skycloak.Theme, error)
 	UpsertSMTP(ctx context.Context, clusterID, realm string, req skycloak.UpsertSMTPRequest) (*skycloak.SMTPConfig, error)
@@ -116,6 +116,9 @@ type API interface {
 	DeleteLoginBranding(ctx context.Context, clusterID, realm string) error
 	DeleteEmailBranding(ctx context.Context, clusterID, realm string) error
 	ExportClusterEvents(ctx context.Context, clusterID string) ([]byte, error)
+	GetClusterMaintenanceWindow(ctx context.Context, clusterID string) (*skycloak.MaintenanceWindow, error)
+	SetClusterMaintenanceWindow(ctx context.Context, clusterID string, window skycloak.MaintenanceWindow) (*skycloak.MaintenanceWindow, error)
+	DeleteClusterMaintenanceWindow(ctx context.Context, clusterID string) error
 }
 
 // Register adds all tools to the server.

@@ -93,7 +93,11 @@ func (s stubAPI) CreateCluster(_ context.Context, req skycloak.CreateClusterRequ
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &skycloak.Cluster{ID: "new", Name: req.Name, Status: "provisioning", Type: req.Type, Size: req.Size, Version: req.Version, Location: req.Location}, nil
+	autoUpgradeEnabled := false
+	if req.AutoUpgradeEnabled != nil {
+		autoUpgradeEnabled = *req.AutoUpgradeEnabled
+	}
+	return &skycloak.Cluster{ID: "new", Name: req.Name, Status: "provisioning", Type: req.Type, Size: req.Size, Version: req.Version, Location: req.Location, AutoUpgradeEnabled: autoUpgradeEnabled}, nil
 }
 
 func (s stubAPI) DeleteCluster(context.Context, string) error {
@@ -510,7 +514,7 @@ func (s stubAPI) GetClusterCredentials(context.Context, string) (*skycloak.Clust
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &skycloak.ClusterCredentials{AdminUsername: "admin", AdminPassword: "s3cr3t"}, nil
+	return &skycloak.ClusterCredentials{ClientID: "skycloak-automation", ClientSecret: "s3cr3t", TokenURL: "https://auth.example.com/realms/master/protocol/openid-connect/token"}, nil
 }
 
 func (s stubAPI) GetClusterUpgradePath(context.Context, string) ([]skycloak.UpgradePathStep, error) {
@@ -587,11 +591,15 @@ func (s stubAPI) UpdateIdentityProvider(_ context.Context, _, _, providerID, _ s
 	return &skycloak.IdentityProvider{ProviderID: providerID, Enabled: enabled}, nil
 }
 
-func (s stubAPI) UpdateCluster(_ context.Context, _, version, _ string) (*skycloak.Cluster, error) {
+func (s stubAPI) UpdateCluster(_ context.Context, _, version, _ string, autoUpgradeEnabled *bool) (*skycloak.Cluster, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &skycloak.Cluster{ID: "c1", Name: "prod", Version: version}, nil
+	autoUpgrade := false
+	if autoUpgradeEnabled != nil {
+		autoUpgrade = *autoUpgradeEnabled
+	}
+	return &skycloak.Cluster{ID: "c1", Name: "prod", Version: version, AutoUpgradeEnabled: autoUpgrade}, nil
 }
 
 func (s stubAPI) UpdateExtension(_ context.Context, _, name, _ string) (*skycloak.ExtensionInfo, error) {
@@ -637,6 +645,24 @@ func (s stubAPI) ExportClusterEvents(context.Context, string) ([]byte, error) {
 		return nil, s.err
 	}
 	return []byte("id,type\n1,LOGIN\n"), nil
+}
+
+func (s stubAPI) GetClusterMaintenanceWindow(context.Context, string) (*skycloak.MaintenanceWindow, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.MaintenanceWindow{Enabled: true, DaysOfWeek: []int32{1, 2}, StartLocal: "02:00", EndLocal: "04:00", Timezone: "Europe/Berlin"}, nil
+}
+
+func (s stubAPI) SetClusterMaintenanceWindow(_ context.Context, _ string, window skycloak.MaintenanceWindow) (*skycloak.MaintenanceWindow, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &window, nil
+}
+
+func (s stubAPI) DeleteClusterMaintenanceWindow(context.Context, string) error {
+	return s.err
 }
 
 func TestListClustersHandler(t *testing.T) {
