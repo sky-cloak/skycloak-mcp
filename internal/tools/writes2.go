@@ -25,6 +25,8 @@ func registerWrites2Tools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{Name: "skycloak_delete_login_branding", Description: "Revert login branding to defaults. Set confirm=true to proceed.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete login branding"}}, deleteLoginBrandingHandler(api))
 	mcp.AddTool(s, &mcp.Tool{Name: "skycloak_delete_email_branding", Description: "Revert email branding to defaults. Set confirm=true to proceed.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete email branding"}}, deleteEmailBrandingHandler(api))
 	mcp.AddTool(s, &mcp.Tool{Name: "skycloak_export_cluster_events", Description: "Export a cluster's events as a document and return its contents.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Export cluster events"}}, exportClusterEventsHandler(api))
+	mcp.AddTool(s, &mcp.Tool{Name: "skycloak_set_cluster_maintenance_window", Description: "Create or replace a cluster-specific maintenance window.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, IdempotentHint: true, Title: "Set maintenance window"}}, setClusterMaintenanceWindowHandler(api))
+	mcp.AddTool(s, &mcp.Tool{Name: "skycloak_delete_cluster_maintenance_window", Description: "Delete a cluster-specific maintenance window so the cluster follows the workspace default. Set confirm=true to proceed.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete maintenance window"}}, deleteClusterMaintenanceWindowHandler(api))
 }
 
 // UpdateRealmRoleInput is the input for skycloak_update_realm_role.
@@ -164,9 +166,10 @@ func updateIdentityProviderHandler(api API) mcp.ToolHandlerFor[UpdateIdentityPro
 
 // UpdateClusterInput is the input for skycloak_update_cluster.
 type UpdateClusterInput struct {
-	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
-	Version   string `json:"version,omitempty" jsonschema:"target Keycloak version (triggers an upgrade)"`
-	Size      string `json:"size,omitempty" jsonschema:"new cluster size"`
+	ClusterID          string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Version            string `json:"version,omitempty" jsonschema:"target Keycloak version (triggers an upgrade)"`
+	Size               string `json:"size,omitempty" jsonschema:"new cluster size"`
+	AutoUpgradeEnabled *bool  `json:"auto_upgrade_enabled,omitempty" jsonschema:"enable or disable automatic patch upgrades"`
 }
 
 func updateClusterHandler(api API) mcp.ToolHandlerFor[UpdateClusterInput, skycloak.Cluster] {
@@ -174,11 +177,59 @@ func updateClusterHandler(api API) mcp.ToolHandlerFor[UpdateClusterInput, skyclo
 		if in.ClusterID == "" {
 			return errResult("cluster_id is required"), skycloak.Cluster{}, nil
 		}
-		cl, err := api.UpdateCluster(ctx, in.ClusterID, in.Version, in.Size)
+		cl, err := api.UpdateCluster(ctx, in.ClusterID, in.Version, in.Size, in.AutoUpgradeEnabled)
 		if err != nil {
 			return toolError(err), skycloak.Cluster{}, nil
 		}
 		return okResult("Updated cluster " + cl.Name), *cl, nil
+	}
+}
+
+// MaintenanceWindowInput is the input for skycloak_set_cluster_maintenance_window.
+type MaintenanceWindowInput struct {
+	ClusterID  string  `json:"cluster_id" jsonschema:"the cluster ID"`
+	Enabled    bool    `json:"enabled" jsonschema:"whether the window is active"`
+	DaysOfWeek []int32 `json:"days_of_week" jsonschema:"days of week, 0=Sunday through 6=Saturday"`
+	StartLocal string  `json:"start_local" jsonschema:"local start time in HH:MM format"`
+	EndLocal   string  `json:"end_local" jsonschema:"local end time in HH:MM format"`
+	Timezone   string  `json:"timezone" jsonschema:"IANA timezone, e.g. Europe/Berlin"`
+}
+
+func setClusterMaintenanceWindowHandler(api API) mcp.ToolHandlerFor[MaintenanceWindowInput, skycloak.MaintenanceWindow] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in MaintenanceWindowInput) (*mcp.CallToolResult, skycloak.MaintenanceWindow, error) {
+		if in.ClusterID == "" || in.StartLocal == "" || in.EndLocal == "" || in.Timezone == "" || len(in.DaysOfWeek) == 0 {
+			return errResult("cluster_id, days_of_week, start_local, end_local and timezone are required"), skycloak.MaintenanceWindow{}, nil
+		}
+		window := skycloak.MaintenanceWindow{
+			Enabled: in.Enabled, DaysOfWeek: in.DaysOfWeek,
+			StartLocal: in.StartLocal, EndLocal: in.EndLocal, Timezone: in.Timezone,
+		}
+		out, err := api.SetClusterMaintenanceWindow(ctx, in.ClusterID, window)
+		if err != nil {
+			return toolError(err), skycloak.MaintenanceWindow{}, nil
+		}
+		return okResult("Updated maintenance window: " + formatMaintenanceWindow(*out)), *out, nil
+	}
+}
+
+// DeleteMaintenanceWindowInput is the input for skycloak_delete_cluster_maintenance_window.
+type DeleteMaintenanceWindowInput struct {
+	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Confirm   bool   `json:"confirm" jsonschema:"must be true to confirm deletion"`
+}
+
+func deleteClusterMaintenanceWindowHandler(api API) mcp.ToolHandlerFor[DeleteMaintenanceWindowInput, struct{}] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteMaintenanceWindowInput) (*mcp.CallToolResult, struct{}, error) {
+		if in.ClusterID == "" {
+			return errResult("cluster_id is required"), struct{}{}, nil
+		}
+		if !in.Confirm {
+			return errResult("Refusing to delete maintenance window: set confirm=true."), struct{}{}, nil
+		}
+		if err := api.DeleteClusterMaintenanceWindow(ctx, in.ClusterID); err != nil {
+			return toolError(err), struct{}{}, nil
+		}
+		return okResult("Deleted maintenance window for cluster " + in.ClusterID), struct{}{}, nil
 	}
 }
 

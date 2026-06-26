@@ -133,16 +133,17 @@ func cid(s string) apiclient.ClusterId {
 
 // Cluster mirrors the public API Cluster resource (subset used by the tools).
 type Cluster struct {
-	ID        string
-	Name      string
-	Type      string
-	Size      string
-	Version   string
-	Location  string
-	Status    string
-	URL       string
-	CreatedAt string
-	UpdatedAt string
+	ID                 string
+	Name               string
+	Type               string
+	Size               string
+	Version            string
+	Location           string
+	Status             string
+	URL                string
+	CreatedAt          string
+	UpdatedAt          string
+	AutoUpgradeEnabled bool
 }
 
 // ListClustersParams holds optional pagination parameters (the clusters list is
@@ -164,20 +165,34 @@ func (c *Client) ListClusters(ctx context.Context, _ ListClustersParams) ([]Clus
 	}
 	out := make([]Cluster, 0, len(*resp.JSON200))
 	for _, s := range *resp.JSON200 {
-		out = append(out, Cluster{
-			ID: s.Id.String(), Name: string(s.Name), Type: string(s.Type), Size: string(s.Size),
-			Version: string(s.Version), Location: string(s.Location), Status: string(s.Status),
-			URL: s.Url, CreatedAt: fmtTime(s.CreatedAt), UpdatedAt: fmtTime(s.UpdatedAt),
-		})
+		out = append(out, clusterSummaryFromAPI(&s))
 	}
 	return out, nil
 }
 
+func clusterSummaryFromAPI(cl *apiclient.ClusterSummary) Cluster {
+	autoUpgradeEnabled := false
+	if cl.AutoUpgradeEnabled != nil {
+		autoUpgradeEnabled = *cl.AutoUpgradeEnabled
+	}
+	return Cluster{
+		ID: cl.Id.String(), Name: string(cl.Name), Type: string(cl.Type), Size: string(cl.Size),
+		Version: string(cl.Version), Location: string(cl.Location), Status: string(cl.Status),
+		URL: cl.Url, CreatedAt: fmtTime(cl.CreatedAt), UpdatedAt: fmtTime(cl.UpdatedAt),
+		AutoUpgradeEnabled: autoUpgradeEnabled,
+	}
+}
+
 func clusterFromAPI(cl *apiclient.Cluster) *Cluster {
+	autoUpgradeEnabled := false
+	if cl.AutoUpgradeEnabled != nil {
+		autoUpgradeEnabled = *cl.AutoUpgradeEnabled
+	}
 	return &Cluster{
 		ID: cl.Id.String(), Name: string(cl.Name), Type: string(cl.Type), Size: string(cl.Size),
 		Version: string(cl.Version), Location: string(cl.Location), Status: string(cl.Status),
 		URL: cl.Url, CreatedAt: fmtTime(cl.CreatedAt), UpdatedAt: fmtTime(cl.UpdatedAt),
+		AutoUpgradeEnabled: autoUpgradeEnabled,
 	}
 }
 
@@ -195,11 +210,13 @@ func (c *Client) GetCluster(ctx context.Context, id string) (*Cluster, error) {
 
 // CreateClusterRequest is the body for creating a cluster.
 type CreateClusterRequest struct {
-	Name     string
-	Type     string
-	Size     string
-	Version  string
-	Location string
+	Name               string
+	Type               string
+	Size               string
+	Version            string
+	Location           string
+	AutoUpgradeEnabled *bool
+	MaintenanceWindow  *MaintenanceWindow
 }
 
 // CreateCluster provisions a new cluster (asynchronous; the returned cluster is
@@ -214,6 +231,10 @@ func (c *Client) CreateCluster(ctx context.Context, req CreateClusterRequest) (*
 	if req.Type != "" {
 		t := apiclient.ClusterType(req.Type)
 		body.Type = &t
+	}
+	body.AutoUpgradeEnabled = req.AutoUpgradeEnabled
+	if req.MaintenanceWindow != nil {
+		body.MaintenanceWindow = maintenanceWindowToAPI(req.MaintenanceWindow)
 	}
 	resp, err := c.gen.CreateClusterWithResponse(ctx, nil, body)
 	if err != nil {
@@ -1966,13 +1987,14 @@ func (c *Client) CancelClusterUpgrade(ctx context.Context, clusterID string) err
 
 // ---- Read parity: credentials, builds, upgrade path, insights, role/group get, members ----
 
-// ClusterCredentials holds a cluster's Keycloak admin credentials.
+// ClusterCredentials holds a cluster's Keycloak automation client credentials.
 type ClusterCredentials struct {
-	AdminUsername string `json:"admin_username"`
-	AdminPassword string `json:"admin_password"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	TokenURL     string `json:"token_url"`
 }
 
-// GetClusterCredentials returns a cluster's admin credentials.
+// GetClusterCredentials returns a cluster's automation client credentials.
 func (c *Client) GetClusterCredentials(ctx context.Context, clusterID string) (*ClusterCredentials, error) {
 	resp, err := c.gen.GetClusterCredentialsWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
@@ -1981,7 +2003,72 @@ func (c *Client) GetClusterCredentials(ctx context.Context, clusterID string) (*
 	if resp.JSON200 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	return &ClusterCredentials{AdminUsername: resp.JSON200.AdminUsername, AdminPassword: resp.JSON200.AdminPassword}, nil
+	return &ClusterCredentials{ClientID: resp.JSON200.ClientId, ClientSecret: resp.JSON200.ClientSecret, TokenURL: resp.JSON200.TokenUrl}, nil
+}
+
+// MaintenanceWindow describes when Skycloak can apply disruptive changes.
+type MaintenanceWindow struct {
+	Enabled    bool    `json:"enabled"`
+	DaysOfWeek []int32 `json:"days_of_week"`
+	StartLocal string  `json:"start_local"`
+	EndLocal   string  `json:"end_local"`
+	Timezone   string  `json:"timezone"`
+}
+
+func maintenanceWindowFromAPI(w *apiclient.MaintenanceWindow) *MaintenanceWindow {
+	if w == nil {
+		return nil
+	}
+	return &MaintenanceWindow{
+		Enabled: w.Enabled, DaysOfWeek: w.DaysOfWeek,
+		StartLocal: w.StartLocal, EndLocal: w.EndLocal, Timezone: w.Timezone,
+	}
+}
+
+func maintenanceWindowToAPI(w *MaintenanceWindow) *apiclient.MaintenanceWindow {
+	if w == nil {
+		return nil
+	}
+	return &apiclient.MaintenanceWindow{
+		Enabled: w.Enabled, DaysOfWeek: w.DaysOfWeek,
+		StartLocal: w.StartLocal, EndLocal: w.EndLocal, Timezone: w.Timezone,
+	}
+}
+
+// GetClusterMaintenanceWindow returns a cluster-specific maintenance window.
+func (c *Client) GetClusterMaintenanceWindow(ctx context.Context, clusterID string) (*MaintenanceWindow, error) {
+	resp, err := c.gen.GetClusterMaintenanceWindowWithResponse(ctx, cid(clusterID), nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return maintenanceWindowFromAPI(resp.JSON200), nil
+}
+
+// SetClusterMaintenanceWindow creates or replaces a cluster-specific maintenance window.
+func (c *Client) SetClusterMaintenanceWindow(ctx context.Context, clusterID string, window MaintenanceWindow) (*MaintenanceWindow, error) {
+	resp, err := c.gen.SetClusterMaintenanceWindowWithResponse(ctx, cid(clusterID), nil, *maintenanceWindowToAPI(&window))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return maintenanceWindowFromAPI(resp.JSON200), nil
+}
+
+// DeleteClusterMaintenanceWindow removes a cluster-specific maintenance window.
+func (c *Client) DeleteClusterMaintenanceWindow(ctx context.Context, clusterID string) error {
+	resp, err := c.gen.DeleteClusterMaintenanceWindowWithResponse(ctx, cid(clusterID), nil)
+	if err != nil {
+		return err
+	}
+	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
+		return statusError(resp.HTTPResponse, resp.Body)
+	}
+	return nil
 }
 
 // UpgradePathStep is one step in a cluster's recommended upgrade path.
@@ -2217,7 +2304,7 @@ func (c *Client) UpdateIdentityProvider(ctx context.Context, clusterID, realm, p
 }
 
 // UpdateCluster updates a cluster's mutable fields (e.g. version for an upgrade).
-func (c *Client) UpdateCluster(ctx context.Context, clusterID, version, size string) (*Cluster, error) {
+func (c *Client) UpdateCluster(ctx context.Context, clusterID, version, size string, autoUpgradeEnabled *bool) (*Cluster, error) {
 	body := apiclient.UpdateClusterJSONRequestBody{}
 	if version != "" {
 		v := apiclient.KeycloakVersion(version)
@@ -2227,6 +2314,7 @@ func (c *Client) UpdateCluster(ctx context.Context, clusterID, version, size str
 		sz := apiclient.ClusterSize(size)
 		body.Size = &sz
 	}
+	body.AutoUpgradeEnabled = autoUpgradeEnabled
 	resp, err := c.gen.UpdateClusterWithResponse(ctx, cid(clusterID), nil, body)
 	if err != nil {
 		return nil, err

@@ -186,11 +186,17 @@ func deleteIdentityProviderHandler(api API) mcp.ToolHandlerFor[DeleteIdentityPro
 
 // CreateClusterInput is the input schema for skycloak_create_cluster.
 type CreateClusterInput struct {
-	Name     string `json:"name" jsonschema:"human-readable cluster name"`
-	Type     string `json:"type,omitempty" jsonschema:"cluster type (keycloak or tidecloak); defaults to keycloak"`
-	Size     string `json:"size" jsonschema:"instance size: small, medium, or large"`
-	Version  string `json:"version" jsonschema:"Keycloak version, e.g. 26.1"`
-	Location string `json:"location" jsonschema:"region: us, ca, eu, or au"`
+	Name               string  `json:"name" jsonschema:"human-readable cluster name"`
+	Type               string  `json:"type,omitempty" jsonschema:"cluster type (keycloak or tidecloak); defaults to keycloak"`
+	Size               string  `json:"size" jsonschema:"instance size: small, medium, or large"`
+	Version            string  `json:"version" jsonschema:"Keycloak version, e.g. 26.1"`
+	Location           string  `json:"location" jsonschema:"region: us, ca, eu, or au"`
+	AutoUpgradeEnabled *bool   `json:"auto_upgrade_enabled,omitempty" jsonschema:"enable automatic patch upgrades"`
+	MWEnabled          bool    `json:"maintenance_window_enabled,omitempty" jsonschema:"whether the creation maintenance window is active"`
+	MWDaysOfWeek       []int32 `json:"maintenance_window_days_of_week,omitempty" jsonschema:"maintenance-window days, 0=Sunday through 6=Saturday"`
+	MWStartLocal       string  `json:"maintenance_window_start_local,omitempty" jsonschema:"maintenance-window local start time in HH:MM format"`
+	MWEndLocal         string  `json:"maintenance_window_end_local,omitempty" jsonschema:"maintenance-window local end time in HH:MM format"`
+	MWTimezone         string  `json:"maintenance_window_timezone,omitempty" jsonschema:"maintenance-window IANA timezone, e.g. Europe/Berlin"`
 }
 
 func createClusterHandler(api API) mcp.ToolHandlerFor[CreateClusterInput, ClusterDetail] {
@@ -198,11 +204,21 @@ func createClusterHandler(api API) mcp.ToolHandlerFor[CreateClusterInput, Cluste
 		if in.Name == "" || in.Size == "" || in.Version == "" || in.Location == "" {
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "name, size, version and location are required"}}}, ClusterDetail{}, nil
 		}
-		cl, err := api.CreateCluster(ctx, skycloak.CreateClusterRequest{Name: in.Name, Type: in.Type, Size: in.Size, Version: in.Version, Location: in.Location})
+		req := skycloak.CreateClusterRequest{
+			Name: in.Name, Type: in.Type, Size: in.Size, Version: in.Version, Location: in.Location,
+			AutoUpgradeEnabled: in.AutoUpgradeEnabled,
+		}
+		if len(in.MWDaysOfWeek) > 0 || in.MWStartLocal != "" || in.MWEndLocal != "" || in.MWTimezone != "" {
+			if len(in.MWDaysOfWeek) == 0 || in.MWStartLocal == "" || in.MWEndLocal == "" || in.MWTimezone == "" {
+				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "maintenance_window_days_of_week, maintenance_window_start_local, maintenance_window_end_local and maintenance_window_timezone must all be provided together"}}}, ClusterDetail{}, nil
+			}
+			req.MaintenanceWindow = &skycloak.MaintenanceWindow{Enabled: in.MWEnabled, DaysOfWeek: in.MWDaysOfWeek, StartLocal: in.MWStartLocal, EndLocal: in.MWEndLocal, Timezone: in.MWTimezone}
+		}
+		cl, err := api.CreateCluster(ctx, req)
 		if err != nil {
 			return toolError(err), ClusterDetail{}, nil
 		}
-		detail := ClusterDetail{ID: cl.ID, Name: cl.Name, Status: cl.Status, Type: cl.Type, Size: cl.Size, Version: cl.Version, Location: cl.Location, URL: cl.URL, CreatedAt: cl.CreatedAt, UpdatedAt: cl.UpdatedAt}
+		detail := ClusterDetail{ID: cl.ID, Name: cl.Name, Status: cl.Status, Type: cl.Type, Size: cl.Size, Version: cl.Version, Location: cl.Location, URL: cl.URL, CreatedAt: cl.CreatedAt, UpdatedAt: cl.UpdatedAt, AutoUpgradeEnabled: cl.AutoUpgradeEnabled}
 		text := fmt.Sprintf("Provisioning cluster %q (%s), status %q. Poll skycloak_get_cluster with id=%s until status is 'available'.", cl.Name, cl.ID, cl.Status, cl.ID)
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, detail, nil
 	}

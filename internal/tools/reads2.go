@@ -13,9 +13,15 @@ import (
 func registerReads2Tools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_credentials",
-		Description: "Get a cluster's Keycloak admin credentials. The password is sensitive.",
+		Description: "Get a cluster's Keycloak automation client credentials for OAuth2 client_credentials.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get cluster credentials"},
 	}, getClusterCredentialsHandler(api))
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "skycloak_get_cluster_maintenance_window",
+		Description: "Get a cluster-specific maintenance window. A 404 means the cluster follows the workspace default.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get maintenance window"},
+	}, getClusterMaintenanceWindowHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_upgrade_path",
@@ -57,8 +63,25 @@ func getClusterCredentialsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, 
 		if err != nil {
 			return toolError(err), skycloak.ClusterCredentials{}, nil
 		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "admin_username=" + creds.AdminUsername + " (password in structured output)"}}}, *creds, nil
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "client_id=" + creds.ClientID + " token_url=" + creds.TokenURL + " (client_secret in structured output)"}}}, *creds, nil
 	}
+}
+
+func getClusterMaintenanceWindowHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, skycloak.MaintenanceWindow] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in ListDomainsInput) (*mcp.CallToolResult, skycloak.MaintenanceWindow, error) {
+		if in.ClusterID == "" {
+			return errResult("cluster_id is required"), skycloak.MaintenanceWindow{}, nil
+		}
+		window, err := api.GetClusterMaintenanceWindow(ctx, in.ClusterID)
+		if err != nil {
+			return toolError(err), skycloak.MaintenanceWindow{}, nil
+		}
+		return okResult(formatMaintenanceWindow(*window)), *window, nil
+	}
+}
+
+func formatMaintenanceWindow(w skycloak.MaintenanceWindow) string {
+	return fmt.Sprintf("enabled=%t days=%v start=%s end=%s timezone=%s", w.Enabled, w.DaysOfWeek, w.StartLocal, w.EndLocal, w.Timezone)
 }
 
 // UpgradePathOutput is the structured upgrade-path result.
