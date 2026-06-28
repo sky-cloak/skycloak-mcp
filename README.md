@@ -19,8 +19,8 @@ Read-only tools are always available. **Write** tools are registered only when t
 
 | Area | Read-only | Write (`--allow-writes`) |
 |---|---|---|
-| Clusters | `list_clusters`, `get_cluster`, `list_cluster_locations`, `list_cluster_types`, `list_cluster_features`, `list_cluster_versions`, `list_cluster_upgrades`, `get_cluster_upgrade_path`, `get_cluster_credentials`, `get_cluster_insights` | `create_cluster`, `update_cluster`, `delete_cluster`, `cancel_cluster_upgrade` |
-| Edge security | `get_cluster_security` | `update_cluster_security` |
+| Clusters | `list_clusters`, `get_cluster`, `list_cluster_locations`, `list_cluster_types`, `list_cluster_features`, `list_cluster_versions`, `list_cluster_upgrades`, `get_cluster_upgrade_path`, `get_cluster_credentials`, `get_cluster_insights`, `get_cluster_maintenance_window` | `create_cluster`, `update_cluster`, `delete_cluster`, `cancel_cluster_upgrade`, `set_cluster_maintenance_window`, `delete_cluster_maintenance_window` |
+| Edge security | `get_cluster_security`, `list_cluster_captcha_domains` | `update_cluster_security`, `add_cluster_captcha_domain`, `remove_cluster_captcha_domain` |
 | Realms | `list_realms`, `get_realm` | `create_realm`, `update_realm`, `delete_realm` |
 | Applications | `list_applications`, `get_application`, `list_application_roles`, `list_application_sessions` | `create_application`, `update_application`, `delete_application`, `assign_application_role`, `remove_application_role`, `rotate_application_secret` |
 | Identity providers | `list_identity_providers`, `get_identity_provider`, `list_identity_provider_templates`, `discover_oidc` | `create_identity_provider` (OIDC), `update_identity_provider`, `delete_identity_provider`, `test_identity_provider` |
@@ -30,6 +30,8 @@ Read-only tools are always available. **Write** tools are registered only when t
 | Extensions | `list_extensions`, `list_cluster_extensions` | `install_extension`, `upgrade_extension`, `update_extension`, `uninstall_extension`, `delete_extension` |
 | SMTP | `get_smtp` | `upsert_smtp`, `delete_smtp`, `test_smtp` |
 | Exports & logs | `list_exports`, `get_export`, `get_logs`, `get_security_logs`, `query_events` | `create_export`, `delete_export`, `export_cluster_events` |
+| SIEM | `list_siem_destinations`, `get_siem_destination` | `create_siem_destination`, `update_siem_destination`, `delete_siem_destination`, `test_siem_destination` |
+| Webhooks | `list_webhook_event_types`, `list_webhook_subscriptions`, `get_webhook_subscription` | `create_webhook_subscription`, `update_webhook_subscription`, `delete_webhook_subscription`, `test_webhook_subscription` |
 
 **Conventions:** destructive tools (`delete_*`, `uninstall_extension`, `cancel_cluster_upgrade`) require `confirm=true`. `create_cluster` is asynchronous: poll `get_cluster` until the cluster is `available`. `create_domain` returns the DNS records the customer must create; `verify_domain` triggers a DNS check. `set_theme_assignment` activates a custom theme per Keycloak theme type (empty string resets to the built-in default). `update_cluster_security` leaves CAPTCHA settings untouched.
 
