@@ -103,8 +103,9 @@ func runServer(ctx context.Context, args []string) {
 		return
 	}
 
+	// TODO: Handle API key in APIKey header.
 	cfg := auth.ConfigFromEnv()
-	apiKey, err := auth.LoadAPIKey(cfg)
+	apiKey, err := auth.LoadAPIKey(cfg) 
 	if errors.Is(err, auth.ErrNoCredential) && term.IsTerminal(int(os.Stdin.Fd())) {
 		// A human ran `run` directly with no stored key: sign in inline, then
 		// reload. When an MCP client spawns us (stdin is a pipe, not a TTY) we
@@ -123,16 +124,14 @@ func runServer(ctx context.Context, args []string) {
 
 	client := skycloak.New(endpoint, apiKey, apiVersion, skycloak.WithUserAgent("skycloak-mcp/"+version))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "skycloak-mcp", Version: version}, nil)
-	tools.Register(server, client, *allowWrites)
-
 	switch *transport {
 	case "stdio":
+		server := newMCPServer(client, *allowWrites)
 		if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
 			log.Fatalf("server error: %v", err)
 		}
 	case "http":
-		handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+		handler := newHTTPHandler(client, *allowWrites)
 		log.Printf("skycloak-mcp %s listening on %s (streamable HTTP)", version, *httpAddr)
 		srv := &http.Server{Addr: *httpAddr, Handler: handler}
 		if err := srv.ListenAndServe(); err != nil {
@@ -140,6 +139,58 @@ func runServer(ctx context.Context, args []string) {
 		}
 	default:
 		log.Fatalf("unknown transport %q (want stdio|http)", *transport)
+	}
+}
+
+func newMCPServer(api tools.API, allowWrites bool) *mcp.Server {
+	server := mcp.NewServer(&mcp.Implementation{Name: "skycloak-mcp", Version: version}, nil)
+	tools.Register(server, api, allowWrites)
+	return server
+}
+
+func newHTTPHandler(api tools.API, allowWrites bool) http.Handler {
+	readOnlyServer := newMCPServer(api, false)
+	writeEnabledServer := newMCPServer(api, true)
+
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		readonly, err := readonlyMode(r)
+		if err != nil {
+			return nil
+		}
+		if !httpAllowWrites(allowWrites, readonly) {
+			return readOnlyServer
+		}
+		return writeEnabledServer
+	}, nil)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := readonlyMode(r); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	})
+}
+
+// httpAllowWrites returns true if the server is configured to allow writes and
+// the session is not in readonly mode.
+func httpAllowWrites(serverAllowWrites, readonly bool) bool {
+	return serverAllowWrites && !readonly
+}
+
+// readonlyMode returns true if the request has a query parameter
+// `readonly=true`.
+func readonlyMode(r *http.Request) (bool, error) {
+	values, ok := r.URL.Query()["readonly"]
+	if !ok {
+		return false, nil
+	}
+	raw := values[len(values)-1]
+	switch raw {
+	case "true", "false":
+		return raw == "true", nil
+	default:
+		return false, fmt.Errorf("invalid readonly query parameter %q (want true or false)", raw)
 	}
 }
 

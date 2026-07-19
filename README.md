@@ -66,7 +66,7 @@ For headless / CI (no browser), skip `init` and pass the key instead: add `"env"
 
 Add `--allow-writes` only when you intend to make changes (sign in with `skycloak-mcp init --allow-writes`, or use a write-scoped key).
 
-The server also supports a streamable-HTTP transport (`run --transport http`) for hosted/remote use.
+The server also supports a streamable-HTTP transport (`run --transport http`) for hosted/remote use. Add `?readonly=true` to expose only read-only tools for that HTTP session, or `?readonly=false` to request the write-capable tool surface. The query parameter defaults to `false`, but write tools are registered only when the server was started with `--allow-writes`.
 
 ## Configuration
 
@@ -85,7 +85,7 @@ Commands: `init` (browser sign-in), `run` (serve), `logout` (remove the stored k
 |---|---|---|
 | `--transport` | `stdio` | `stdio` or `http` |
 | `--http-addr` | `:8080` | listen address for the http transport |
-| `--allow-writes` | `false` | enable mutating tools |
+| `--allow-writes` | `false` | enable mutating tools for stdio and permit HTTP sessions with `readonly=false` to register write tools |
 
 ## Development
 
