@@ -2,16 +2,17 @@
 // It exposes the Skycloak public API as MCP tools so an AI assistant can manage
 // a customer's managed-Keycloak environment.
 //
-// Authentication uses an OAuth 2.0 device sign-in:
+// Local stdio authentication uses an OAuth 2.0 device sign-in:
 //
 //	skycloak-mcp init     sign in once (device flow); stores a workspace-scoped
 //	                      API key in the OS keychain
-//	skycloak-mcp run      run the MCP server (stdio | http) using the stored key
+//	skycloak-mcp run      run the MCP server (stdio | http)
 //	skycloak-mcp logout   remove the stored key
 //
-// Setting SKYCLOAK_API_KEY skips the keychain entirely (for CI / headless use),
-// and invoking with server flags but no subcommand behaves like `run`, so
-// existing `skycloak-mcp --transport stdio` configurations keep working.
+// For stdio, setting SKYCLOAK_API_KEY skips the keychain entirely (for CI /
+// headless use). HTTP clients must provide API-Key on each request. Invoking
+// with server flags but no subcommand behaves like `run`, so existing
+// `skycloak-mcp --transport stdio` configurations keep working.
 package main
 
 import (
@@ -22,6 +23,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -88,8 +90,7 @@ func runLogout() int {
 	return 0
 }
 
-// runServer parses the server flags, loads the API key, and serves the chosen
-// transport.
+// runServer parses the server flags and serves the chosen transport.
 func runServer(ctx context.Context, args []string) {
 	fs := flag.NewFlagSet("skycloak-mcp", flag.ExitOnError)
 	transport := fs.String("transport", "stdio", "transport: stdio | http")
@@ -103,35 +104,34 @@ func runServer(ctx context.Context, args []string) {
 		return
 	}
 
-	// TODO: Handle API key in APIKey header.
-	cfg := auth.ConfigFromEnv()
-	apiKey, err := auth.LoadAPIKey(cfg) 
-	if errors.Is(err, auth.ErrNoCredential) && term.IsTerminal(int(os.Stdin.Fd())) {
-		// A human ran `run` directly with no stored key: sign in inline, then
-		// reload. When an MCP client spawns us (stdin is a pipe, not a TTY) we
-		// skip this and surface the actionable "run init" error instead, since
-		// the browser device flow can't be driven over the protocol pipe.
-		if ierr := auth.Init(ctx, cfg, auth.InitOptions{AllowWrites: *allowWrites, TTL: 90 * 24 * time.Hour}, os.Stderr); ierr != nil {
-			log.Fatalf("sign-in failed: %v", ierr)
-		}
-		apiKey, err = auth.LoadAPIKey(cfg)
-	}
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
 	endpoint := getenv("SKYCLOAK_ENDPOINT", "https://api.skycloak.io")
 	apiVersion := getenv("SKYCLOAK_API_VERSION", "2026-06-01.beta")
-
-	client := skycloak.New(endpoint, apiKey, apiVersion, skycloak.WithUserAgent("skycloak-mcp/"+version))
+	userAgent := "skycloak-mcp/" + version
 
 	switch *transport {
 	case "stdio":
+		cfg := auth.ConfigFromEnv()
+		apiKey, err := auth.LoadAPIKey(cfg)
+		if errors.Is(err, auth.ErrNoCredential) && term.IsTerminal(int(os.Stdin.Fd())) {
+			// A human ran `run` directly with no stored key: sign in inline, then
+			// reload. When an MCP client spawns us (stdin is a pipe, not a TTY) we
+			// skip this and surface the actionable "run init" error instead, since
+			// the browser device flow can't be driven over the protocol pipe.
+			if ierr := auth.Init(ctx, cfg, auth.InitOptions{AllowWrites: *allowWrites, TTL: 90 * 24 * time.Hour}, os.Stderr); ierr != nil {
+				log.Fatalf("sign-in failed: %v", ierr)
+			}
+			apiKey, err = auth.LoadAPIKey(cfg)
+		}
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
+		client := skycloak.New(endpoint, apiKey, apiVersion, skycloak.WithUserAgent(userAgent))
 		server := newMCPServer(client, *allowWrites)
 		if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
 			log.Fatalf("server error: %v", err)
 		}
 	case "http":
-		handler := newHTTPHandler(client, *allowWrites)
+		handler := newHTTPHandler(endpoint, apiVersion, userAgent, *allowWrites)
 		log.Printf("skycloak-mcp %s listening on %s (streamable HTTP)", version, *httpAddr)
 		srv := &http.Server{Addr: *httpAddr, Handler: handler}
 		if err := srv.ListenAndServe(); err != nil {
@@ -148,19 +148,21 @@ func newMCPServer(api tools.API, allowWrites bool) *mcp.Server {
 	return server
 }
 
-func newHTTPHandler(api tools.API, allowWrites bool) http.Handler {
-	readOnlyServer := newMCPServer(api, false)
-	writeEnabledServer := newMCPServer(api, true)
-
+func newHTTPHandler(endpoint, apiVersion, userAgent string, allowWrites bool) http.Handler {
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		apiKey, err := apiKeyFromHeader(r)
+		if err != nil {
+			return nil
+		}
 		readonly, err := readonlyMode(r)
 		if err != nil {
 			return nil
 		}
+		api := skycloak.New(endpoint, apiKey, apiVersion, skycloak.WithUserAgent(userAgent))
 		if !httpAllowWrites(allowWrites, readonly) {
-			return readOnlyServer
+			return newMCPServer(api, false)
 		}
-		return writeEnabledServer
+		return newMCPServer(api, true)
 	}, nil)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -168,8 +170,20 @@ func newHTTPHandler(api tools.API, allowWrites bool) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if _, err := apiKeyFromHeader(r); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		handler.ServeHTTP(w, r)
 	})
+}
+
+func apiKeyFromHeader(r *http.Request) (string, error) {
+	apiKey := strings.TrimSpace(r.Header.Get("API-Key"))
+	if apiKey == "" {
+		return "", errors.New("missing API-Key header")
+	}
+	return apiKey, nil
 }
 
 // httpAllowWrites returns true if the server is configured to allow writes and

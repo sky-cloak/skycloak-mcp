@@ -1,13 +1,13 @@
 # skycloak-mcp
 
-Official [Model Context Protocol](https://modelcontextprotocol.io) server for **Skycloak** (managed Keycloak): manage your clusters, realms, applications, and SSO from any MCP client (Claude Desktop, Claude Code, Cursor). Sign in once with your browser.
+Official [Model Context Protocol](https://modelcontextprotocol.io) server for **Skycloak** (managed Keycloak): manage your clusters, realms, applications, and SSO from any MCP client (Claude Desktop, Claude Code, Cursor).
 
 > **Status:** early release. Tool coverage is growing; see the changelog for what's available.
 
 ## Authentication & safety
 
-- **Sign in once.** Run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key, stores it in your operating-system keychain, and detects your default workspace automatically (pass `--workspace <id>` to pick another). `skycloak-mcp logout` removes the stored key.
-- **Or just run it.** Started directly in a terminal with no stored key, `skycloak-mcp run` signs you in first, then serves. When an MCP client launches it over a pipe it stays non-interactive, so run `init` once beforehand.
+- **Hosted HTTP.** Create an API key in the [Skycloak dashboard](https://app.skycloak.io) and configure your MCP client to send it as the `API-Key` header to `https://mcp.skycloak.io`.
+- **Local stdio.** Run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key, stores it in your operating-system keychain, and detects your default workspace automatically (pass `--workspace <id>` to pick another). `skycloak-mcp logout` removes the stored key.
 - **Headless / CI.** Set the `SKYCLOAK_API_KEY` environment variable (create a key in the [Skycloak dashboard](https://app.skycloak.io)) to skip the browser entirely. It always takes precedence over the keychain.
 - **Read-only by default.** Mutating tools are registered only when the server starts with `--allow-writes`.
 - **Destructive tools require confirmation:** deleting a realm, for example, needs an explicit `confirm=true` argument.
@@ -37,7 +37,27 @@ Read-only tools are always available. **Write** tools are registered only when t
 
 ## Connecting
 
-Sign in once, then point your client at `skycloak-mcp run`:
+For hosted HTTP, create an API key in the Skycloak dashboard and configure your MCP client to send it in the `API-Key` header:
+
+```bash
+claude mcp add --transport http skycloak https://mcp.skycloak.io --header "API-Key: sk_sc_XXX"
+```
+
+This adds the following to `.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "skycloak": {
+      "type": "http",
+      "url": "https://mcp.skycloak.io",
+      "headers": {
+        "API-Key": "sk_sc_XXX"
+      }
+    }
+  }
+}
+```
 
 ```bash
 skycloak-mcp init        # one-time browser sign-in; stores a key in your keychain
@@ -66,13 +86,13 @@ For headless / CI (no browser), skip `init` and pass the key instead: add `"env"
 
 Add `--allow-writes` only when you intend to make changes (sign in with `skycloak-mcp init --allow-writes`, or use a write-scoped key).
 
-The server also supports a streamable-HTTP transport (`run --transport http`) for hosted/remote use. Add `?readonly=true` to expose only read-only tools for that HTTP session, or `?readonly=false` to request the write-capable tool surface. The query parameter defaults to `false`, but write tools are registered only when the server was started with `--allow-writes`.
+Add `?readonly=true` to a hosted HTTP URL to expose only read-only tools for that HTTP session, or `?readonly=false` to request the write-capable tool surface. The query parameter defaults to `false`, but write tools are registered only when the server was started with `--allow-writes`.
 
 ## Configuration
 
 | Env var | Default |
 |---|---|
-| `SKYCLOAK_API_KEY` | none (optional; for headless/CI, otherwise sign in with `skycloak-mcp init`) |
+| `SKYCLOAK_API_KEY` | none (optional for stdio; HTTP clients provide `API-Key` headers instead) |
 | `SKYCLOAK_ENDPOINT` | `https://api.skycloak.io` |
 | `SKYCLOAK_API_VERSION` | current API version |
 | `SKYCLOAK_ISSUER` | `https://login.app.skycloak.io/realms/skycloak` |
@@ -84,7 +104,7 @@ Commands: `init` (browser sign-in), `run` (serve), `logout` (remove the stored k
 | Flag | Default | Description |
 |---|---|---|
 | `--transport` | `stdio` | `stdio` or `http` |
-| `--http-addr` | `:8080` | listen address for the http transport |
+| `--http-addr` | `:8080` | listen address for the HTTP transport |
 | `--allow-writes` | `false` | enable mutating tools for stdio and permit HTTP sessions with `readonly=false` to register write tools |
 
 ## Development
