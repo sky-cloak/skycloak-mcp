@@ -33,6 +33,10 @@ func Init(ctx context.Context, cfg Config, opts InitOptions, out io.Writer) erro
 	hc := &http.Client{Timeout: 30 * time.Second}
 
 	fprintf(out, "Signing in to %s\n", cfg.Issuer)
+	// The browser consent page can only list Keycloak's own scopes (openid,
+	// profile, email); the key's actual powers are chosen here, in the mint
+	// request. State them before the user approves, so the approval is informed.
+	printGrantNotice(out, opts)
 	tok, err := deviceLogin(ctx, hc, cfg, func(p DevicePrompt) {
 		url := p.VerificationURIComplete
 		if url == "" {
@@ -74,6 +78,22 @@ func Init(ctx context.Context, cfg Config, opts InitOptions, out io.Writer) erro
 // printPrompt shows the verification URL and user code. It prefers the complete
 // URL (code embedded) so the user can one-click, and always prints the code as
 // a fallback.
+// printGrantNotice states what the minted key will be able to do. The browser
+// consent screen cannot show this: API key scopes are a Skycloak concept, not
+// Keycloak client scopes, so they never reach Keycloak's consent page.
+func printGrantNotice(out io.Writer, opts InitOptions) {
+	if opts.AllowWrites {
+		fprintf(out, "\nThis will create an API key that can READ AND MODIFY your Skycloak\nresources (clusters, realms, applications, users, identity providers).\n")
+	} else {
+		fprintf(out, "\nThis will create a read-only API key. Re-run with --allow-writes to\ninclude write access.\n")
+	}
+	if opts.TTL > 0 {
+		fprintf(out, "The key expires in %s.\n", opts.TTL)
+	} else {
+		fprintf(out, "The key does not expire. Pass --ttl to set a lifetime, and revoke it\nany time from the dashboard.\n")
+	}
+}
+
 func printPrompt(out io.Writer, p DevicePrompt) {
 	if p.VerificationURIComplete != "" {
 		fprintf(out, "  %s\n", p.VerificationURIComplete)

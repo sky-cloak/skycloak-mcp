@@ -6,7 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/zalando/go-keyring"
 )
@@ -146,4 +148,44 @@ func TestMintCLIKey(t *testing.T) {
 			t.Fatalf("must never request clusters:credentials:read")
 		}
 	}
+}
+
+// The browser consent page lists only Keycloak scopes, so the CLI must state
+// what the key itself will be able to do before the user approves.
+func TestPrintGrantNotice(t *testing.T) {
+	t.Run("read-only mentions read-only and never claims writes", func(t *testing.T) {
+		var b strings.Builder
+		printGrantNotice(&b, InitOptions{})
+		got := b.String()
+		if !strings.Contains(got, "read-only") {
+			t.Fatalf("expected read-only notice, got %q", got)
+		}
+		if strings.Contains(got, "MODIFY") {
+			t.Fatalf("read-only notice must not claim write access, got %q", got)
+		}
+	})
+
+	t.Run("allow-writes names the write powers", func(t *testing.T) {
+		var b strings.Builder
+		printGrantNotice(&b, InitOptions{AllowWrites: true})
+		got := b.String()
+		for _, want := range []string{"MODIFY", "clusters", "realms"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("expected %q in write notice, got %q", want, got)
+			}
+		}
+	})
+
+	t.Run("expiry is stated either way", func(t *testing.T) {
+		var b strings.Builder
+		printGrantNotice(&b, InitOptions{})
+		if !strings.Contains(b.String(), "does not expire") {
+			t.Fatalf("expected no-expiry warning, got %q", b.String())
+		}
+		var c strings.Builder
+		printGrantNotice(&c, InitOptions{TTL: 2 * time.Hour})
+		if !strings.Contains(c.String(), "expires in 2h") {
+			t.Fatalf("expected TTL notice, got %q", c.String())
+		}
+	})
 }
