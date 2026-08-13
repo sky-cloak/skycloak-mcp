@@ -123,8 +123,9 @@ func TestUnknownPathsAreNotFoundWithoutChallenge(t *testing.T) {
 }
 
 // The MCP endpoint answers on the bare origin (what `claude mcp add --transport
-// http skycloak https://mcp.skycloak.io` targets) and on /mcp. Narrowing the
-// unknown-path handling must not turn either into a 404.
+// http skycloak https://mcp.skycloak.io` targets), on /mcp, and on /mcp/, which
+// the old catch-all also served. Narrowing the unknown-path handling must not
+// turn any of them into a 404.
 func TestMCPEndpointServesBareOriginAndMCPPath(t *testing.T) {
 	upstream := newFakeUpstream(t)
 	ts := httptest.NewServer(newHTTPHandler(httpConfig{
@@ -132,7 +133,7 @@ func TestMCPEndpointServesBareOriginAndMCPPath(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	for _, path := range []string{"", "/mcp"} {
+	for _, path := range []string{"", "/mcp", "/mcp/"} {
 		resp := mcpPost(t, ts.URL+path, "sk_sc_test", "", initBody)
 		body, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
