@@ -6,8 +6,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-13
+
 ### Fixed
-- The hosted HTTP transport answered every unknown path with `401` and the credential challenge, including the OAuth discovery paths. A client that got a `401` on connect then probed `/.well-known/oauth-protected-resource`, read the `401` there as "this server does OAuth", attempted Dynamic Client Registration, and told the user registration had been rejected, when all the server ever wanted was an API key. Only the MCP endpoint is credential-gated now; anything else is a plain `404` with no challenge. The endpoint still serves both the bare origin and `/mcp`, and `/healthz` and `/readyz` stay unauthenticated.
+- The hosted HTTP transport answered every unknown path with `401` and the credential challenge, including the OAuth discovery paths. A client that got a `401` on connect then probed `/.well-known/oauth-protected-resource`, read the `401` there as "this server does OAuth", attempted Dynamic Client Registration, and told the user registration had been rejected, when all the server ever wanted was an API key. Only the MCP endpoint is credential-gated now; anything else is a plain `404` with no challenge. The endpoint still serves the bare origin, `/mcp` and `/mcp/`, and `/healthz` and `/readyz` stay unauthenticated.
 
 ## [0.5.0] - 2026-08-13
 
@@ -83,7 +85,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
 - `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
-[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.2.0...v0.3.0
