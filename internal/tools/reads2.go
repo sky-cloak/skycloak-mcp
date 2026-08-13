@@ -13,7 +13,7 @@ import (
 func registerReads2Tools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_credentials",
-		Description: "Get a cluster's Keycloak automation client credentials for OAuth2 client_credentials.",
+		Description: "Get a cluster's Keycloak automation client credentials for OAuth2 client_credentials. Needs a key with the clusters:credentials:read scope, which `skycloak-mcp init` only requests with --allow-credentials.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get cluster credentials"},
 	}, getClusterCredentialsHandler(api))
 
@@ -61,6 +61,13 @@ func getClusterCredentialsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, 
 		}
 		creds, err := api.GetClusterCredentials(ctx, in.ClusterID)
 		if err != nil {
+			// This is the one scope a sign-in does not grant by default, so a 403
+			// here is usually that rather than a real permission problem.
+			if apiErr, ok := skycloak.AsAPIError(err); ok && apiErr.StatusCode == 403 {
+				return errResult("Forbidden: reading cluster credentials needs the clusters:credentials:read scope, " +
+					"which `skycloak-mcp init` does not request by default. Re-run `skycloak-mcp init --allow-credentials` " +
+					"to mint a key that has it. " + err.Error()), skycloak.ClusterCredentials{}, nil
+			}
 			return toolError(err), skycloak.ClusterCredentials{}, nil
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "client_id=" + creds.ClientID + " token_url=" + creds.TokenURL + " (client_secret in structured output)"}}}, *creds, nil

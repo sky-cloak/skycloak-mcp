@@ -10,6 +10,7 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for **
 - **Local stdio.** Run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key, stores it in your operating-system keychain, and detects your default workspace automatically (pass `--workspace <id>` to pick another). `skycloak-mcp logout` removes the stored key.
 - **Headless / CI.** Set the `SKYCLOAK_API_KEY` environment variable (create a key in the [Skycloak dashboard](https://app.skycloak.io)) to skip the browser entirely. It always takes precedence over the keychain.
 - **Read-only by default.** Mutating tools are registered only when the server starts with `--allow-writes`.
+- **Cluster credentials are opt-in.** `get_cluster_credentials` returns a cluster's Keycloak admin credentials, which an assistant holding the key would then see, so `init` does not request that scope by default. Sign in with `skycloak-mcp init --allow-credentials` if you want that tool to work; without it, it returns a 403 that says so.
 - **Destructive tools require confirmation:** deleting a realm, for example, needs an explicit `confirm=true` argument.
 - Requests are rate limited according to your Skycloak plan; on a `429` response the server surfaces `Retry-After`.
 
@@ -110,7 +111,7 @@ It needs no credential of its own: callers supply theirs per request, so nothing
 | `SKYCLOAK_CLIENT_ID` | `skycloak-mcp` |
 | `SKYCLOAK_DASHBOARD_URL` | `https://app.skycloak.io` |
 
-Commands: `init` (browser sign-in), `run` (serve), `logout` (remove the stored key). `init` accepts `--workspace <id>`, `--allow-writes`, and `--ttl-days` (default 90).
+Commands: `init` (browser sign-in), `run` (serve), `logout` (remove the stored key). `init` accepts `--workspace <id>`, `--allow-writes`, `--allow-credentials`, and `--ttl-days` (default 90).
 
 | Flag | Default | Description |
 |---|---|---|

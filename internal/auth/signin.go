@@ -17,6 +17,11 @@ type InitOptions struct {
 	// AllowWrites requests write scopes in addition to read scopes, so the
 	// minted key can back `skycloak-mcp run --allow-writes`.
 	AllowWrites bool
+	// AllowCredentials additionally requests clusters:credentials:read, which
+	// lets skycloak_get_cluster_credentials return a cluster's Keycloak admin
+	// credentials. Off by default: without it that tool is the only one a
+	// signed-in user cannot call.
+	AllowCredentials bool
 	// TTL is the minted key's lifetime. Zero means no expiry.
 	TTL time.Duration
 	// NoBrowser prints the verification URL instead of opening it in a browser.
@@ -86,6 +91,9 @@ func printGrantNotice(out io.Writer, opts InitOptions) {
 		fprintf(out, "\nThis will create an API key that can READ AND MODIFY your Skycloak\nresources (clusters, realms, applications, users, identity providers).\n")
 	} else {
 		fprintf(out, "\nThis will create a read-only API key. Re-run with --allow-writes to\ninclude write access.\n")
+	}
+	if opts.AllowCredentials {
+		fprintf(out, "It will ALSO be able to read your clusters' Keycloak admin credentials,\nwhich an assistant using this key can then see.\n")
 	}
 	if opts.TTL > 0 {
 		fprintf(out, "The key expires in %s.\n", opts.TTL)

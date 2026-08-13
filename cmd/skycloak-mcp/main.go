@@ -68,14 +68,16 @@ func runInit(ctx context.Context, args []string) int {
 	allowWrites := fs.Bool("allow-writes", false, "also request write scopes (for `run --allow-writes`)")
 	ttlDays := fs.Int("ttl-days", 90, "lifetime of the minted key in days (0 = no expiry)")
 	noBrowser := fs.Bool("no-browser", false, "print the verification URL instead of opening a browser")
+	allowCredentials := fs.Bool("allow-credentials", false, "also request the scope that reads cluster Keycloak admin credentials")
 	_ = fs.Parse(args)
 
 	cfg := auth.ConfigFromEnv()
 	opts := auth.InitOptions{
-		WorkspaceID: *workspace,
-		AllowWrites: *allowWrites,
-		TTL:         time.Duration(*ttlDays) * 24 * time.Hour,
-		NoBrowser:   *noBrowser,
+		WorkspaceID:      *workspace,
+		AllowWrites:      *allowWrites,
+		AllowCredentials: *allowCredentials,
+		TTL:              time.Duration(*ttlDays) * 24 * time.Hour,
+		NoBrowser:        *noBrowser,
 	}
 	if err := auth.Init(ctx, cfg, opts, os.Stderr); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "init failed: %v\n", err)

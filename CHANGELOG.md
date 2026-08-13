@@ -6,6 +6,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `init --allow-credentials` requests `clusters:credentials:read`, the scope `get_cluster_credentials` needs. It stays out of the default grant, because a key that carries it lets an assistant read a cluster's Keycloak admin credentials.
+
+### Changed
+- `get_cluster_credentials` answers a `403` by naming the scope it needs and the flag that grants it, instead of a bare "forbidden". It was previously the only tool a signed-in user could never call, with nothing to say why.
+
 ## [0.4.0] - 2026-08-13
 
 ### Added
