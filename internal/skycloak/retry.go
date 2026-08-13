@@ -8,6 +8,18 @@ import (
 	"time"
 )
 
+const (
+	// maxRetryAfter caps how long a single server-supplied Retry-After can park
+	// a call.
+	maxRetryAfter = 60 * time.Second
+	// defaultTotalWaitBudget caps the backoff a whole call may accumulate. In
+	// stateless HTTP mode nothing cancels a handler when the client disconnects,
+	// so an unbounded loop would leave goroutines sleeping through an incident.
+	// Once the budget is spent the last response is returned as-is, and the
+	// caller sees the 429 rather than a hang.
+	defaultTotalWaitBudget = 2 * time.Minute
+)
+
 // retryTransport retries 429 and 5xx responses, honoring a numeric Retry-After
 // header, with bounded exponential backoff.
 //
@@ -15,9 +27,10 @@ import (
 // caller's context instead, so a Retry-After longer than one attempt's budget
 // is still honored rather than being cut short by an overall deadline.
 type retryTransport struct {
-	base       http.RoundTripper
-	maxRetries int
-	perAttempt time.Duration
+	base            http.RoundTripper
+	maxRetries      int
+	perAttempt      time.Duration
+	totalWaitBudget time.Duration
 }
 
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -25,6 +38,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if base == nil {
 		base = http.DefaultTransport
 	}
+	var waited time.Duration
 	for attempt := 0; ; attempt++ {
 		attemptReq := req.Clone(req.Context())
 		// Replay the body on retries (oapi-codegen sets GetBody for JSON bodies).
@@ -50,7 +64,13 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 			return nil, err
 		}
-		if !retryableStatus(resp.StatusCode) || attempt >= t.maxRetries {
+		wait := backoffDelay(attempt, resp.Header.Get("Retry-After"))
+		budgetSpent := t.totalWaitBudget > 0 && waited+wait > t.totalWaitBudget
+
+		// Give up either because this response is final, or because sleeping again
+		// would overrun the wait budget; in both cases the caller gets the
+		// response rather than a hang.
+		if !retryableStatus(resp.StatusCode) || attempt >= t.maxRetries || budgetSpent {
 			if cancel != nil {
 				// The body is still streaming, so the attempt's context must outlive
 				// this return and be released when the caller closes the body.
@@ -58,8 +78,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 			return resp, nil
 		}
-
-		wait := backoffDelay(attempt, resp.Header.Get("Retry-After"))
+		waited += wait
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 		if cancel != nil {
@@ -97,7 +116,14 @@ func retryableStatus(code int) bool {
 func backoffDelay(attempt int, retryAfter string) time.Duration {
 	if retryAfter != "" {
 		if secs, err := strconv.Atoi(retryAfter); err == nil && secs >= 0 {
-			return time.Duration(secs) * time.Second
+			d := time.Duration(secs) * time.Second
+			// Honor the gateway's pacing, but don't park a tool call for an hour
+			// because a header said so; past the cap the caller is better served
+			// by the 429 than by a wait it never agreed to.
+			if d > maxRetryAfter {
+				return maxRetryAfter
+			}
+			return d
 		}
 	}
 	d := time.Duration(1<<uint(attempt)) * time.Second

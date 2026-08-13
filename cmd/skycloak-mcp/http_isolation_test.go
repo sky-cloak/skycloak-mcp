@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -176,5 +175,3 @@ func truncate(b []byte) string {
 	}
 	return string(b)
 }
-
-var _ = json.Marshal

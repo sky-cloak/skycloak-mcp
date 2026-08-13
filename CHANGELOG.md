@@ -20,6 +20,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - An unauthenticated HTTP request is answered with `401` and a `WWW-Authenticate` challenge instead of `400`.
 - Request retries are bounded per attempt rather than by one overall client deadline, so a `Retry-After` longer than a single attempt's timeout is honored instead of failing the call. The caller's context still bounds the whole operation.
 - The client no longer installs its retry transport onto an `http.Client` supplied via `WithHTTPClient`; it copies the client first.
+- A server-supplied `Retry-After` is capped at 60s, and the backoff a single call may accumulate is capped at 2 minutes, so a gateway incident cannot park a tool call indefinitely.
+- A query string containing `;` is rejected rather than silently parsed as absent, so `?readonly=true;x=1` can no longer fall back to the write-capable default.
 
 ### Removed
 - list_cluster_builds / get_cluster_build tools: the cluster-builds endpoints were removed from the Skycloak public API.

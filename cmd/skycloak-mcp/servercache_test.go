@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -110,6 +113,73 @@ func TestServerCacheDoesNotStoreRawCredential(t *testing.T) {
 	for k := range c.entries {
 		if strings.Contains(k, secret) {
 			t.Fatalf("cache key %q contains the raw credential", k)
+		}
+	}
+}
+
+// Building a server is slow. If it happens under the cache's lock, one build
+// stalls every other caller, so a flood of unknown credentials serializes the
+// whole server. Concurrent misses for distinct keys must proceed in parallel.
+func TestServerCacheBuildsConcurrentlyAcrossKeys(t *testing.T) {
+	const keys = 8
+	var building sync.WaitGroup
+	building.Add(keys)
+	release := make(chan struct{})
+
+	c := newServerCache(64, time.Minute, func(string, bool) *mcp.Server {
+		building.Done() // announce arrival
+		<-release       // hold until every builder has arrived
+		return mcp.NewServer(&mcp.Implementation{Name: "t", Version: "t"}, nil)
+	})
+
+	var wg sync.WaitGroup
+	for i := 0; i < keys; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			c.get(fmt.Sprintf("key-%d", i), false)
+		}(i)
+	}
+
+	done := make(chan struct{})
+	go func() { building.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		close(release)
+		t.Fatal("builds are serialized: not all builders started concurrently")
+	}
+	close(release)
+	wg.Wait()
+}
+
+// Concurrent misses for the SAME credential must build once, not once per
+// caller, or a burst of new sessions multiplies the cost.
+func TestServerCacheBuildsOncePerKeyUnderConcurrency(t *testing.T) {
+	var calls atomic.Int32
+	c := newServerCache(64, time.Minute, func(string, bool) *mcp.Server {
+		calls.Add(1)
+		time.Sleep(20 * time.Millisecond)
+		return mcp.NewServer(&mcp.Implementation{Name: "t", Version: "t"}, nil)
+	})
+
+	var wg sync.WaitGroup
+	servers := make([]*mcp.Server, 16)
+	for i := range servers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			servers[i] = c.get("same-key", false)
+		}(i)
+	}
+	wg.Wait()
+
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("build called %d times for one credential, want 1", got)
+	}
+	for i, s := range servers {
+		if s != servers[0] || s == nil {
+			t.Fatalf("caller %d got a different (or nil) server", i)
 		}
 	}
 }

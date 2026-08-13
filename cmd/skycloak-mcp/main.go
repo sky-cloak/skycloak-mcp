@@ -169,8 +169,8 @@ type httpConfig struct {
 // newHTTPHandler serves MCP over streamable HTTP, authenticating every request
 // individually.
 //
-// It runs stateless. Otherwise the SDK caches a session — and the server built
-// for it — under the client-supplied Mcp-Session-Id, consulting the credential
+// It runs stateless. Otherwise the SDK caches a session, and the server built
+// for it, under the client-supplied Mcp-Session-Id, consulting the credential
 // only when that session is first created, so anyone replaying the id would act
 // with the original caller's key. The SDK's own guard binds sessions to
 // auth.TokenInfo, which only its bearer middleware can populate, so a custom
@@ -197,10 +197,8 @@ func newHTTPHandler(cfg httpConfig) http.Handler {
 	}, &mcp.StreamableHTTPOptions{Stateless: true})
 
 	authed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := readonlyMode(r); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+		// Credential first: an unauthenticated caller gets 401 whatever else is
+		// wrong with the request, and learns nothing from how we parse the rest.
 		if _, err := credentialFromRequest(r); err != nil {
 			// 401 (not 400) so clients can distinguish "authenticate" from
 			// "malformed"; the challenge tells them which scheme to use.
@@ -208,12 +206,16 @@ func newHTTPHandler(cfg httpConfig) http.Handler {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
+		if _, err := readonlyMode(r); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		handler.ServeHTTP(w, r)
 	})
 
 	// Probes cannot present a credential, so health lives outside the auth
 	// wrapper. Both report the same thing: the process is up. There is no
-	// readiness to gate on — the server holds no connection and no state, and a
+	// readiness to gate on: the server holds no connection and no state, and a
 	// dependency check here would only turn a Skycloak API blip into a
 	// self-inflicted outage by failing every replica's probe at once.
 	mux := http.NewServeMux()
@@ -233,7 +235,7 @@ var errNoCredential = errors.New("missing credential: send `Authorization: Beare
 
 // credentialFromRequest extracts the caller's Skycloak API key. Bearer is the
 // MCP-standard shape and is preferred; API-Key matches the Skycloak REST API.
-// The key's validity is not checked here — the Skycloak API is the authority,
+// The key's validity is not checked here: the Skycloak API is the authority,
 // and verifying up front would cost a round trip on every request.
 func credentialFromRequest(r *http.Request) (string, error) {
 	if fields := strings.Fields(r.Header.Get("Authorization")); len(fields) == 2 {
@@ -258,6 +260,12 @@ func httpAllowWrites(serverAllowWrites, readonly bool) bool {
 // readonlyMode returns true if the request has a query parameter
 // `readonly=true`.
 func readonlyMode(r *http.Request) (bool, error) {
+	// Go silently drops any query pair containing a semicolon, which would turn
+	// `?readonly=true;x=1` into no readonly at all. Refuse rather than fall back
+	// to the write-capable default.
+	if strings.Contains(r.URL.RawQuery, ";") {
+		return false, errors.New("invalid query string: `;` is not a supported separator")
+	}
 	values, ok := r.URL.Query()["readonly"]
 	if !ok {
 		return false, nil

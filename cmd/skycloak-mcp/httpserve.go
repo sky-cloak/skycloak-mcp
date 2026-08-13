@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -46,7 +47,14 @@ func serveWithShutdown(ctx context.Context, srv *http.Server, ln net.Listener) e
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			return err
+			// Running out of drain time is a slow request, not a failure: report it
+			// and still exit cleanly, so a rollout doesn't look like a crash loop.
+			if errors.Is(err, context.DeadlineExceeded) {
+				log.Printf("shutdown: drain exceeded %s; closing remaining connections", shutdownGrace)
+				_ = srv.Close()
+			} else {
+				return err
+			}
 		}
 		return <-errc
 	}

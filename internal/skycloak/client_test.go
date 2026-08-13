@@ -73,3 +73,13 @@ func TestProblemError(t *testing.T) {
 		t.Fatalf("unexpected APIError: %+v", apiErr)
 	}
 }
+
+// New must not install its retry transport onto a client the caller owns: that
+// would leak retry behavior into every other request they make with it.
+func TestWithHTTPClientLeavesCallersClientUntouched(t *testing.T) {
+	caller := &http.Client{}
+	_ = New("https://example.invalid", "k", "v", WithHTTPClient(caller))
+	if caller.Transport != nil {
+		t.Fatalf("New mutated the caller's client: Transport = %T", caller.Transport)
+	}
+}

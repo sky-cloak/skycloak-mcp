@@ -19,8 +19,9 @@ const (
 )
 
 type cachedServer struct {
+	once     sync.Once // builds this entry exactly once, however many callers race for it
 	server   *mcp.Server
-	lastUsed time.Time
+	lastUsed time.Time // guarded by serverCache.mu
 }
 
 // serverCache hands out one MCP server per (credential, write mode) pair.
@@ -51,22 +52,26 @@ func (c *serverCache) get(apiKey string, allowWrites bool) *mcp.Server {
 	key := cacheKey(apiKey, allowWrites)
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	now := c.now()
-
-	if e, ok := c.entries[key]; ok && now.Sub(e.lastUsed) < c.ttl {
-		e.lastUsed = now
-		return e.server
+	entry, ok := c.entries[key]
+	if ok && now.Sub(entry.lastUsed) < c.ttl {
+		entry.lastUsed = now
+	} else {
+		c.evictExpiredLocked(now)
+		if len(c.entries) >= c.max {
+			c.evictOldestLocked()
+		}
+		entry = &cachedServer{lastUsed: now}
+		c.entries[key] = entry
 	}
+	c.mu.Unlock()
 
-	c.evictExpiredLocked(now)
-	if len(c.entries) >= c.max {
-		c.evictOldestLocked()
-	}
-
-	server := c.build(apiKey, allowWrites)
-	c.entries[key] = &cachedServer{server: server, lastUsed: now}
-	return server
+	// Build outside the lock. A build takes ~17ms, so holding the lock across it
+	// would make one unknown credential stall every other caller, and a flood of
+	// them would serialize the whole process. The Once collapses concurrent
+	// misses for the same credential into a single build.
+	entry.once.Do(func() { entry.server = c.build(apiKey, allowWrites) })
+	return entry.server
 }
 
 func (c *serverCache) evictExpiredLocked(now time.Time) {

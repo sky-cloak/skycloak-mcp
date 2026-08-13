@@ -6,7 +6,7 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for **
 
 ## Authentication & safety
 
-- **Hosted HTTP.** Create an API key in the [Skycloak dashboard](https://app.skycloak.io) and configure your MCP client to send it as `Authorization: Bearer <key>` (or `API-Key: <key>`) to `https://mcp.skycloak.io`. Every request is authenticated on its own and acts only as that key's workspace. The server keeps no session state, so a request never inherits another caller's credential.
+- **Hosted HTTP.** Create an API key in the [Skycloak dashboard](https://app.skycloak.io) and configure your MCP client to send it as `Authorization: Bearer <key>` (or `API-Key: <key>`) to `https://mcp.skycloak.io`. Every request carries its own key and acts only as that key's workspace. The server keeps no session state, so a request never inherits another caller's credential. Keys are not verified before use: the Skycloak API is the authority, so an invalid key surfaces as a `401` on the first tool call rather than at connect time.
 - **Local stdio.** Run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key, stores it in your operating-system keychain, and detects your default workspace automatically (pass `--workspace <id>` to pick another). `skycloak-mcp logout` removes the stored key.
 - **Headless / CI.** Set the `SKYCLOAK_API_KEY` environment variable (create a key in the [Skycloak dashboard](https://app.skycloak.io)) to skip the browser entirely. It always takes precedence over the keychain.
 - **Read-only by default.** Mutating tools are registered only when the server starts with `--allow-writes`.
@@ -58,6 +58,8 @@ This adds the following to `.claude.json`:
   }
 }
 ```
+
+For local stdio, sign in once, then point your client at `skycloak-mcp run`:
 
 ```bash
 skycloak-mcp init        # one-time browser sign-in; stores a key in your keychain

@@ -41,7 +41,9 @@ type config struct {
 // for a 60s Retry-After), and the caller's context is what limits the total.
 const defaultPerAttemptTimeout = 30 * time.Second
 
-// WithHTTPClient overrides the underlying HTTP client (useful in tests).
+// WithHTTPClient overrides the underlying HTTP client (useful in tests). The
+// client is copied, not mutated. Note that its Timeout, if set, bounds the whole
+// call including retry backoff; use WithPerAttemptTimeout to bound one attempt.
 func WithHTTPClient(h *http.Client) Option { return func(c *config) { c.httpClient = h } }
 
 // WithUserAgent sets the User-Agent header sent on every request.
@@ -65,7 +67,7 @@ func New(endpoint, apiKey, apiVersion string, opts ...Option) *Client {
 	// transport on it would leak retry behavior into their other requests.
 	hc := *cfg.httpClient
 	// Retry 429/5xx with Retry-After-aware backoff.
-	hc.Transport = &retryTransport{base: hc.Transport, maxRetries: 4, perAttempt: cfg.perAttemptTimeout}
+	hc.Transport = &retryTransport{base: hc.Transport, maxRetries: 4, perAttempt: cfg.perAttemptTimeout, totalWaitBudget: defaultTotalWaitBudget}
 	cfg.httpClient = &hc
 
 	editor := func(_ context.Context, req *http.Request) error {

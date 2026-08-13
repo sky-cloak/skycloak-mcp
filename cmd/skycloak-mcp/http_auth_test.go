@@ -80,3 +80,29 @@ func TestMCPPathsStillRequireCredential(t *testing.T) {
 		}
 	}
 }
+
+// A caller with no credential must not be able to tell how the rest of their
+// request parsed: 401 wins over any other complaint.
+func TestUnauthenticatedWinsOverMalformedQuery(t *testing.T) {
+	ts := httptest.NewServer(newHTTPHandler(httpConfig{allowWrites: true}))
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/mcp?readonly=bogus", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", resp.StatusCode)
+	}
+}
+
+// Go's URL.Query() silently drops any pair containing a semicolon, so a
+// readonly request could arrive looking like no request at all. A safety
+// control must not fail open on input we cannot parse.
+func TestReadonlyRejectsUnparseableQuery(t *testing.T) {
+	req := httptest.NewRequest("POST", "http://example.com/mcp?readonly=true;v=2", nil)
+	if _, err := readonlyMode(req); err == nil {
+		t.Fatal("readonlyMode accepted a query Go silently mangles; it must refuse instead of defaulting to write-capable")
+	}
+}

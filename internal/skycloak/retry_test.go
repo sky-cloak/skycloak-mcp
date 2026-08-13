@@ -110,3 +110,42 @@ func TestCallerContextCancelsRetryLoop(t *testing.T) {
 		t.Fatalf("retry loop ignored caller context: took %v", elapsed)
 	}
 }
+
+// A gateway asking us to wait an hour must not park the call for an hour.
+func TestBackoffDelayCapsRetryAfter(t *testing.T) {
+	if d := backoffDelay(0, "3600"); d != maxRetryAfter {
+		t.Fatalf("Retry-After 3600 gave %v, want it capped at %v", d, maxRetryAfter)
+	}
+	if d := backoffDelay(0, "5"); d != 5*time.Second {
+		t.Fatalf("Retry-After 5 gave %v, want 5s (under the cap it is honored as-is)", d)
+	}
+}
+
+// In stateless HTTP mode nothing cancels a handler when the client goes away,
+// so a gateway incident returning repeated 429s must not leave goroutines
+// sleeping for minutes. The retry loop gives up once its wait budget is spent.
+func TestRetryLoopGivesUpOnceWaitBudgetIsSpent(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	tr := &retryTransport{maxRetries: 4, perAttempt: time.Second, totalWaitBudget: 150 * time.Millisecond}
+	req, _ := http.NewRequest("GET", srv.URL, nil)
+	start := time.Now()
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want the 429 surfaced to the caller", resp.StatusCode)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("retry loop slept past its budget: %v", elapsed)
+	}
+}
