@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-13
+
 ### Added
 - Browser sign-in: `skycloak-mcp init` runs the OAuth 2.0 device authorization flow (RFC 8628) against the Skycloak realm, mints a workspace-scoped API key, and stores it in the OS keychain. `skycloak-mcp run` loads it; `skycloak-mcp logout` removes it. No API key to copy or paste.
 - `--workspace`, `--allow-writes`, and `--ttl-days` flags on `init`; `SKYCLOAK_ISSUER`, `SKYCLOAK_CLIENT_ID`, and `SKYCLOAK_DASHBOARD_URL` env vars to target dev / self-hosted control planes.
@@ -58,6 +60,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
 - `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
-[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sky-cloak/skycloak-mcp/releases/tag/v0.1.0
