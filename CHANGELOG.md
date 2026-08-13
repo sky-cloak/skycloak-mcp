@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-13
+
 ### Added
 - Realm import/export tools: `create_realm_export`, `get_realm_export`, `create_realm_import`, `get_realm_import`, `create_realm_import_upload_url`. Both jobs are asynchronous; the archive is always encrypted, and a realm can be imported from an existing export without re-uploading it. Import overwrites the target realm and requires `confirm=true`.
 - `download_theme_content` returns a theme's archive as an MCP resource blob, with size and SHA-256 always reported and the bytes inlined only when small enough to be worth it.
@@ -69,7 +71,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
 - `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
-[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sky-cloak/skycloak-mcp/releases/tag/v0.1.0
