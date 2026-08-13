@@ -7,10 +7,51 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 const rexUID = "22222222-2222-2222-2222-222222222222"
+
+// The source-kind values are a closed enum in the API. Compare them against the
+// spec rather than against the code that produces them: a literal that merely
+// agrees with itself would pass while every real import 400s.
+func TestRealmImportSourceKindsMatchTheSpec(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "apiclient", "openapi.yaml"))
+	if err != nil {
+		t.Fatalf("read spec: %v", err)
+	}
+	var doc struct {
+		Components struct {
+			Schemas struct {
+				RealmImportSourceKind struct {
+					Enum []string `yaml:"enum"`
+				} `yaml:"RealmImportSourceKind"`
+			} `yaml:"schemas"`
+		} `yaml:"components"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse spec: %v", err)
+	}
+	spec := doc.Components.Schemas.RealmImportSourceKind.Enum
+	if len(spec) == 0 {
+		t.Fatal("no RealmImportSourceKind enum in the spec; the test is looking in the wrong place")
+	}
+
+	ours := map[string]bool{RealmImportSourceUpload: true, RealmImportSourceStored: true}
+	for _, want := range spec {
+		if !ours[want] {
+			t.Errorf("spec allows source_kind %q but no constant produces it", want)
+		}
+		delete(ours, want)
+	}
+	for leftover := range ours {
+		t.Errorf("we would send source_kind %q, which the spec does not allow", leftover)
+	}
+}
 
 func TestCreateRealmExport(t *testing.T) {
 	var gotBody map[string]any
@@ -85,8 +126,8 @@ func TestCreateRealmImportSendsChosenSource(t *testing.T) {
 		wantKey string
 		wantVal string
 	}{
-		{"upload", CreateRealmImportRequest{SourceKind: "upload", UploadS3Key: "imports/abc"}, "upload_s3_key", "imports/abc"},
-		{"stored export", CreateRealmImportRequest{SourceKind: "stored_export", SourceExportID: rexUID}, "source_export_id", rexUID},
+		{"upload", CreateRealmImportRequest{SourceKind: RealmImportSourceUpload, UploadS3Key: "imports/abc"}, "upload_s3_key", "imports/abc"},
+		{"stored export", CreateRealmImportRequest{SourceKind: RealmImportSourceStored, SourceExportID: rexUID}, "source_export_id", rexUID},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotBody map[string]any

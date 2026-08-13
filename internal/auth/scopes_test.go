@@ -30,12 +30,16 @@ func apiScopes(t *testing.T) map[string]bool {
 		case map[string]any:
 			for k, child := range v {
 				if k == "x-scopes" {
-					if list, ok := child.([]any); ok {
-						for _, s := range list {
-							if str, ok := s.(string); ok {
-								found[str] = true
-							}
+					list, ok := child.([]any)
+					if !ok {
+						t.Fatalf("x-scopes is %T, not a list; the parser would silently skip it", child)
+					}
+					for _, s := range list {
+						str, ok := s.(string)
+						if !ok {
+							t.Fatalf("x-scopes entry is %T, not a string", s)
 						}
+						found[str] = true
 					}
 				}
 				walk(child)
@@ -98,6 +102,20 @@ func TestWriteScopesIncludeMatchingReadScopes(t *testing.T) {
 		read := strings.TrimSuffix(s, ":write") + ":read"
 		if known[read] && !requested[read] {
 			t.Errorf("writeScopes has %q but not %q", s, read)
+		}
+	}
+}
+
+// The exclusion is a deliberate security choice, so it needs a test: nothing
+// else here would notice it being added back.
+func TestWriteScopesExcludeClusterCredentials(t *testing.T) {
+	const excluded = "clusters:credentials:read"
+	if !apiScopes(t)[excluded] {
+		t.Fatalf("%s no longer exists in the spec; this test is stale", excluded)
+	}
+	for _, s := range writeScopes {
+		if s == excluded {
+			t.Fatalf("writeScopes requests %s, which exposes a cluster's admin credentials", excluded)
 		}
 	}
 }

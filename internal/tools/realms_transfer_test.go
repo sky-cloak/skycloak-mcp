@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/sky-cloak/skycloak-mcp/internal/skycloak"
 )
 
 func TestCreateRealmExportHandler(t *testing.T) {
@@ -91,8 +93,8 @@ func TestCreateRealmImportDerivesSourceKind(t *testing.T) {
 		in   CreateRealmImportInput
 		want string
 	}{
-		{"upload", CreateRealmImportInput{ClusterID: "c1", UploadS3Key: "k", Confirm: true}, "upload"},
-		{"stored export", CreateRealmImportInput{ClusterID: "c1", SourceExportID: "rex_1", Confirm: true}, "stored_export"},
+		{"upload", CreateRealmImportInput{ClusterID: "c1", UploadS3Key: "k", Confirm: true}, skycloak.RealmImportSourceUpload},
+		{"stored export", CreateRealmImportInput{ClusterID: "c1", SourceExportID: "rex_1", Confirm: true}, skycloak.RealmImportSourceStored},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			res, out, err := createRealmImportHandler(stubAPI{})(context.Background(), nil, tt.in)

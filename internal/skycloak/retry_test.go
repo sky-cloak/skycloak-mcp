@@ -149,3 +149,43 @@ func TestRetryLoopGivesUpOnceWaitBudgetIsSpent(t *testing.T) {
 		t.Fatalf("retry loop slept past its budget: %v", elapsed)
 	}
 }
+
+// A gateway 5xx on a POST may mean the origin accepted the request. Replaying
+// it would start a second realm import, so only 429 is retried there.
+func TestNonIdempotentRequestsAreNotRetriedOn5xx(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		method    string
+		status    int
+		wantCalls int32
+	}{
+		{"POST 504 is not replayed", "POST", http.StatusGatewayTimeout, 1},
+		{"POST 429 is retried: the request was refused, not performed", "POST", http.StatusTooManyRequests, 2},
+		{"GET 504 is retried", "GET", http.StatusGatewayTimeout, 2},
+		{"DELETE 503 is retried", "DELETE", http.StatusServiceUnavailable, 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if calls.Add(1) == 1 {
+					w.Header().Set("Retry-After", "0")
+					w.WriteHeader(tt.status)
+					return
+				}
+				writeJSON(w, 200, `{}`)
+			}))
+			defer srv.Close()
+
+			tr := &retryTransport{maxRetries: 4, perAttempt: 2 * time.Second, totalWaitBudget: time.Minute}
+			req, _ := http.NewRequest(tt.method, srv.URL, nil)
+			resp, err := tr.RoundTrip(req)
+			if err != nil {
+				t.Fatalf("RoundTrip: %v", err)
+			}
+			_ = resp.Body.Close()
+			if got := calls.Load(); got != tt.wantCalls {
+				t.Fatalf("upstream saw %d calls, want %d", got, tt.wantCalls)
+			}
+		})
+	}
+}

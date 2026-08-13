@@ -70,7 +70,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		// Give up either because this response is final, or because sleeping again
 		// would overrun the wait budget; in both cases the caller gets the
 		// response rather than a hang.
-		if !retryableStatus(resp.StatusCode) || attempt >= t.maxRetries || budgetSpent {
+		if !retryable(req.Method, resp.StatusCode) || attempt >= t.maxRetries || budgetSpent {
 			if cancel != nil {
 				// The body is still streaming, so the attempt's context must outlive
 				// this return and be released when the caller closes the body.
@@ -104,11 +104,29 @@ func (c *cancelOnClose) Close() error {
 	return err
 }
 
-func retryableStatus(code int) bool {
-	return code == http.StatusTooManyRequests ||
-		code == http.StatusBadGateway ||
-		code == http.StatusServiceUnavailable ||
-		code == http.StatusGatewayTimeout
+// retryable reports whether a response may be retried.
+//
+// 429 is always safe: the request was refused, not performed. A 5xx is only
+// safe on an idempotent method. A gateway 504 on a POST often means the origin
+// did accept the request, and replaying it would start a second realm import
+// or a second export.
+func retryable(method string, code int) bool {
+	if code == http.StatusTooManyRequests {
+		return true
+	}
+	switch code {
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return idempotent(method)
+	}
+	return false
+}
+
+func idempotent(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions, http.MethodTrace, "":
+		return true
+	}
+	return false
 }
 
 // backoffDelay returns the wait before the next attempt: the server's numeric
