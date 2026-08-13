@@ -6,6 +6,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- The hosted HTTP transport answered every unknown path with `401` and the credential challenge, including the OAuth discovery paths. A client that got a `401` on connect then probed `/.well-known/oauth-protected-resource`, read the `401` there as "this server does OAuth", attempted Dynamic Client Registration, and told the user registration had been rejected, when all the server ever wanted was an API key. Only the MCP endpoint is credential-gated now; anything else is a plain `404` with no challenge. The endpoint still serves both the bare origin and `/mcp`, and `/healthz` and `/readyz` stay unauthenticated.
+
 ## [0.5.0] - 2026-08-13
 
 ### Added
