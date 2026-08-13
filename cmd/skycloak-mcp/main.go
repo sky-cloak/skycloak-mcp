@@ -221,10 +221,19 @@ func newHTTPHandler(cfg httpConfig) http.Handler {
 	// readiness to gate on: the server holds no connection and no state, and a
 	// dependency check here would only turn a Skycloak API blip into a
 	// self-inflicted outage by failing every replica's probe at once.
+	//
+	// Only the MCP endpoint is credential-gated, and it is registered as exact
+	// patterns rather than a catch-all, so every other path falls through to
+	// ServeMux's plain 404. Challenging for a credential everywhere told clients
+	// probing `/.well-known/oauth-protected-resource` that this server speaks
+	// OAuth, so they attempted Dynamic Client Registration and reported it as
+	// rejected rather than asking for the API key we actually want.
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealth)
 	mux.HandleFunc("GET /readyz", handleHealth)
-	mux.Handle("/", authed)
+	mux.Handle("/{$}", authed) // bare origin: what `claude mcp add --transport http` targets
+	mux.Handle("/mcp", authed)
+	mux.Handle("/mcp/{$}", authed) // trailing slash, which the old catch-all also served
 	return mux
 }
 

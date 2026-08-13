@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -77,6 +78,71 @@ func TestMCPPathsStillRequireCredential(t *testing.T) {
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Fatalf("POST %s = %d, want 401", path, resp.StatusCode)
+		}
+	}
+}
+
+// A path we do not serve must answer 404 with no challenge at all. MCP clients
+// probe /.well-known/... for OAuth metadata; a 401 there reads as "this server
+// does OAuth", so the client attempts Dynamic Client Registration and reports
+// that registration was rejected, when the server only ever wanted an API key.
+func TestUnknownPathsAreNotFoundWithoutChallenge(t *testing.T) {
+	ts := httptest.NewServer(newHTTPHandler(httpConfig{allowWrites: true}))
+	defer ts.Close()
+
+	for _, tt := range []struct{ method, path string }{
+		{"GET", "/.well-known/oauth-protected-resource"},
+		{"GET", "/.well-known/oauth-authorization-server"},
+		{"POST", "/register"},
+		{"GET", "/nope"},
+		{"POST", "/mcp/extra"},
+	} {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			req, err := http.NewRequest(tt.method, ts.URL+tt.path, strings.NewReader("{}"))
+			if err != nil {
+				t.Fatalf("new request: %v", err)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("%s %s: %v", tt.method, tt.path, err)
+			}
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+
+			if resp.StatusCode != http.StatusNotFound {
+				t.Fatalf("%s %s = %d, want 404", tt.method, tt.path, resp.StatusCode)
+			}
+			if got := resp.Header.Get("WWW-Authenticate"); got != "" {
+				t.Fatalf("%s %s carried WWW-Authenticate = %q, want none", tt.method, tt.path, got)
+			}
+			if strings.Contains(string(body), "missing credential") {
+				t.Fatalf("%s %s answered with the credential challenge: %s", tt.method, tt.path, body)
+			}
+		})
+	}
+}
+
+// The MCP endpoint answers on the bare origin (what `claude mcp add --transport
+// http skycloak https://mcp.skycloak.io` targets), on /mcp, and on /mcp/, which
+// the old catch-all also served. Narrowing the unknown-path handling must not
+// turn any of them into a 404.
+func TestMCPEndpointServesBareOriginAndMCPPath(t *testing.T) {
+	upstream := newFakeUpstream(t)
+	ts := httptest.NewServer(newHTTPHandler(httpConfig{
+		endpoint: upstream.srv.URL, apiVersion: "v1", userAgent: "test", allowWrites: false,
+	}))
+	defer ts.Close()
+
+	for _, path := range []string{"", "/mcp", "/mcp/"} {
+		resp := mcpPost(t, ts.URL+path, "sk_sc_test", "", initBody)
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST %q = %d, want 200: %s", path, resp.StatusCode, truncate(body))
+		}
+		if !strings.Contains(string(body), "skycloak-mcp") {
+			t.Fatalf("POST %q did not return an initialize result: %s", path, truncate(body))
 		}
 	}
 }
