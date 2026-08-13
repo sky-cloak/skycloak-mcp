@@ -6,6 +6,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- The container image declares its user numerically (`65532:65532`) instead of by name. Under a `runAsNonRoot` policy the kubelet has to verify the user is not root, cannot do that from a name, and refuses to start the container with `CreateContainerConfigError`.
+
 ## [0.3.0] - 2026-08-13
 
 ### Added
