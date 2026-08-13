@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -898,6 +899,11 @@ func (s stubAPI) CreateRealmImportUpload(_ context.Context, _ string) (*skycloak
 func (s stubAPI) CreateRealmImport(_ context.Context, _ string, req skycloak.CreateRealmImportRequest) (*skycloak.RealmImport, error) {
 	if s.err != nil {
 		return nil, s.err
+	}
+	// Reject like the API does rather than echoing whatever arrives: source_kind
+	// is a closed enum, and a stub that accepts anything hides a bad value.
+	if req.SourceKind != skycloak.RealmImportSourceUpload && req.SourceKind != skycloak.RealmImportSourceStored {
+		return nil, fmt.Errorf("invalid source_kind %q", req.SourceKind)
 	}
 	return &skycloak.RealmImport{ID: "rim_1", Realm: "app", SourceKind: req.SourceKind, Status: "pending"}, nil
 }

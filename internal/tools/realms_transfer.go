@@ -55,8 +55,9 @@ func registerRealmTransferWriteTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "skycloak_create_realm_import",
 		Description: "Import a Keycloak realm into a cluster from an uploaded archive or an existing realm export. Asynchronous: poll skycloak_get_realm_import. " +
-			"This overwrites the target realm's configuration and cannot be undone, so set confirm=true to proceed.",
-		Annotations: &mcp.ToolAnnotations{Title: "Import realm", ReadOnlyHint: false, DestructiveHint: ptr(true)},
+			"Creates a new realm: preflight refuses a name collision rather than overwriting, so an existing realm of the same name fails with 409. " +
+			"It does import users and their credentials, so set confirm=true to proceed.",
+		Annotations: &mcp.ToolAnnotations{Title: "Import realm", ReadOnlyHint: false, DestructiveHint: ptr(false)},
 	}, createRealmImportHandler(api))
 }
 
@@ -131,7 +132,7 @@ type CreateRealmImportInput struct {
 	UploadS3Key    string `json:"upload_s3_key,omitempty" jsonschema:"s3_key from skycloak_create_realm_import_upload_url, after uploading the archive"`
 	SourceExportID string `json:"source_export_id,omitempty" jsonschema:"ID of an existing realm export to import instead of an upload"`
 	Password       string `json:"password,omitempty" jsonschema:"password that decrypts the archive; required for an encrypted one"`
-	Confirm        bool   `json:"confirm" jsonschema:"must be true: importing overwrites the target realm's configuration"`
+	Confirm        bool   `json:"confirm" jsonschema:"must be true: the import creates a realm complete with users and credentials"`
 }
 
 func createRealmImportHandler(api API) mcp.ToolHandlerFor[CreateRealmImportInput, skycloak.RealmImport] {
@@ -140,7 +141,7 @@ func createRealmImportHandler(api API) mcp.ToolHandlerFor[CreateRealmImportInput
 			return errResult("cluster_id is required"), skycloak.RealmImport{}, nil
 		}
 		if !in.Confirm {
-			return errResult("refusing to import without confirm=true: this overwrites the target realm's configuration"), skycloak.RealmImport{}, nil
+			return errResult("refusing to import without confirm=true: this creates a realm complete with users and credentials"), skycloak.RealmImport{}, nil
 		}
 		switch {
 		case in.UploadS3Key != "" && in.SourceExportID != "":
@@ -152,9 +153,9 @@ func createRealmImportHandler(api API) mcp.ToolHandlerFor[CreateRealmImportInput
 		req := skycloak.CreateRealmImportRequest{
 			UploadS3Key: in.UploadS3Key, SourceExportID: in.SourceExportID, Password: in.Password,
 		}
-		req.SourceKind = "upload"
+		req.SourceKind = skycloak.RealmImportSourceUpload
 		if in.SourceExportID != "" {
-			req.SourceKind = "stored_export"
+			req.SourceKind = skycloak.RealmImportSourceStored
 		}
 		i, err := api.CreateRealmImport(ctx, in.ClusterID, req)
 		if err != nil {
@@ -222,7 +223,7 @@ func downloadThemeContentHandler(api API) mcp.ToolHandlerFor[ThemeContentInput, 
 			&mcp.TextContent{Text: fmt.Sprintf("Theme archive: %d bytes, SHA-256 %s.", len(raw), out.SHA256)},
 			&mcp.EmbeddedResource{Resource: &mcp.ResourceContents{
 				URI:      fmt.Sprintf("skycloak://clusters/%s/themes/%s/content", in.ClusterID, in.ThemeID),
-				MIMEType: "application/octet-stream",
+				MIMEType: "application/zip",
 				Blob:     raw,
 			}},
 		}}, out, nil

@@ -45,6 +45,13 @@ type RealmImportUpload struct {
 	S3Key     string `json:"s3_key"`
 }
 
+// Realm import sources. Defined from the generated enum, so a spec change to
+// these values fails the build here rather than 400ing at runtime.
+const (
+	RealmImportSourceUpload = string(apiclient.Upload)
+	RealmImportSourceStored = string(apiclient.Stored)
+)
+
 // CreateRealmImportRequest starts an import. Exactly one source is used:
 // UploadS3Key for an artifact uploaded via CreateRealmImportUpload, or
 // SourceExportID to reuse a realm export that already exists.
