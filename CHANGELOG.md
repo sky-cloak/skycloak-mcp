@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-13
+
 ### Added
 - `init --allow-credentials` requests `clusters:credentials:read`, the scope `get_cluster_credentials` needs. It stays out of the default grant, because a key that carries it lets an assistant read a cluster's Keycloak admin credentials.
 
@@ -78,7 +80,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
 - `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
-[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.1.0...v0.2.0
