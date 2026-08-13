@@ -32,6 +32,40 @@ type cliKeyResponse struct {
 	} `json:"api_key"`
 }
 
+// clusterCredentialsScope exposes a cluster's Keycloak admin credentials. It is
+// never in the default grant: an assistant holding the key can read whatever the
+// key can, and that is a bigger thing to hand over than the rest of the API.
+const clusterCredentialsScope = "clusters:credentials:read"
+
+// readScopes is the read half of writeScopes, derived so the two cannot drift.
+var readScopes = func() []string {
+	var out []string
+	for _, s := range writeScopes {
+		if strings.HasSuffix(s, ":read") {
+			out = append(out, s)
+		}
+	}
+	return out
+}()
+
+// requestedScopes is the scope list to send when minting. An empty result means
+// send none, which leaves the server's own read-only default in place.
+func requestedScopes(opts InitOptions) []string {
+	var out []string
+	switch {
+	case opts.AllowWrites:
+		out = append(out, writeScopes...)
+	case opts.AllowCredentials:
+		// An explicit list replaces the server default entirely, so the read
+		// scopes have to come along or the key could read nothing else.
+		out = append(out, readScopes...)
+	}
+	if opts.AllowCredentials {
+		out = append(out, clusterCredentialsScope)
+	}
+	return out
+}
+
 // writeScopes is the read+write set requested with --allow-writes: every scope
 // the API defines, except clusters:credentials:read, which exposes a cluster's
 // admin credentials and is not something a general-purpose key should carry.
@@ -73,8 +107,9 @@ func mintCLIKey(ctx context.Context, hc *http.Client, cfg Config, token string, 
 		WorkspaceID: opts.WorkspaceID,
 		Notes:       "Created by `skycloak-mcp init` (device sign-in).",
 	}
-	if opts.AllowWrites {
-		body.Scopes = writeScopes // else omit: the server defaults to read-only
+	// Empty means omit, and the server applies its read-only default.
+	if scopes := requestedScopes(opts); len(scopes) > 0 {
+		body.Scopes = scopes
 	}
 	if opts.TTL > 0 {
 		exp := time.Now().Add(opts.TTL).UTC()
