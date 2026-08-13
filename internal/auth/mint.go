@@ -32,19 +32,35 @@ type cliKeyResponse struct {
 	} `json:"api_key"`
 }
 
-// writeScopes is the read+write set requested with --allow-writes.
-// clusters:credentials:read is never requested; it exposes admin credentials.
+// writeScopes is the read+write set requested with --allow-writes: every scope
+// the API defines, except clusters:credentials:read, which exposes a cluster's
+// admin credentials and is not something a general-purpose key should carry.
+//
+// Names must match the API exactly. A scope that does not exist is not an
+// error at mint time; it simply is not granted, and only surfaces later as a
+// 403 on a tool call. The tests in scopes_test.go check this list against the
+// x-scopes declared in the committed OpenAPI spec, so adding a tool for a new
+// area fails there until its scope is added here.
 var writeScopes = []string{
 	"clusters:read", "clusters:write",
+	"clusters:events:read", "clusters:insights:read", "clusters:logs:read",
+	"clusters:security:read", "clusters:security:write",
+	"clusters:exports:read", "clusters:exports:write",
+	"clusters:imports:read", "clusters:imports:write",
+	"clusters:extensions:read", "clusters:extensions:write",
 	"realms:read", "realms:write",
-	"applications:read", "applications:write",
-	"users:read", "users:write",
 	"realm-users:read", "realm-users:write",
 	"realm-roles:read", "realm-roles:write",
 	"realm-groups:read", "realm-groups:write",
+	"applications:read", "applications:write",
 	"identity-providers:read", "identity-providers:write",
-	"cluster-logs:read", "cluster-insights:read", "cluster-events:read",
-	"cluster-security:read", "cluster-security:write",
+	"domains:read", "domains:write",
+	"themes:read", "themes:write",
+	"branding:read", "branding:write",
+	"extensions:read", "extensions:write",
+	"smtp:read", "smtp:write",
+	"siem:read", "siem:write",
+	"webhooks:read", "webhooks:write",
 }
 
 // mintCLIKey exchanges the device-flow Bearer token for a workspace-scoped API
