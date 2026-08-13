@@ -6,7 +6,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Realm import/export tools: `create_realm_export`, `get_realm_export`, `create_realm_import`, `get_realm_import`, `create_realm_import_upload_url`. Both jobs are asynchronous; the archive is always encrypted, and a realm can be imported from an existing export without re-uploading it. Import overwrites the target realm and requires `confirm=true`.
+- `download_theme_content` returns a theme's archive as an MCP resource blob, with size and SHA-256 always reported and the bytes inlined only when small enough to be worth it.
+- This completes the API surface: all 134 generated operations are now used.
+
 ### Fixed
+- `--allow-writes` requested seven scope names the API does not define (`users:read`, `users:write`, `cluster-logs:read`, `cluster-insights:read`, `cluster-events:read`, `cluster-security:read`, `cluster-security:write`), and omitted every scope for domains, themes, branding, extensions, SMTP, SIEM, webhooks, exports and imports. A minted key therefore 403'd on those tools. The list now matches the scopes declared in the OpenAPI spec, and a test checks it against the spec so a new tool area cannot silently miss one.
 - The container image declares its user numerically (`65532:65532`) instead of by name. Under a `runAsNonRoot` policy the kubelet has to verify the user is not root, cannot do that from a name, and refuses to start the container with `CreateContainerConfigError`.
 
 ## [0.3.0] - 2026-08-13

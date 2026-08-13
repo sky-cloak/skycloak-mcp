@@ -135,6 +135,12 @@ type API interface {
 	UpdateWebhookSubscription(ctx context.Context, webhookID string, req skycloak.UpdateWebhookSubscriptionRequest) (*skycloak.WebhookSubscription, error)
 	DeleteWebhookSubscription(ctx context.Context, webhookID string) error
 	TestWebhookSubscription(ctx context.Context, webhookID string, req skycloak.TestWebhookSubscriptionRequest) (*skycloak.WebhookTestResult, error)
+	CreateRealmExport(ctx context.Context, clusterID, realm, encryptionPassword string) (*skycloak.RealmExport, error)
+	GetRealmExport(ctx context.Context, exportID string) (*skycloak.RealmExport, error)
+	CreateRealmImportUpload(ctx context.Context, clusterID string) (*skycloak.RealmImportUpload, error)
+	CreateRealmImport(ctx context.Context, clusterID string, req skycloak.CreateRealmImportRequest) (*skycloak.RealmImport, error)
+	GetRealmImport(ctx context.Context, importID string) (*skycloak.RealmImport, error)
+	DownloadThemeContent(ctx context.Context, clusterID, themeID string) ([]byte, error)
 }
 
 // Register adds all tools to the server.
@@ -160,6 +166,7 @@ func Register(s *mcp.Server, api API, allowWrites bool) {
 	registerSIEMReadTools(s, api)
 	registerWebhookReadTools(s, api)
 	registerReads2Tools(s, api)
+	registerRealmTransferReadTools(s, api)
 	if allowWrites {
 		registerWriteTools(s, api)
 	}

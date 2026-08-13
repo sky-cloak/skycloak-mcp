@@ -11,51 +11,52 @@ import (
 )
 
 type stubAPI struct {
-	clusters  []skycloak.Cluster
-	cluster   *skycloak.Cluster
-	realms    []skycloak.Realm
-	apps      []skycloak.Application
-	idps      []skycloak.IdentityProvider
-	logs      []skycloak.LogEntry
-	secLogs   []skycloak.SecurityLogEntry
-	events    []skycloak.EventEntry
-	domains   []skycloak.Domain
-	domain    *skycloak.Domain
-	themes    []skycloak.Theme
-	assign    *skycloak.ThemeAssignment
-	login     *skycloak.LoginBranding
-	email     *skycloak.EmailBranding
-	catalog   []skycloak.ExtensionInfo
-	clusExts  []skycloak.ClusterExtension
-	exports   []skycloak.Export
-	export    *skycloak.Export
-	rroles    []skycloak.RealmRole
-	rgroups   []skycloak.RealmGroup
-	rusers    []skycloak.RealmUser
-	ruser     *skycloak.RealmUser
-	appRoles  []skycloak.ApplicationRole
-	appSess   []skycloak.ApplicationSession
-	locations []skycloak.ClusterLocationInfo
-	ctypes    []skycloak.ClusterTypeInfo
-	features  []skycloak.ClusterFeatureInfo
-	versions  []string
-	upgrades  []skycloak.ClusterUpgrade
-	templates []skycloak.ProviderTemplate
-	routes    []skycloak.DomainRoute
-	app       *skycloak.Application
-	idp       *skycloak.IdentityProvider
-	realm     *skycloak.Realm
-	smtp      *skycloak.SMTPConfig
-	theme     *skycloak.Theme
-	route     *skycloak.DomainRoute
-	upPath    []skycloak.UpgradePathStep
-	captcha   *skycloak.CAPTCHADomainsInfo
-	siem      *skycloak.SIEMDestination
-	siems     []skycloak.SIEMDestination
-	whEvent   []skycloak.WebhookEventType
-	webhook   *skycloak.WebhookSubscription
-	webhooks  []skycloak.WebhookSubscription
-	err       error
+	clusters     []skycloak.Cluster
+	cluster      *skycloak.Cluster
+	realms       []skycloak.Realm
+	apps         []skycloak.Application
+	idps         []skycloak.IdentityProvider
+	logs         []skycloak.LogEntry
+	secLogs      []skycloak.SecurityLogEntry
+	events       []skycloak.EventEntry
+	domains      []skycloak.Domain
+	domain       *skycloak.Domain
+	themes       []skycloak.Theme
+	assign       *skycloak.ThemeAssignment
+	login        *skycloak.LoginBranding
+	email        *skycloak.EmailBranding
+	catalog      []skycloak.ExtensionInfo
+	clusExts     []skycloak.ClusterExtension
+	exports      []skycloak.Export
+	themeArchive []byte
+	export       *skycloak.Export
+	rroles       []skycloak.RealmRole
+	rgroups      []skycloak.RealmGroup
+	rusers       []skycloak.RealmUser
+	ruser        *skycloak.RealmUser
+	appRoles     []skycloak.ApplicationRole
+	appSess      []skycloak.ApplicationSession
+	locations    []skycloak.ClusterLocationInfo
+	ctypes       []skycloak.ClusterTypeInfo
+	features     []skycloak.ClusterFeatureInfo
+	versions     []string
+	upgrades     []skycloak.ClusterUpgrade
+	templates    []skycloak.ProviderTemplate
+	routes       []skycloak.DomainRoute
+	app          *skycloak.Application
+	idp          *skycloak.IdentityProvider
+	realm        *skycloak.Realm
+	smtp         *skycloak.SMTPConfig
+	theme        *skycloak.Theme
+	route        *skycloak.DomainRoute
+	upPath       []skycloak.UpgradePathStep
+	captcha      *skycloak.CAPTCHADomainsInfo
+	siem         *skycloak.SIEMDestination
+	siems        []skycloak.SIEMDestination
+	whEvent      []skycloak.WebhookEventType
+	webhook      *skycloak.WebhookSubscription
+	webhooks     []skycloak.WebhookSubscription
+	err          error
 }
 
 func (s stubAPI) ListClusters(context.Context, skycloak.ListClustersParams) ([]skycloak.Cluster, error) {
@@ -871,4 +872,49 @@ func TestListRealmsHandler_MissingClusterID(t *testing.T) {
 func TestRegister(_ *testing.T) {
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "test"}, nil)
 	Register(s, stubAPI{}, true) // allowWrites=true exercises both paths; must not panic
+}
+
+func (s stubAPI) CreateRealmExport(_ context.Context, _, realm, _ string) (*skycloak.RealmExport, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmExport{ID: "rex_1", Realm: realm, Status: "pending", Scope: "full"}, nil
+}
+
+func (s stubAPI) GetRealmExport(_ context.Context, exportID string) (*skycloak.RealmExport, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmExport{ID: exportID, Realm: "app", Status: "completed", Progress: 100, DownloadURL: "https://example/dl"}, nil
+}
+
+func (s stubAPI) CreateRealmImportUpload(_ context.Context, _ string) (*skycloak.RealmImportUpload, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmImportUpload{UploadURL: "https://example/put", S3Key: "imports/abc"}, nil
+}
+
+func (s stubAPI) CreateRealmImport(_ context.Context, _ string, req skycloak.CreateRealmImportRequest) (*skycloak.RealmImport, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmImport{ID: "rim_1", Realm: "app", SourceKind: req.SourceKind, Status: "pending"}, nil
+}
+
+func (s stubAPI) GetRealmImport(_ context.Context, importID string) (*skycloak.RealmImport, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.RealmImport{ID: importID, Realm: "app", Status: "completed", Progress: 100}, nil
+}
+
+func (s stubAPI) DownloadThemeContent(_ context.Context, _, _ string) ([]byte, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.themeArchive != nil {
+		return s.themeArchive, nil
+	}
+	return []byte("PK\x03\x04 theme archive"), nil
 }
