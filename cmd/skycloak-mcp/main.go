@@ -10,8 +10,9 @@
 //	skycloak-mcp logout   remove the stored key
 //
 // For stdio, setting SKYCLOAK_API_KEY skips the keychain entirely (for CI /
-// headless use). HTTP clients must provide API-Key on each request. Invoking
-// with server flags but no subcommand behaves like `run`, so existing
+// headless use). The HTTP transport holds no key of its own: each request
+// carries its caller's, as `Authorization: Bearer <key>` or `API-Key: <key>`.
+// Invoking with server flags but no subcommand behaves like `run`, so existing
 // `skycloak-mcp --transport stdio` configurations keep working.
 package main
 
@@ -21,9 +22,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -131,10 +135,16 @@ func runServer(ctx context.Context, args []string) {
 			log.Fatalf("server error: %v", err)
 		}
 	case "http":
-		handler := newHTTPHandler(endpoint, apiVersion, userAgent, *allowWrites)
-		log.Printf("skycloak-mcp %s listening on %s (streamable HTTP)", version, *httpAddr)
-		srv := &http.Server{Addr: *httpAddr, Handler: handler}
-		if err := srv.ListenAndServe(); err != nil {
+		handler := newHTTPHandler(httpConfig{endpoint: endpoint, apiVersion: apiVersion, userAgent: userAgent, allowWrites: *allowWrites})
+		srv := newHTTPServer(*httpAddr, handler)
+		ln, err := net.Listen("tcp", *httpAddr)
+		if err != nil {
+			log.Fatalf("listen %s: %v", *httpAddr, err)
+		}
+		signalCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		log.Printf("skycloak-mcp %s listening on %s (streamable HTTP)", version, ln.Addr())
+		if err := serveWithShutdown(signalCtx, srv, ln); err != nil {
 			log.Fatalf("server error: %v", err)
 		}
 	default:
@@ -148,9 +158,34 @@ func newMCPServer(api tools.API, allowWrites bool) *mcp.Server {
 	return server
 }
 
-func newHTTPHandler(endpoint, apiVersion, userAgent string, allowWrites bool) http.Handler {
+// httpConfig holds what the HTTP transport needs to build a per-caller client.
+type httpConfig struct {
+	endpoint    string
+	apiVersion  string
+	userAgent   string
+	allowWrites bool
+}
+
+// newHTTPHandler serves MCP over streamable HTTP, authenticating every request
+// individually.
+//
+// It runs stateless. Otherwise the SDK caches a session — and the server built
+// for it — under the client-supplied Mcp-Session-Id, consulting the credential
+// only when that session is first created, so anyone replaying the id would act
+// with the original caller's key. The SDK's own guard binds sessions to
+// auth.TokenInfo, which only its bearer middleware can populate, so a custom
+// credential header leaves the guard permanently disarmed. Holding no session
+// state removes the attack surface, and lets any replica serve any request
+// without sticky sessions.
+func newHTTPHandler(cfg httpConfig) http.Handler {
+	cache := newServerCache(defaultServerCacheSize, defaultServerCacheTTL,
+		func(apiKey string, allowWrites bool) *mcp.Server {
+			api := skycloak.New(cfg.endpoint, apiKey, cfg.apiVersion, skycloak.WithUserAgent(cfg.userAgent))
+			return newMCPServer(api, allowWrites)
+		})
+
 	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		apiKey, err := apiKeyFromHeader(r)
+		apiKey, err := credentialFromRequest(r)
 		if err != nil {
 			return nil
 		}
@@ -158,32 +193,60 @@ func newHTTPHandler(endpoint, apiVersion, userAgent string, allowWrites bool) ht
 		if err != nil {
 			return nil
 		}
-		api := skycloak.New(endpoint, apiKey, apiVersion, skycloak.WithUserAgent(userAgent))
-		if !httpAllowWrites(allowWrites, readonly) {
-			return newMCPServer(api, false)
-		}
-		return newMCPServer(api, true)
-	}, nil)
+		return cache.get(apiKey, httpAllowWrites(cfg.allowWrites, readonly))
+	}, &mcp.StreamableHTTPOptions{Stateless: true})
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	authed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := readonlyMode(r); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if _, err := apiKeyFromHeader(r); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		if _, err := credentialFromRequest(r); err != nil {
+			// 401 (not 400) so clients can distinguish "authenticate" from
+			// "malformed"; the challenge tells them which scheme to use.
+			w.Header().Set("WWW-Authenticate", `Bearer realm="skycloak-mcp"`)
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 		handler.ServeHTTP(w, r)
 	})
+
+	// Probes cannot present a credential, so health lives outside the auth
+	// wrapper. Both report the same thing: the process is up. There is no
+	// readiness to gate on — the server holds no connection and no state, and a
+	// dependency check here would only turn a Skycloak API blip into a
+	// self-inflicted outage by failing every replica's probe at once.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", handleHealth)
+	mux.HandleFunc("GET /readyz", handleHealth)
+	mux.Handle("/", authed)
+	return mux
 }
 
-func apiKeyFromHeader(r *http.Request) (string, error) {
-	apiKey := strings.TrimSpace(r.Header.Get("API-Key"))
-	if apiKey == "" {
-		return "", errors.New("missing API-Key header")
+func handleHealth(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(`{"status":"ok"}`))
+}
+
+// errNoCredential is returned when a request carries neither supported header.
+var errNoCredential = errors.New("missing credential: send `Authorization: Bearer <api-key>` or `API-Key: <api-key>`")
+
+// credentialFromRequest extracts the caller's Skycloak API key. Bearer is the
+// MCP-standard shape and is preferred; API-Key matches the Skycloak REST API.
+// The key's validity is not checked here — the Skycloak API is the authority,
+// and verifying up front would cost a round trip on every request.
+func credentialFromRequest(r *http.Request) (string, error) {
+	if fields := strings.Fields(r.Header.Get("Authorization")); len(fields) == 2 {
+		if strings.EqualFold(fields[0], "bearer") {
+			if key := strings.TrimSpace(fields[1]); key != "" {
+				return key, nil
+			}
+		}
 	}
-	return apiKey, nil
+	if key := strings.TrimSpace(r.Header.Get("API-Key")); key != "" {
+		return key, nil
+	}
+	return "", errNoCredential
 }
 
 // httpAllowWrites returns true if the server is configured to allow writes and

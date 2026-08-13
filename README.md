@@ -6,7 +6,7 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for **
 
 ## Authentication & safety
 
-- **Hosted HTTP.** Create an API key in the [Skycloak dashboard](https://app.skycloak.io) and configure your MCP client to send it as the `API-Key` header to `https://mcp.skycloak.io`.
+- **Hosted HTTP.** Create an API key in the [Skycloak dashboard](https://app.skycloak.io) and configure your MCP client to send it as `Authorization: Bearer <key>` (or `API-Key: <key>`) to `https://mcp.skycloak.io`. Every request is authenticated on its own and acts only as that key's workspace. The server keeps no session state, so a request never inherits another caller's credential.
 - **Local stdio.** Run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key, stores it in your operating-system keychain, and detects your default workspace automatically (pass `--workspace <id>` to pick another). `skycloak-mcp logout` removes the stored key.
 - **Headless / CI.** Set the `SKYCLOAK_API_KEY` environment variable (create a key in the [Skycloak dashboard](https://app.skycloak.io)) to skip the browser entirely. It always takes precedence over the keychain.
 - **Read-only by default.** Mutating tools are registered only when the server starts with `--allow-writes`.
@@ -37,10 +37,10 @@ Read-only tools are always available. **Write** tools are registered only when t
 
 ## Connecting
 
-For hosted HTTP, create an API key in the Skycloak dashboard and configure your MCP client to send it in the `API-Key` header:
+For hosted HTTP, create an API key in the Skycloak dashboard and configure your MCP client to send it as a bearer token:
 
 ```bash
-claude mcp add --transport http skycloak https://mcp.skycloak.io --header "API-Key: sk_sc_XXX"
+claude mcp add --transport http skycloak https://mcp.skycloak.io --header "Authorization: Bearer sk_sc_XXX"
 ```
 
 This adds the following to `.claude.json`:
@@ -52,7 +52,7 @@ This adds the following to `.claude.json`:
       "type": "http",
       "url": "https://mcp.skycloak.io",
       "headers": {
-        "API-Key": "sk_sc_XXX"
+        "Authorization": "Bearer sk_sc_XXX"
       }
     }
   }
@@ -87,6 +87,14 @@ For headless / CI (no browser), skip `init` and pass the key instead: add `"env"
 Add `--allow-writes` only when you intend to make changes (sign in with `skycloak-mcp init --allow-writes`, or use a write-scoped key).
 
 Add `?readonly=true` to a hosted HTTP URL to expose only read-only tools for that HTTP session, or `?readonly=false` to request the write-capable tool surface. The query parameter defaults to `false`, but write tools are registered only when the server was started with `--allow-writes`.
+
+### Running the HTTP transport
+
+```bash
+skycloak-mcp run --transport http --http-addr :8080
+```
+
+It needs no credential of its own: callers supply theirs per request, so nothing is injected at deploy time. `GET /healthz` and `GET /readyz` are unauthenticated and report only that the process is up; they deliberately do not probe the Skycloak API, so an upstream blip cannot fail every replica's probe at once. The server holds no session state, so replicas need no session affinity and can be scaled or rolled freely. `SIGTERM` stops new connections and drains in-flight calls.
 
 ## Configuration
 

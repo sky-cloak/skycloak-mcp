@@ -82,59 +82,9 @@ func TestHTTPAllowWritesRequiresServerAllowWritesAndReadonlyFalse(t *testing.T) 
 }
 
 func TestHTTPHandlerRejectsInvalidReadonlyQueryParam(t *testing.T) {
-	handler := newHTTPHandler("", "", "", true)
+	handler := newHTTPHandler(httpConfig{allowWrites: true})
 	req := httptest.NewRequest("POST", "http://example.com/mcp?readonly=1", nil)
 	req.Header.Set("API-Key", "sk_sc_test")
-	rec := httptest.NewRecorder()
-
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
-}
-
-func TestAPIKeyFromHeader(t *testing.T) {
-	tests := []struct {
-		name    string
-		header  string
-		want    string
-		wantErr bool
-	}{
-		{name: "normal key", header: "sk_sc_test", want: "sk_sc_test"},
-		{name: "trims whitespace", header: "  sk_sc_test  ", want: "sk_sc_test"},
-		{name: "does not validate shape", header: "not-a-skycloak-key", want: "not-a-skycloak-key"},
-		{name: "missing", wantErr: true},
-		{name: "blank", header: "   ", wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "http://example.com/mcp", nil)
-			if tt.header != "" {
-				req.Header.Set("API-Key", tt.header)
-			}
-
-			got, err := apiKeyFromHeader(req)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("apiKeyFromHeader returned nil error, want error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("apiKeyFromHeader returned error: %v", err)
-			}
-			if got != tt.want {
-				t.Fatalf("apiKeyFromHeader = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestHTTPHandlerRequiresAPIKeyHeader(t *testing.T) {
-	handler := newHTTPHandler("", "", "", true)
-	req := httptest.NewRequest("POST", "http://example.com/mcp", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)

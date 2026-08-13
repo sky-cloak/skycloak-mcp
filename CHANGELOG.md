@@ -10,10 +10,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Browser sign-in: `skycloak-mcp init` runs the OAuth 2.0 device authorization flow (RFC 8628) against the Skycloak realm, mints a workspace-scoped API key, and stores it in the OS keychain. `skycloak-mcp run` loads it; `skycloak-mcp logout` removes it. No API key to copy or paste.
 - `--workspace`, `--allow-writes`, and `--ttl-days` flags on `init`; `SKYCLOAK_ISSUER`, `SKYCLOAK_CLIENT_ID`, and `SKYCLOAK_DASHBOARD_URL` env vars to target dev / self-hosted control planes.
 - `init` opens your browser to the verification page automatically (code pre-filled), and still prints the URL/code as a fallback. `--no-browser` disables the auto-open for SSH / headless terminals.
+- Hosted HTTP transport (`run --transport http`): every request authenticates on its own via `Authorization: Bearer <key>` or `API-Key: <key>`, so one process serves many workspaces without holding a key of its own. `?readonly=true` narrows a session to read-only tools.
+- Unauthenticated `GET /healthz` and `GET /readyz` for container probes, and a graceful drain on `SIGTERM`.
 
 ### Changed
 - `SKYCLOAK_API_KEY` is now optional: it is the headless/CI path (and still used by the container image) and takes precedence over the keychain when set. Invoking the binary with no subcommand still serves stdio, so existing configurations keep working.
 - `skycloak-mcp run` signs you in automatically (device flow) when started interactively in a terminal with no stored key. When an MCP client launches it over a pipe it stays non-interactive and surfaces the actionable `run skycloak-mcp init` message instead.
+- The HTTP transport runs stateless: it no longer caches an MCP session (and the server built for it) under the client-supplied `Mcp-Session-Id`. Previously a caller replaying another caller's session id was served with that caller's API key. Replicas now need no session affinity.
+- An unauthenticated HTTP request is answered with `401` and a `WWW-Authenticate` challenge instead of `400`.
+- Request retries are bounded per attempt rather than by one overall client deadline, so a `Retry-After` longer than a single attempt's timeout is honored instead of failing the call. The caller's context still bounds the whole operation.
+- The client no longer installs its retry transport onto an `http.Client` supplied via `WithHTTPClient`; it copies the client first.
 
 ### Removed
 - list_cluster_builds / get_cluster_build tools: the cluster-builds endpoints were removed from the Skycloak public API.

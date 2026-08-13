@@ -1,6 +1,7 @@
 package skycloak
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strconv"
@@ -8,10 +9,15 @@ import (
 )
 
 // retryTransport retries 429 and 5xx responses, honoring a numeric Retry-After
-// header, with bounded exponential backoff. It is request-context aware.
+// header, with bounded exponential backoff.
+//
+// perAttempt bounds each individual attempt. The total call is bounded by the
+// caller's context instead, so a Retry-After longer than one attempt's budget
+// is still honored rather than being cut short by an overall deadline.
 type retryTransport struct {
 	base       http.RoundTripper
 	maxRetries int
+	perAttempt time.Duration
 }
 
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -19,33 +25,64 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	var resp *http.Response
-	var err error
 	for attempt := 0; ; attempt++ {
-		// Reset the body for replays (oapi-codegen sets GetBody for JSON bodies).
+		attemptReq := req.Clone(req.Context())
+		// Replay the body on retries (oapi-codegen sets GetBody for JSON bodies).
 		if attempt > 0 && req.GetBody != nil {
-			body, gerr := req.GetBody()
-			if gerr != nil {
-				return resp, err
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, err
 			}
-			req.Body = body
+			attemptReq.Body = body
 		}
-		resp, err = base.RoundTrip(req)
+
+		var cancel context.CancelFunc
+		if t.perAttempt > 0 {
+			var ctx context.Context
+			ctx, cancel = context.WithTimeout(req.Context(), t.perAttempt)
+			attemptReq = attemptReq.WithContext(ctx)
+		}
+
+		resp, err := base.RoundTrip(attemptReq)
 		if err != nil {
-			return resp, err
+			if cancel != nil {
+				cancel()
+			}
+			return nil, err
 		}
 		if !retryableStatus(resp.StatusCode) || attempt >= t.maxRetries {
+			if cancel != nil {
+				// The body is still streaming, so the attempt's context must outlive
+				// this return and be released when the caller closes the body.
+				resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
+			}
 			return resp, nil
 		}
+
 		wait := backoffDelay(attempt, resp.Header.Get("Retry-After"))
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
+		if cancel != nil {
+			cancel()
+		}
 		select {
 		case <-req.Context().Done():
 			return nil, req.Context().Err()
 		case <-time.After(wait):
 		}
 	}
+}
+
+// cancelOnClose releases an attempt's context once the response body is closed.
+type cancelOnClose struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (c *cancelOnClose) Close() error {
+	err := c.ReadCloser.Close()
+	c.cancel()
+	return err
 }
 
 func retryableStatus(code int) bool {
