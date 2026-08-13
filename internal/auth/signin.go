@@ -71,6 +71,9 @@ func Init(ctx context.Context, cfg Config, opts InitOptions, out io.Writer) erro
 	if opts.AllowWrites {
 		mode = "read + write"
 	}
+	if opts.AllowCredentials {
+		mode += " + cluster credentials"
+	}
 	if wsID != "" {
 		fprintf(out, "Done. Created a %s API key for workspace %s and saved it to your keychain.\n", mode, wsID)
 	} else {

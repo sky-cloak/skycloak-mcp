@@ -102,6 +102,7 @@ func runServer(ctx context.Context, args []string) {
 	transport := fs.String("transport", "stdio", "transport: stdio | http")
 	httpAddr := fs.String("http-addr", ":8080", "listen address for the http transport")
 	allowWrites := fs.Bool("allow-writes", false, "enable mutating tools (requires a write-scoped key)")
+	allowCredentials := fs.Bool("allow-credentials", false, "when signing in inline, also request the cluster-credentials scope")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	_ = fs.Parse(args)
 
@@ -123,7 +124,7 @@ func runServer(ctx context.Context, args []string) {
 			// reload. When an MCP client spawns us (stdin is a pipe, not a TTY) we
 			// skip this and surface the actionable "run init" error instead, since
 			// the browser device flow can't be driven over the protocol pipe.
-			if ierr := auth.Init(ctx, cfg, auth.InitOptions{AllowWrites: *allowWrites, TTL: 90 * 24 * time.Hour}, os.Stderr); ierr != nil {
+			if ierr := auth.Init(ctx, cfg, auth.InitOptions{AllowWrites: *allowWrites, AllowCredentials: *allowCredentials, TTL: 90 * 24 * time.Hour}, os.Stderr); ierr != nil {
 				log.Fatalf("sign-in failed: %v", ierr)
 			}
 			apiKey, err = auth.LoadAPIKey(cfg)

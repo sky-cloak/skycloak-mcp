@@ -179,3 +179,61 @@ func TestRequestedScopesAreEmptyForAPlainReadOnlySignIn(t *testing.T) {
 		t.Fatalf("read-only sign-in requested %v, want no explicit scopes", got)
 	}
 }
+
+// Opting into credentials must not cost write access. The switch that builds
+// the list can silently shadow one case with the other, and a test that only
+// checks the credentials scope would not notice.
+func TestRequestedScopesKeepWritesAlongsideCredentials(t *testing.T) {
+	got := map[string]bool{}
+	for _, s := range requestedScopes(InitOptions{AllowWrites: true, AllowCredentials: true}) {
+		got[s] = true
+	}
+	for _, want := range writeScopes {
+		if !got[want] {
+			t.Errorf("--allow-writes --allow-credentials drops %q", want)
+		}
+	}
+	if !got[clusterCredentialsScope] {
+		t.Errorf("--allow-writes --allow-credentials drops %q", clusterCredentialsScope)
+	}
+}
+
+// An explicit scope list replaces the server's default instead of adding to it,
+// so writeScopes has to carry every read scope the API has, including the
+// read-only ones with no :write sibling. Without this, a new read-only scope in
+// the API would leave --allow-credentials keys unable to use it while a plain
+// sign-in could.
+func TestWriteScopesCoverEveryReadableArea(t *testing.T) {
+	requested := map[string]bool{}
+	for _, s := range writeScopes {
+		requested[s] = true
+	}
+	for s := range apiScopes(t) {
+		if !strings.HasSuffix(s, ":read") || s == clusterCredentialsScope {
+			continue
+		}
+		if !requested[s] {
+			t.Errorf("the API defines %q but writeScopes omits it, so an explicit-list key cannot use it", s)
+		}
+	}
+}
+
+// readScopes must be the whole read half, not merely a non-empty sample of it.
+func TestReadScopesAreTheCompleteReadHalf(t *testing.T) {
+	got := map[string]bool{}
+	for _, s := range readScopes {
+		got[s] = true
+	}
+	for s := range apiScopes(t) {
+		if !strings.HasSuffix(s, ":read") || s == clusterCredentialsScope {
+			continue
+		}
+		if !got[s] {
+			t.Errorf("readScopes omits %q", s)
+		}
+		delete(got, s)
+	}
+	for leftover := range got {
+		t.Errorf("readScopes contains %q, which is not a read scope the API defines", leftover)
+	}
+}

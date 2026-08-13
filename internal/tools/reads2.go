@@ -13,7 +13,7 @@ import (
 func registerReads2Tools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_credentials",
-		Description: "Get a cluster's Keycloak automation client credentials for OAuth2 client_credentials. Needs a key with the clusters:credentials:read scope, which `skycloak-mcp init` only requests with --allow-credentials.",
+		Description: "Get a cluster's Keycloak automation client credentials for OAuth2 client_credentials. Needs a key with the clusters:credentials:read scope, which is not granted by default.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get cluster credentials"},
 	}, getClusterCredentialsHandler(api))
 
@@ -64,9 +64,15 @@ func getClusterCredentialsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, 
 			// This is the one scope a sign-in does not grant by default, so a 403
 			// here is usually that rather than a real permission problem.
 			if apiErr, ok := skycloak.AsAPIError(err); ok && apiErr.StatusCode == 403 {
+				// The advice has to hold for both transports: over stdio the key
+				// usually comes from `init`, but a hosted HTTP caller supplies a
+				// dashboard key and has no keychain here. Note the env var too,
+				// since it outranks the keychain and would otherwise make a
+				// freshly minted key look like it changed nothing.
 				return errResult("Forbidden: reading cluster credentials needs the clusters:credentials:read scope, " +
-					"which `skycloak-mcp init` does not request by default. Re-run `skycloak-mcp init --allow-credentials` " +
-					"to mint a key that has it. " + err.Error()), skycloak.ClusterCredentials{}, nil
+					"which is not granted by default. Use a key that has it: create one in the Skycloak dashboard, " +
+					"or over stdio run `skycloak-mcp init --allow-credentials`. If SKYCLOAK_API_KEY is set it takes " +
+					"precedence over the stored key, so update that instead. " + err.Error()), skycloak.ClusterCredentials{}, nil
 			}
 			return toolError(err), skycloak.ClusterCredentials{}, nil
 		}
