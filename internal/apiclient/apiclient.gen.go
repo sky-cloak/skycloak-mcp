@@ -231,7 +231,7 @@ const (
 
 // Defines values for ManagementMode.
 const (
-	Full ManagementMode = "full"
+	ManagementModeFull ManagementMode = "full"
 )
 
 // Defines values for NameIdFormat.
@@ -247,6 +247,17 @@ const (
 	ProviderTypeLdap ProviderType = "ldap"
 	ProviderTypeOidc ProviderType = "oidc"
 	ProviderTypeSaml ProviderType = "saml"
+)
+
+// Defines values for RealmExportScope.
+const (
+	RealmExportScopeFull RealmExportScope = "full"
+)
+
+// Defines values for RealmImportSourceKind.
+const (
+	Stored RealmImportSourceKind = "stored"
+	Upload RealmImportSourceKind = "upload"
 )
 
 // Defines values for RealmSslRequired.
@@ -532,6 +543,12 @@ type AdminOperationType string
 
 // Application A Keycloak client (application) registered in a realm.
 type Application struct {
+	// AdminUrl Admin URL. Where Keycloak sends back-channel logout and admin callbacks.
+	AdminUrl *string `json:"admin_url,omitempty"`
+
+	// BaseUrl Home URL. Where Keycloak sends a user opening the application from the account console.
+	BaseUrl *string `json:"base_url,omitempty"`
+
 	// ClientId OAuth 2.0 client identifier. Stable resource identifier for this API.
 	ClientId ApplicationClientId `json:"client_id"`
 
@@ -554,11 +571,17 @@ type Application struct {
 	// PkceRequired Whether PKCE (Proof Key for Code Exchange) is required.
 	PkceRequired bool `json:"pkce_required"`
 
+	// PostLogoutRedirectUris URIs a user may be redirected to after signing out. Falls back to `redirect_uris` when empty.
+	PostLogoutRedirectUris *[]string `json:"post_logout_redirect_uris,omitempty"`
+
 	// Protocol Authentication protocol.
 	Protocol ApplicationProtocol `json:"protocol"`
 
 	// RedirectUris Allowed redirect URIs for authorization-code flows. Required for `authorization_code` grant.
 	RedirectUris []string `json:"redirect_uris"`
+
+	// RootUrl Root URL. Prefixed to any relative redirect URI.
+	RootUrl *string `json:"root_url,omitempty"`
 
 	// SamlConfig SAML-specific configuration. Present only when `protocol` is `saml`.
 	SamlConfig *SAMLConfiguration `json:"saml_config,omitempty"`
@@ -572,6 +595,9 @@ type Application struct {
 	// Type OAuth 2.0 client type.
 	Type      ApplicationType `json:"type"`
 	UpdatedAt time.Time       `json:"updated_at"`
+
+	// WebOrigins Browser origins allowed to call this application (CORS). `["*"]` allows any origin.
+	WebOrigins *[]string `json:"web_origins,omitempty"`
 }
 
 // ApplicationClientId OAuth 2.0 client identifier. Used as the stable resource identifier in this API and in Keycloak realm URLs.
@@ -1085,6 +1111,15 @@ type CreateIdentityProviderRequest struct {
 	Type ProviderType `json:"type"`
 }
 
+// CreateRealmExportRequest defines model for CreateRealmExportRequest.
+type CreateRealmExportRequest struct {
+	// EncryptionPassword Password used to encrypt the archive (AES-256-CBC, PBKDF2). Required: every realm export contains credentials. Never stored; only a hash is retained for verification.
+	EncryptionPassword string `json:"encryption_password" validate:"required,min=8,max=128"`
+
+	// Scope Export scope. Only `full` is currently supported.
+	Scope *RealmExportScope `json:"scope,omitempty"`
+}
+
 // CreateRealmGroupRequest Request body for creating a realm group. Omit `parent_id` to create a top-level group.
 type CreateRealmGroupRequest struct {
 	// Name Group name (leaf segment of the path).
@@ -1092,6 +1127,21 @@ type CreateRealmGroupRequest struct {
 
 	// ParentId ID of the parent group. When provided, the new group is created as a child of the specified group.
 	ParentId *RealmGroupId `json:"parent_id,omitempty"`
+}
+
+// CreateRealmImportRequest defines model for CreateRealmImportRequest.
+type CreateRealmImportRequest struct {
+	// Password Password to decrypt an encrypted artifact. Omit for a bare foreign JSON.
+	Password *string `json:"password,omitempty" validate:"omitnil,max=500"`
+
+	// SourceExportId A stored realm export id. Required when `source_kind` is `stored`.
+	SourceExportId *string `json:"source_export_id,omitempty" validate:"omitnil,max=500"`
+
+	// SourceKind Where the artifact comes from. `upload` (default) or `stored`.
+	SourceKind *RealmImportSourceKind `json:"source_kind,omitempty"`
+
+	// UploadS3Key Object key of a previously-uploaded artifact (from the upload-url endpoint). Required when `source_kind` is `upload`.
+	UploadS3Key *string `json:"upload_s3_key,omitempty" validate:"omitnil,max=500"`
 }
 
 // CreateRealmRequest Request body for creating a realm. If `display_name` is omitted, the realm name is used.
@@ -1561,7 +1611,7 @@ type FieldError struct {
 
 // GeoBlockingConfig defines model for GeoBlockingConfig.
 type GeoBlockingConfig struct {
-	// Countries ISO 3166-1 alpha-2 country codes.
+	// Countries ISO 3166-1 alpha-2 country codes. Overseas territories have their own codes, distinct from their mainland: for example `GP` (Guadeloupe), `MQ` (Martinique) and `RE` (Réunion) are not covered by `FR`, so an allowlist for France and its overseas territories must list them explicitly.
 	Countries []string        `json:"countries" validate:"dive,iso3166_1_alpha2"`
 	Enabled   bool            `json:"enabled"`
 	Mode      GeoBlockingMode `json:"mode"`
@@ -1581,6 +1631,8 @@ type HexColor = string
 
 // IPAccessControlConfig defines model for IPAccessControlConfig.
 type IPAccessControlConfig struct {
+	// Enabled Whether IP access control is enabled. When false, no path rules are enforced.
+	Enabled   *bool        `json:"enabled,omitempty"`
 	PathRules []IPPathRule `json:"path_rules"`
 }
 
@@ -1961,6 +2013,43 @@ type Realm struct {
 // RealmDisplayName defines model for RealmDisplayName.
 type RealmDisplayName = string
 
+// RealmExport defines model for RealmExport.
+type RealmExport struct {
+	ClusterId   ClusterId                    `json:"cluster_id"`
+	CompletedAt nullable.Nullable[time.Time] `json:"completed_at,omitempty"`
+	CreatedAt   time.Time                    `json:"created_at"`
+
+	// DownloadUrl Time-limited presigned URL to download the encrypted archive. Only set when `status` is `completed` and `expires_at` is in the future. Skycloak does not retain the artifact past `expires_at`.
+	DownloadUrl nullable.Nullable[string] `json:"download_url,omitempty" validate:"omitnil,max=500"`
+
+	// ErrorMessage Failure description. Only set when `status` is `failed`.
+	ErrorMessage nullable.Nullable[string] `json:"error_message,omitempty" validate:"omitnil,max=500"`
+
+	// ExpiresAt When the archive is deleted from storage (24h after completion).
+	ExpiresAt nullable.Nullable[time.Time] `json:"expires_at,omitempty"`
+	Id        RealmExportId                `json:"id"`
+
+	// Progress Percent complete, 0-100.
+	Progress int `json:"progress"`
+
+	// Realm The exported realm's name (Keycloak realm id).
+	Realm string           `json:"realm" validate:"omitnil,max=500"`
+	Scope RealmExportScope `json:"scope"`
+
+	// Sha256Checksum SHA-256 checksum of the produced encrypted archive (hex). Only set once `status` is `completed`.
+	Sha256Checksum nullable.Nullable[string] `json:"sha256_checksum,omitempty" validate:"omitnil,max=500"`
+
+	// SourceVersion Keycloak version that produced the export. An import target must run this version or newer. Only set once `status` is `completed`.
+	SourceVersion nullable.Nullable[string] `json:"source_version,omitempty" validate:"omitnil,max=500"`
+	Status        ExportStatus              `json:"status"`
+}
+
+// RealmExportId defines model for RealmExportId.
+type RealmExportId = openapi_types.UUID
+
+// RealmExportScope defines model for RealmExportScope.
+type RealmExportScope string
+
 // RealmGroup defines model for RealmGroup.
 type RealmGroup struct {
 	Id   RealmGroupId `json:"id"`
@@ -1984,6 +2073,37 @@ type RealmGroupPath = string
 
 // RealmId Keycloak realm ID. This is a UUID generated by Keycloak.
 type RealmId = openapi_types.UUID
+
+// RealmImport defines model for RealmImport.
+type RealmImport struct {
+	ClusterId   ClusterId                    `json:"cluster_id"`
+	CompletedAt nullable.Nullable[time.Time] `json:"completed_at,omitempty"`
+	CreatedAt   time.Time                    `json:"created_at"`
+
+	// ErrorMessage Failure description. Only set when `status` is `failed`.
+	ErrorMessage nullable.Nullable[string] `json:"error_message,omitempty" validate:"omitnil,max=500"`
+	Id           RealmImportId             `json:"id"`
+
+	// Progress Percent complete, 0-100.
+	Progress int `json:"progress"`
+
+	// Realm The imported realm's name, derived from the artifact.
+	Realm      string                `json:"realm" validate:"omitnil,max=500"`
+	SourceKind RealmImportSourceKind `json:"source_kind"`
+
+	// SourceVersion Keycloak version that produced the artifact.
+	SourceVersion nullable.Nullable[string] `json:"source_version,omitempty" validate:"omitnil,max=500"`
+	Status        ExportStatus              `json:"status"`
+
+	// TargetVersion Target cluster's Keycloak version at import time.
+	TargetVersion nullable.Nullable[string] `json:"target_version,omitempty" validate:"omitnil,max=500"`
+}
+
+// RealmImportId defines model for RealmImportId.
+type RealmImportId = openapi_types.UUID
+
+// RealmImportSourceKind defines model for RealmImportSourceKind.
+type RealmImportSourceKind string
 
 // RealmName Keycloak realm name (not ID). Must start with a letter; allows letters, digits, and hyphens.
 type RealmName = string
@@ -2526,6 +2646,12 @@ type ThemeType string
 
 // UpdateApplicationRequest Partial update request. All fields are optional; only provided fields are updated.
 type UpdateApplicationRequest struct {
+	// AdminUrl Admin URL.
+	AdminUrl *string `json:"admin_url,omitempty"`
+
+	// BaseUrl Home URL.
+	BaseUrl *string `json:"base_url,omitempty"`
+
 	// ConsentRequired Updated consent requirement.
 	ConsentRequired *bool `json:"consent_required,omitempty"`
 
@@ -2541,14 +2667,23 @@ type UpdateApplicationRequest struct {
 	// PkceRequired Updated PKCE requirement.
 	PkceRequired *bool `json:"pkce_required,omitempty"`
 
+	// PostLogoutRedirectUris URIs a user may be redirected to after signing out.
+	PostLogoutRedirectUris *[]string `json:"post_logout_redirect_uris,omitempty"`
+
 	// RedirectUris Replace the full set of allowed redirect URIs.
 	RedirectUris *[]string `json:"redirect_uris,omitempty"`
+
+	// RootUrl Root URL. Prefixed to any relative redirect URI.
+	RootUrl *string `json:"root_url,omitempty"`
 
 	// SamlConfig Updated SAML configuration. Pass `null` to clear.
 	SamlConfig *SAMLConfiguration `json:"saml_config,omitempty"`
 
 	// Status Updated status.
 	Status *ApplicationStatus `json:"status,omitempty"`
+
+	// WebOrigins Browser origins allowed to call this application (CORS).
+	WebOrigins *[]string `json:"web_origins,omitempty"`
 }
 
 // UpdateClusterRequest Partial update request. At least one field must be provided. `location` and `type` cannot be changed after creation.
@@ -3296,6 +3431,16 @@ type CreateRealmParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
 }
 
+// CreateRealmImportParams defines parameters for CreateRealmImport.
+type CreateRealmImportParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// PresignRealmImportUploadParams defines parameters for PresignRealmImportUpload.
+type PresignRealmImportUploadParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
 // DeleteRealmParams defines parameters for DeleteRealm.
 type DeleteRealmParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
@@ -3558,6 +3703,11 @@ type UpsertLoginBrandingParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
 }
 
+// CreateRealmExportParams defines parameters for CreateRealmExport.
+type CreateRealmExportParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
 // DeleteSmtpConfigParams defines parameters for DeleteSmtpConfig.
 type DeleteSmtpConfigParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
@@ -3663,8 +3813,8 @@ type UploadThemeMultipartBody struct {
 	// ThemeTypes Subset of theme types to deploy from the package. Omit to deploy all detected types.
 	ThemeTypes *[]ThemeType `json:"theme_types,omitempty" validate:"omitnil,min=1,unique,dive,oneof=account admin email login"`
 
-	// Version Semantic version string (e.g. `1.2.3`).
-	Version *string `json:"version,omitempty" validate:"omitnil,semver"`
+	// Version Version label for the theme, e.g. `v2.4` or `2026-08-12`. Free text, up to 50 characters; it is shown in the library and never interpreted.
+	Version *string `json:"version,omitempty" validate:"omitnil,max=50"`
 }
 
 // UploadThemeParams defines parameters for UploadTheme.
@@ -3684,6 +3834,25 @@ type GetThemeParams struct {
 
 // UpdateThemeParams defines parameters for UpdateTheme.
 type UpdateThemeParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// DownloadThemeContentParams defines parameters for DownloadThemeContent.
+type DownloadThemeContentParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// UpdateThemeContentMultipartBody defines parameters for UpdateThemeContent.
+type UpdateThemeContentMultipartBody struct {
+	// ThemeFile Replacement Keycloak-compatible theme archive. Content type must be `application/zip` (ZIP) or `application/java-archive` (Keycloakify JAR).
+	ThemeFile openapi_types.File `json:"theme_file"`
+
+	// Version Optional new version label, e.g. `v2.4`. Free text, up to 50 characters. Omit to leave the existing version unchanged; it is recorded only once the new content is live.
+	Version *string `json:"version,omitempty" validate:"omitnil,max=50"`
+}
+
+// UpdateThemeContentParams defines parameters for UpdateThemeContent.
+type UpdateThemeContentParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
 }
 
@@ -3760,6 +3929,16 @@ type DiscoverOIDCParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
 }
 
+// GetRealmExportParams defines parameters for GetRealmExport.
+type GetRealmExportParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// GetRealmImportParams defines parameters for GetRealmImport.
+type GetRealmImportParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
 // ListSIEMDestinationsParams defines parameters for ListSIEMDestinations.
 type ListSIEMDestinationsParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
@@ -3829,6 +4008,9 @@ type SetClusterMaintenanceWindowJSONRequestBody = MaintenanceWindow
 // CreateRealmJSONRequestBody defines body for CreateRealm for application/json ContentType.
 type CreateRealmJSONRequestBody = CreateRealmRequest
 
+// CreateRealmImportJSONRequestBody defines body for CreateRealmImport for application/json ContentType.
+type CreateRealmImportJSONRequestBody = CreateRealmImportRequest
+
 // UpdateRealmJSONRequestBody defines body for UpdateRealm for application/json ContentType.
 type UpdateRealmJSONRequestBody = UpdateRealmRequest
 
@@ -3880,6 +4062,9 @@ type UpsertEmailBrandingJSONRequestBody = UpsertEmailBrandingRequest
 // UpsertLoginBrandingJSONRequestBody defines body for UpsertLoginBranding for application/json ContentType.
 type UpsertLoginBrandingJSONRequestBody = UpsertLoginBrandingRequest
 
+// CreateRealmExportJSONRequestBody defines body for CreateRealmExport for application/json ContentType.
+type CreateRealmExportJSONRequestBody = CreateRealmExportRequest
+
 // UpsertSmtpConfigJSONRequestBody defines body for UpsertSmtpConfig for application/json ContentType.
 type UpsertSmtpConfigJSONRequestBody = UpsertSmtpConfigRequest
 
@@ -3900,6 +4085,9 @@ type UploadThemeMultipartRequestBody UploadThemeMultipartBody
 
 // UpdateThemeJSONRequestBody defines body for UpdateTheme for application/json ContentType.
 type UpdateThemeJSONRequestBody = UpdateThemeRequest
+
+// UpdateThemeContentMultipartRequestBody defines body for UpdateThemeContent for multipart/form-data ContentType.
+type UpdateThemeContentMultipartRequestBody UpdateThemeContentMultipartBody
 
 // UploadExtensionMultipartRequestBody defines body for UploadExtension for multipart/form-data ContentType.
 type UploadExtensionMultipartRequestBody UploadExtensionMultipartBody
@@ -4142,6 +4330,14 @@ type ClientInterface interface {
 
 	CreateRealm(ctx context.Context, clusterId ClusterId, params *CreateRealmParams, body CreateRealmJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateRealmImportWithBody request with any body
+	CreateRealmImportWithBody(ctx context.Context, clusterId ClusterId, params *CreateRealmImportParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRealmImport(ctx context.Context, clusterId ClusterId, params *CreateRealmImportParams, body CreateRealmImportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PresignRealmImportUpload request
+	PresignRealmImportUpload(ctx context.Context, clusterId ClusterId, params *PresignRealmImportUploadParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteRealm request
 	DeleteRealm(ctx context.Context, clusterId ClusterId, realmName RealmName, params *DeleteRealmParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4323,6 +4519,11 @@ type ClientInterface interface {
 
 	UpsertLoginBranding(ctx context.Context, clusterId ClusterId, realm RealmName, params *UpsertLoginBrandingParams, body UpsertLoginBrandingJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateRealmExportWithBody request with any body
+	CreateRealmExportWithBody(ctx context.Context, clusterId ClusterId, realm string, params *CreateRealmExportParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRealmExport(ctx context.Context, clusterId ClusterId, realm string, params *CreateRealmExportParams, body CreateRealmExportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteSmtpConfig request
 	DeleteSmtpConfig(ctx context.Context, clusterId ClusterId, realm RealmName, params *DeleteSmtpConfigParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4386,6 +4587,12 @@ type ClientInterface interface {
 
 	UpdateTheme(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *UpdateThemeParams, body UpdateThemeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DownloadThemeContent request
+	DownloadThemeContent(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *DownloadThemeContentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateThemeContentWithBody request with any body
+	UpdateThemeContentWithBody(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *UpdateThemeContentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetClusterUpgradePath request
 	GetClusterUpgradePath(ctx context.Context, clusterId ClusterId, params *GetClusterUpgradePathParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4422,6 +4629,12 @@ type ClientInterface interface {
 	DiscoverOIDCWithBody(ctx context.Context, params *DiscoverOIDCParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	DiscoverOIDC(ctx context.Context, params *DiscoverOIDCParams, body DiscoverOIDCJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRealmExport request
+	GetRealmExport(ctx context.Context, exportId RealmExportId, params *GetRealmExportParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRealmImport request
+	GetRealmImport(ctx context.Context, importId RealmImportId, params *GetRealmImportParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSIEMDestinations request
 	ListSIEMDestinations(ctx context.Context, params *ListSIEMDestinationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5063,6 +5276,42 @@ func (c *Client) CreateRealmWithBody(ctx context.Context, clusterId ClusterId, p
 
 func (c *Client) CreateRealm(ctx context.Context, clusterId ClusterId, params *CreateRealmParams, body CreateRealmJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateRealmRequest(c.Server, clusterId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRealmImportWithBody(ctx context.Context, clusterId ClusterId, params *CreateRealmImportParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRealmImportRequestWithBody(c.Server, clusterId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRealmImport(ctx context.Context, clusterId ClusterId, params *CreateRealmImportParams, body CreateRealmImportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRealmImportRequest(c.Server, clusterId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PresignRealmImportUpload(ctx context.Context, clusterId ClusterId, params *PresignRealmImportUploadParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPresignRealmImportUploadRequest(c.Server, clusterId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5865,6 +6114,30 @@ func (c *Client) UpsertLoginBranding(ctx context.Context, clusterId ClusterId, r
 	return c.Client.Do(req)
 }
 
+func (c *Client) CreateRealmExportWithBody(ctx context.Context, clusterId ClusterId, realm string, params *CreateRealmExportParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRealmExportRequestWithBody(c.Server, clusterId, realm, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRealmExport(ctx context.Context, clusterId ClusterId, realm string, params *CreateRealmExportParams, body CreateRealmExportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRealmExportRequest(c.Server, clusterId, realm, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) DeleteSmtpConfig(ctx context.Context, clusterId ClusterId, realm RealmName, params *DeleteSmtpConfigParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteSmtpConfigRequest(c.Server, clusterId, realm, params)
 	if err != nil {
@@ -6141,6 +6414,30 @@ func (c *Client) UpdateTheme(ctx context.Context, clusterId ClusterId, themeId T
 	return c.Client.Do(req)
 }
 
+func (c *Client) DownloadThemeContent(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *DownloadThemeContentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadThemeContentRequest(c.Server, clusterId, themeId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateThemeContentWithBody(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *UpdateThemeContentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateThemeContentRequestWithBody(c.Server, clusterId, themeId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GetClusterUpgradePath(ctx context.Context, clusterId ClusterId, params *GetClusterUpgradePathParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterUpgradePathRequest(c.Server, clusterId, params)
 	if err != nil {
@@ -6287,6 +6584,30 @@ func (c *Client) DiscoverOIDCWithBody(ctx context.Context, params *DiscoverOIDCP
 
 func (c *Client) DiscoverOIDC(ctx context.Context, params *DiscoverOIDCParams, body DiscoverOIDCJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDiscoverOIDCRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRealmExport(ctx context.Context, exportId RealmExportId, params *GetRealmExportParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRealmExportRequest(c.Server, exportId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRealmImport(ctx context.Context, importId RealmImportId, params *GetRealmImportParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRealmImportRequest(c.Server, importId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9524,6 +9845,113 @@ func NewCreateRealmRequestWithBody(server string, clusterId ClusterId, params *C
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewCreateRealmImportRequest calls the generic CreateRealmImport builder with application/json body
+func NewCreateRealmImportRequest(server string, clusterId ClusterId, params *CreateRealmImportParams, body CreateRealmImportJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRealmImportRequestWithBody(server, clusterId, params, "application/json", bodyReader)
+}
+
+// NewCreateRealmImportRequestWithBody generates requests for CreateRealmImport with any type of body
+func NewCreateRealmImportRequestWithBody(server string, clusterId ClusterId, params *CreateRealmImportParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/realms/import", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewPresignRealmImportUploadRequest generates requests for PresignRealmImportUpload
+func NewPresignRealmImportUploadRequest(server string, clusterId ClusterId, params *PresignRealmImportUploadParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/realms/import/upload-url", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
 
@@ -12868,6 +13296,73 @@ func NewUpsertLoginBrandingRequestWithBody(server string, clusterId ClusterId, r
 	return req, nil
 }
 
+// NewCreateRealmExportRequest calls the generic CreateRealmExport builder with application/json body
+func NewCreateRealmExportRequest(server string, clusterId ClusterId, realm string, params *CreateRealmExportParams, body CreateRealmExportJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRealmExportRequestWithBody(server, clusterId, realm, params, "application/json", bodyReader)
+}
+
+// NewCreateRealmExportRequestWithBody generates requests for CreateRealmExport with any type of body
+func NewCreateRealmExportRequestWithBody(server string, clusterId ClusterId, realm string, params *CreateRealmExportParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "realm", runtime.ParamLocationPath, realm)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/realms/%s/exports", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewDeleteSmtpConfigRequest generates requests for DeleteSmtpConfig
 func NewDeleteSmtpConfigRequest(server string, clusterId ClusterId, realm RealmName, params *DeleteSmtpConfigParams) (*http.Request, error) {
 	var err error
@@ -13983,6 +14478,116 @@ func NewUpdateThemeRequestWithBody(server string, clusterId ClusterId, themeId T
 	return req, nil
 }
 
+// NewDownloadThemeContentRequest generates requests for DownloadThemeContent
+func NewDownloadThemeContentRequest(server string, clusterId ClusterId, themeId ThemeId, params *DownloadThemeContentParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "theme_id", runtime.ParamLocationPath, themeId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/themes/%s/content", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewUpdateThemeContentRequestWithBody generates requests for UpdateThemeContent with any type of body
+func NewUpdateThemeContentRequestWithBody(server string, clusterId ClusterId, themeId ThemeId, params *UpdateThemeContentParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "theme_id", runtime.ParamLocationPath, themeId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/themes/%s/content", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewGetClusterUpgradePathRequest generates requests for GetClusterUpgradePath
 func NewGetClusterUpgradePathRequest(server string, clusterId ClusterId, params *GetClusterUpgradePathParams) (*http.Request, error) {
 	var err error
@@ -14485,6 +15090,100 @@ func NewDiscoverOIDCRequestWithBody(server string, params *DiscoverOIDCParams, c
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewGetRealmExportRequest generates requests for GetRealmExport
+func NewGetRealmExportRequest(server string, exportId RealmExportId, params *GetRealmExportParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "export_id", runtime.ParamLocationPath, exportId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/realm-exports/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewGetRealmImportRequest generates requests for GetRealmImport
+func NewGetRealmImportRequest(server string, importId RealmImportId, params *GetRealmImportParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "import_id", runtime.ParamLocationPath, importId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/realm-imports/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
 
@@ -15312,6 +16011,14 @@ type ClientWithResponsesInterface interface {
 
 	CreateRealmWithResponse(ctx context.Context, clusterId ClusterId, params *CreateRealmParams, body CreateRealmJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRealmResponse, error)
 
+	// CreateRealmImportWithBodyWithResponse request with any body
+	CreateRealmImportWithBodyWithResponse(ctx context.Context, clusterId ClusterId, params *CreateRealmImportParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRealmImportResponse, error)
+
+	CreateRealmImportWithResponse(ctx context.Context, clusterId ClusterId, params *CreateRealmImportParams, body CreateRealmImportJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRealmImportResponse, error)
+
+	// PresignRealmImportUploadWithResponse request
+	PresignRealmImportUploadWithResponse(ctx context.Context, clusterId ClusterId, params *PresignRealmImportUploadParams, reqEditors ...RequestEditorFn) (*PresignRealmImportUploadResponse, error)
+
 	// DeleteRealmWithResponse request
 	DeleteRealmWithResponse(ctx context.Context, clusterId ClusterId, realmName RealmName, params *DeleteRealmParams, reqEditors ...RequestEditorFn) (*DeleteRealmResponse, error)
 
@@ -15493,6 +16200,11 @@ type ClientWithResponsesInterface interface {
 
 	UpsertLoginBrandingWithResponse(ctx context.Context, clusterId ClusterId, realm RealmName, params *UpsertLoginBrandingParams, body UpsertLoginBrandingJSONRequestBody, reqEditors ...RequestEditorFn) (*UpsertLoginBrandingResponse, error)
 
+	// CreateRealmExportWithBodyWithResponse request with any body
+	CreateRealmExportWithBodyWithResponse(ctx context.Context, clusterId ClusterId, realm string, params *CreateRealmExportParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRealmExportResponse, error)
+
+	CreateRealmExportWithResponse(ctx context.Context, clusterId ClusterId, realm string, params *CreateRealmExportParams, body CreateRealmExportJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRealmExportResponse, error)
+
 	// DeleteSmtpConfigWithResponse request
 	DeleteSmtpConfigWithResponse(ctx context.Context, clusterId ClusterId, realm RealmName, params *DeleteSmtpConfigParams, reqEditors ...RequestEditorFn) (*DeleteSmtpConfigResponse, error)
 
@@ -15556,6 +16268,12 @@ type ClientWithResponsesInterface interface {
 
 	UpdateThemeWithResponse(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *UpdateThemeParams, body UpdateThemeJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateThemeResponse, error)
 
+	// DownloadThemeContentWithResponse request
+	DownloadThemeContentWithResponse(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *DownloadThemeContentParams, reqEditors ...RequestEditorFn) (*DownloadThemeContentResponse, error)
+
+	// UpdateThemeContentWithBodyWithResponse request with any body
+	UpdateThemeContentWithBodyWithResponse(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *UpdateThemeContentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateThemeContentResponse, error)
+
 	// GetClusterUpgradePathWithResponse request
 	GetClusterUpgradePathWithResponse(ctx context.Context, clusterId ClusterId, params *GetClusterUpgradePathParams, reqEditors ...RequestEditorFn) (*GetClusterUpgradePathResponse, error)
 
@@ -15592,6 +16310,12 @@ type ClientWithResponsesInterface interface {
 	DiscoverOIDCWithBodyWithResponse(ctx context.Context, params *DiscoverOIDCParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DiscoverOIDCResponse, error)
 
 	DiscoverOIDCWithResponse(ctx context.Context, params *DiscoverOIDCParams, body DiscoverOIDCJSONRequestBody, reqEditors ...RequestEditorFn) (*DiscoverOIDCResponse, error)
+
+	// GetRealmExportWithResponse request
+	GetRealmExportWithResponse(ctx context.Context, exportId RealmExportId, params *GetRealmExportParams, reqEditors ...RequestEditorFn) (*GetRealmExportResponse, error)
+
+	// GetRealmImportWithResponse request
+	GetRealmImportWithResponse(ctx context.Context, importId RealmImportId, params *GetRealmImportParams, reqEditors ...RequestEditorFn) (*GetRealmImportResponse, error)
 
 	// ListSIEMDestinationsWithResponse request
 	ListSIEMDestinationsWithResponse(ctx context.Context, params *ListSIEMDestinationsParams, reqEditors ...RequestEditorFn) (*ListSIEMDestinationsResponse, error)
@@ -16814,6 +17538,69 @@ func (r CreateRealmResponse) StatusCode() int {
 	return 0
 }
 
+type CreateRealmImportResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON202                   *RealmImport
+	ApplicationproblemJSON400 *ErrorBody
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON402 *PlanLimitErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON409 *ErrorBody
+	ApplicationproblemJSON422 *ValidationErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRealmImportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRealmImportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PresignRealmImportUploadResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		S3Key     string `json:"s3_key" validate:"omitnil,max=500"`
+		UploadUrl string `json:"upload_url" validate:"omitnil,max=500"`
+	}
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r PresignRealmImportUploadResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PresignRealmImportUploadResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type DeleteRealmResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
@@ -18026,6 +18813,7 @@ type SetClientThemeAssignmentResponse struct {
 	ApplicationproblemJSON401 *ErrorBody
 	ApplicationproblemJSON403 *ErrorBody
 	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON409 *ErrorBody
 	ApplicationproblemJSON422 *ValidationErrorBody
 	ApplicationproblemJSON429 *ErrorBody
 	ApplicationproblemJSON500 *ErrorBody
@@ -18218,6 +19006,37 @@ func (r UpsertLoginBrandingResponse) StatusCode() int {
 	return 0
 }
 
+type CreateRealmExportResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON202                   *RealmExport
+	ApplicationproblemJSON400 *ErrorBody
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON402 *PlanLimitErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON422 *ValidationErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRealmExportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRealmExportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type DeleteSmtpConfigResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
@@ -18369,6 +19188,7 @@ type SetThemeAssignmentResponse struct {
 	ApplicationproblemJSON401 *ErrorBody
 	ApplicationproblemJSON403 *ErrorBody
 	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON409 *ErrorBody
 	ApplicationproblemJSON422 *ValidationErrorBody
 	ApplicationproblemJSON429 *ErrorBody
 	ApplicationproblemJSON500 *ErrorBody
@@ -18711,6 +19531,66 @@ func (r UpdateThemeResponse) StatusCode() int {
 	return 0
 }
 
+type DownloadThemeContentResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON409 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadThemeContentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadThemeContentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateThemeContentResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *Theme
+	ApplicationproblemJSON400 *ErrorBody
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON402 *PlanLimitErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON409 *ErrorBody
+	ApplicationproblemJSON422 *ValidationErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateThemeContentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateThemeContentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetClusterUpgradePathResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
@@ -19010,6 +19890,62 @@ func (r DiscoverOIDCResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r DiscoverOIDCResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetRealmExportResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *RealmExport
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRealmExportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRealmExportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetRealmImportResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *RealmImport
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRealmImportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRealmImportResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -19849,6 +20785,32 @@ func (c *ClientWithResponses) CreateRealmWithResponse(ctx context.Context, clust
 	return ParseCreateRealmResponse(rsp)
 }
 
+// CreateRealmImportWithBodyWithResponse request with arbitrary body returning *CreateRealmImportResponse
+func (c *ClientWithResponses) CreateRealmImportWithBodyWithResponse(ctx context.Context, clusterId ClusterId, params *CreateRealmImportParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRealmImportResponse, error) {
+	rsp, err := c.CreateRealmImportWithBody(ctx, clusterId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRealmImportResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRealmImportWithResponse(ctx context.Context, clusterId ClusterId, params *CreateRealmImportParams, body CreateRealmImportJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRealmImportResponse, error) {
+	rsp, err := c.CreateRealmImport(ctx, clusterId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRealmImportResponse(rsp)
+}
+
+// PresignRealmImportUploadWithResponse request returning *PresignRealmImportUploadResponse
+func (c *ClientWithResponses) PresignRealmImportUploadWithResponse(ctx context.Context, clusterId ClusterId, params *PresignRealmImportUploadParams, reqEditors ...RequestEditorFn) (*PresignRealmImportUploadResponse, error) {
+	rsp, err := c.PresignRealmImportUpload(ctx, clusterId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePresignRealmImportUploadResponse(rsp)
+}
+
 // DeleteRealmWithResponse request returning *DeleteRealmResponse
 func (c *ClientWithResponses) DeleteRealmWithResponse(ctx context.Context, clusterId ClusterId, realmName RealmName, params *DeleteRealmParams, reqEditors ...RequestEditorFn) (*DeleteRealmResponse, error) {
 	rsp, err := c.DeleteRealm(ctx, clusterId, realmName, params, reqEditors...)
@@ -20426,6 +21388,23 @@ func (c *ClientWithResponses) UpsertLoginBrandingWithResponse(ctx context.Contex
 	return ParseUpsertLoginBrandingResponse(rsp)
 }
 
+// CreateRealmExportWithBodyWithResponse request with arbitrary body returning *CreateRealmExportResponse
+func (c *ClientWithResponses) CreateRealmExportWithBodyWithResponse(ctx context.Context, clusterId ClusterId, realm string, params *CreateRealmExportParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRealmExportResponse, error) {
+	rsp, err := c.CreateRealmExportWithBody(ctx, clusterId, realm, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRealmExportResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRealmExportWithResponse(ctx context.Context, clusterId ClusterId, realm string, params *CreateRealmExportParams, body CreateRealmExportJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRealmExportResponse, error) {
+	rsp, err := c.CreateRealmExport(ctx, clusterId, realm, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRealmExportResponse(rsp)
+}
+
 // DeleteSmtpConfigWithResponse request returning *DeleteSmtpConfigResponse
 func (c *ClientWithResponses) DeleteSmtpConfigWithResponse(ctx context.Context, clusterId ClusterId, realm RealmName, params *DeleteSmtpConfigParams, reqEditors ...RequestEditorFn) (*DeleteSmtpConfigResponse, error) {
 	rsp, err := c.DeleteSmtpConfig(ctx, clusterId, realm, params, reqEditors...)
@@ -20627,6 +21606,24 @@ func (c *ClientWithResponses) UpdateThemeWithResponse(ctx context.Context, clust
 	return ParseUpdateThemeResponse(rsp)
 }
 
+// DownloadThemeContentWithResponse request returning *DownloadThemeContentResponse
+func (c *ClientWithResponses) DownloadThemeContentWithResponse(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *DownloadThemeContentParams, reqEditors ...RequestEditorFn) (*DownloadThemeContentResponse, error) {
+	rsp, err := c.DownloadThemeContent(ctx, clusterId, themeId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadThemeContentResponse(rsp)
+}
+
+// UpdateThemeContentWithBodyWithResponse request with arbitrary body returning *UpdateThemeContentResponse
+func (c *ClientWithResponses) UpdateThemeContentWithBodyWithResponse(ctx context.Context, clusterId ClusterId, themeId ThemeId, params *UpdateThemeContentParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateThemeContentResponse, error) {
+	rsp, err := c.UpdateThemeContentWithBody(ctx, clusterId, themeId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateThemeContentResponse(rsp)
+}
+
 // GetClusterUpgradePathWithResponse request returning *GetClusterUpgradePathResponse
 func (c *ClientWithResponses) GetClusterUpgradePathWithResponse(ctx context.Context, clusterId ClusterId, params *GetClusterUpgradePathParams, reqEditors ...RequestEditorFn) (*GetClusterUpgradePathResponse, error) {
 	rsp, err := c.GetClusterUpgradePath(ctx, clusterId, params, reqEditors...)
@@ -20740,6 +21737,24 @@ func (c *ClientWithResponses) DiscoverOIDCWithResponse(ctx context.Context, para
 		return nil, err
 	}
 	return ParseDiscoverOIDCResponse(rsp)
+}
+
+// GetRealmExportWithResponse request returning *GetRealmExportResponse
+func (c *ClientWithResponses) GetRealmExportWithResponse(ctx context.Context, exportId RealmExportId, params *GetRealmExportParams, reqEditors ...RequestEditorFn) (*GetRealmExportResponse, error) {
+	rsp, err := c.GetRealmExport(ctx, exportId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRealmExportResponse(rsp)
+}
+
+// GetRealmImportWithResponse request returning *GetRealmImportResponse
+func (c *ClientWithResponses) GetRealmImportWithResponse(ctx context.Context, importId RealmImportId, params *GetRealmImportParams, reqEditors ...RequestEditorFn) (*GetRealmImportResponse, error) {
+	rsp, err := c.GetRealmImport(ctx, importId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRealmImportResponse(rsp)
 }
 
 // ListSIEMDestinationsWithResponse request returning *ListSIEMDestinationsResponse
@@ -23848,6 +24863,173 @@ func ParseCreateRealmResponse(rsp *http.Response) (*CreateRealmResponse, error) 
 	return response, nil
 }
 
+// ParseCreateRealmImportResponse parses an HTTP response from a CreateRealmImportWithResponse call
+func ParseCreateRealmImportResponse(rsp *http.Response) (*CreateRealmImportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRealmImportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest RealmImport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest PlanLimitErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ValidationErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePresignRealmImportUploadResponse parses an HTTP response from a PresignRealmImportUploadWithResponse call
+func ParsePresignRealmImportUploadResponse(rsp *http.Response) (*PresignRealmImportUploadResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PresignRealmImportUploadResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			S3Key     string `json:"s3_key" validate:"omitnil,max=500"`
+			UploadUrl string `json:"upload_url" validate:"omitnil,max=500"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseDeleteRealmResponse parses an HTTP response from a DeleteRealmWithResponse call
 func ParseDeleteRealmResponse(rsp *http.Response) (*DeleteRealmResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -26901,6 +28083,13 @@ func ParseSetClientThemeAssignmentResponse(rsp *http.Response) (*SetClientThemeA
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest ValidationErrorBody
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -27308,6 +28497,95 @@ func ParseUpsertLoginBrandingResponse(rsp *http.Response) (*UpsertLoginBrandingR
 			return nil, err
 		}
 		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ValidationErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRealmExportResponse parses an HTTP response from a CreateRealmExportWithResponse call
+func ParseCreateRealmExportResponse(rsp *http.Response) (*CreateRealmExportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRealmExportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest RealmExport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest PlanLimitErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
 		var dest ErrorBody
@@ -27765,6 +29043,13 @@ func ParseSetThemeAssignmentResponse(rsp *http.Response) (*SetThemeAssignmentRes
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest ValidationErrorBody
@@ -28631,6 +29916,170 @@ func ParseUpdateThemeResponse(rsp *http.Response) (*UpdateThemeResponse, error) 
 	return response, nil
 }
 
+// ParseDownloadThemeContentResponse parses an HTTP response from a DownloadThemeContentWithResponse call
+func ParseDownloadThemeContentResponse(rsp *http.Response) (*DownloadThemeContentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadThemeContentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateThemeContentResponse parses an HTTP response from a UpdateThemeContentWithResponse call
+func ParseUpdateThemeContentResponse(rsp *http.Response) (*UpdateThemeContentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateThemeContentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Theme
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest PlanLimitErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ValidationErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetClusterUpgradePathResponse parses an HTTP response from a GetClusterUpgradePathWithResponse call
 func ParseGetClusterUpgradePathResponse(rsp *http.Response) (*GetClusterUpgradePathResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -29331,6 +30780,142 @@ func ParseDiscoverOIDCResponse(rsp *http.Response) (*DiscoverOIDCResponse, error
 			return nil, err
 		}
 		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRealmExportResponse parses an HTTP response from a GetRealmExportWithResponse call
+func ParseGetRealmExportResponse(rsp *http.Response) (*GetRealmExportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRealmExportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RealmExport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRealmImportResponse parses an HTTP response from a GetRealmImportWithResponse call
+func ParseGetRealmImportResponse(rsp *http.Response) (*GetRealmImportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRealmImportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RealmImport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorBody
