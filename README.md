@@ -1,13 +1,13 @@
 # skycloak-mcp
 
-Official [Model Context Protocol](https://modelcontextprotocol.io) server for **Skycloak** (managed Keycloak): manage your clusters, realms, applications, and SSO from any MCP client (Claude Desktop, Claude Code, Cursor). Sign in once with your browser.
+Official [Model Context Protocol](https://modelcontextprotocol.io) server for **Skycloak** (managed Keycloak): manage your clusters, realms, applications, and SSO from any MCP client (Claude Desktop, Claude Code, Cursor).
 
 > **Status:** early release. Tool coverage is growing; see the changelog for what's available.
 
 ## Authentication & safety
 
-- **Sign in once.** Run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key, stores it in your operating-system keychain, and detects your default workspace automatically (pass `--workspace <id>` to pick another). `skycloak-mcp logout` removes the stored key.
-- **Or just run it.** Started directly in a terminal with no stored key, `skycloak-mcp run` signs you in first, then serves. When an MCP client launches it over a pipe it stays non-interactive, so run `init` once beforehand.
+- **Hosted HTTP.** Create an API key in the [Skycloak dashboard](https://app.skycloak.io) and configure your MCP client to send it as `Authorization: Bearer <key>` (or `API-Key: <key>`) to `https://mcp.skycloak.io`. Every request carries its own key and acts only as that key's workspace. The server keeps no session state, so a request never inherits another caller's credential. Keys are not verified before use: the Skycloak API is the authority, so an invalid key surfaces as a `401` on the first tool call rather than at connect time.
+- **Local stdio.** Run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key, stores it in your operating-system keychain, and detects your default workspace automatically (pass `--workspace <id>` to pick another). `skycloak-mcp logout` removes the stored key.
 - **Headless / CI.** Set the `SKYCLOAK_API_KEY` environment variable (create a key in the [Skycloak dashboard](https://app.skycloak.io)) to skip the browser entirely. It always takes precedence over the keychain.
 - **Read-only by default.** Mutating tools are registered only when the server starts with `--allow-writes`.
 - **Destructive tools require confirmation:** deleting a realm, for example, needs an explicit `confirm=true` argument.
@@ -19,8 +19,8 @@ Read-only tools are always available. **Write** tools are registered only when t
 
 | Area | Read-only | Write (`--allow-writes`) |
 |---|---|---|
-| Clusters | `list_clusters`, `get_cluster`, `list_cluster_locations`, `list_cluster_types`, `list_cluster_features`, `list_cluster_versions`, `list_cluster_upgrades`, `get_cluster_upgrade_path`, `get_cluster_credentials`, `get_cluster_insights` | `create_cluster`, `update_cluster`, `delete_cluster`, `cancel_cluster_upgrade` |
-| Edge security | `get_cluster_security` | `update_cluster_security` |
+| Clusters | `list_clusters`, `get_cluster`, `list_cluster_locations`, `list_cluster_types`, `list_cluster_features`, `list_cluster_versions`, `list_cluster_upgrades`, `get_cluster_upgrade_path`, `get_cluster_credentials`, `get_cluster_insights`, `get_cluster_maintenance_window` | `create_cluster`, `update_cluster`, `delete_cluster`, `cancel_cluster_upgrade`, `set_cluster_maintenance_window`, `delete_cluster_maintenance_window` |
+| Edge security | `get_cluster_security`, `list_cluster_captcha_domains` | `update_cluster_security`, `add_cluster_captcha_domain`, `remove_cluster_captcha_domain` |
 | Realms | `list_realms`, `get_realm` | `create_realm`, `update_realm`, `delete_realm` |
 | Applications | `list_applications`, `get_application`, `list_application_roles`, `list_application_sessions` | `create_application`, `update_application`, `delete_application`, `assign_application_role`, `remove_application_role`, `rotate_application_secret` |
 | Identity providers | `list_identity_providers`, `get_identity_provider`, `list_identity_provider_templates`, `discover_oidc` | `create_identity_provider` (OIDC), `update_identity_provider`, `delete_identity_provider`, `test_identity_provider` |
@@ -30,12 +30,36 @@ Read-only tools are always available. **Write** tools are registered only when t
 | Extensions | `list_extensions`, `list_cluster_extensions` | `install_extension`, `upgrade_extension`, `update_extension`, `uninstall_extension`, `delete_extension` |
 | SMTP | `get_smtp` | `upsert_smtp`, `delete_smtp`, `test_smtp` |
 | Exports & logs | `list_exports`, `get_export`, `get_logs`, `get_security_logs`, `query_events` | `create_export`, `delete_export`, `export_cluster_events` |
+| SIEM | `list_siem_destinations`, `get_siem_destination` | `create_siem_destination`, `update_siem_destination`, `delete_siem_destination`, `test_siem_destination` |
+| Webhooks | `list_webhook_event_types`, `list_webhook_subscriptions`, `get_webhook_subscription` | `create_webhook_subscription`, `update_webhook_subscription`, `delete_webhook_subscription`, `test_webhook_subscription` |
 
 **Conventions:** destructive tools (`delete_*`, `uninstall_extension`, `cancel_cluster_upgrade`) require `confirm=true`. `create_cluster` is asynchronous: poll `get_cluster` until the cluster is `available`. `create_domain` returns the DNS records the customer must create; `verify_domain` triggers a DNS check. `set_theme_assignment` activates a custom theme per Keycloak theme type (empty string resets to the built-in default). `update_cluster_security` leaves CAPTCHA settings untouched.
 
 ## Connecting
 
-Sign in once, then point your client at `skycloak-mcp run`:
+For hosted HTTP, create an API key in the Skycloak dashboard and configure your MCP client to send it as a bearer token:
+
+```bash
+claude mcp add --transport http skycloak https://mcp.skycloak.io --header "Authorization: Bearer sk_sc_XXX"
+```
+
+This adds the following to `.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "skycloak": {
+      "type": "http",
+      "url": "https://mcp.skycloak.io",
+      "headers": {
+        "Authorization": "Bearer sk_sc_XXX"
+      }
+    }
+  }
+}
+```
+
+For local stdio, sign in once, then point your client at `skycloak-mcp run`:
 
 ```bash
 skycloak-mcp init        # one-time browser sign-in; stores a key in your keychain
@@ -64,13 +88,21 @@ For headless / CI (no browser), skip `init` and pass the key instead: add `"env"
 
 Add `--allow-writes` only when you intend to make changes (sign in with `skycloak-mcp init --allow-writes`, or use a write-scoped key).
 
-The server also supports a streamable-HTTP transport (`run --transport http`) for hosted/remote use.
+Add `?readonly=true` to a hosted HTTP URL to expose only read-only tools for that HTTP session, or `?readonly=false` to request the write-capable tool surface. The query parameter defaults to `false`, but write tools are registered only when the server was started with `--allow-writes`.
+
+### Running the HTTP transport
+
+```bash
+skycloak-mcp run --transport http --http-addr :8080
+```
+
+It needs no credential of its own: callers supply theirs per request, so nothing is injected at deploy time. `GET /healthz` and `GET /readyz` are unauthenticated and report only that the process is up; they deliberately do not probe the Skycloak API, so an upstream blip cannot fail every replica's probe at once. The server holds no session state, so replicas need no session affinity and can be scaled or rolled freely. `SIGTERM` stops new connections and drains in-flight calls.
 
 ## Configuration
 
 | Env var | Default |
 |---|---|
-| `SKYCLOAK_API_KEY` | none (optional; for headless/CI, otherwise sign in with `skycloak-mcp init`) |
+| `SKYCLOAK_API_KEY` | none (optional for stdio; HTTP clients provide `API-Key` headers instead) |
 | `SKYCLOAK_ENDPOINT` | `https://api.skycloak.io` |
 | `SKYCLOAK_API_VERSION` | current API version |
 | `SKYCLOAK_ISSUER` | `https://login.app.skycloak.io/realms/skycloak` |
@@ -82,8 +114,8 @@ Commands: `init` (browser sign-in), `run` (serve), `logout` (remove the stored k
 | Flag | Default | Description |
 |---|---|---|
 | `--transport` | `stdio` | `stdio` or `http` |
-| `--http-addr` | `:8080` | listen address for the http transport |
-| `--allow-writes` | `false` | enable mutating tools |
+| `--http-addr` | `:8080` | listen address for the HTTP transport |
+| `--allow-writes` | `false` | enable mutating tools for stdio and permit HTTP sessions with `readonly=false` to register write tools |
 
 ## Development
 

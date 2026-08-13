@@ -31,27 +31,44 @@ type Client struct {
 type Option func(*config)
 
 type config struct {
-	httpClient *http.Client
-	userAgent  string
+	httpClient        *http.Client
+	userAgent         string
+	perAttemptTimeout time.Duration
 }
 
-// WithHTTPClient overrides the underlying HTTP client (useful in tests).
+// defaultPerAttemptTimeout bounds a single HTTP attempt. It deliberately does
+// not bound the whole call: retry backoff can exceed it (the gateway may ask
+// for a 60s Retry-After), and the caller's context is what limits the total.
+const defaultPerAttemptTimeout = 30 * time.Second
+
+// WithHTTPClient overrides the underlying HTTP client (useful in tests). The
+// client is copied, not mutated. Note that its Timeout, if set, bounds the whole
+// call including retry backoff; use WithPerAttemptTimeout to bound one attempt.
 func WithHTTPClient(h *http.Client) Option { return func(c *config) { c.httpClient = h } }
 
 // WithUserAgent sets the User-Agent header sent on every request.
 func WithUserAgent(ua string) Option { return func(c *config) { c.userAgent = ua } }
 
+// WithPerAttemptTimeout overrides how long a single attempt may take.
+func WithPerAttemptTimeout(d time.Duration) Option {
+	return func(c *config) { c.perAttemptTimeout = d }
+}
+
 // New builds a Client. endpoint defaults to https://api.skycloak.io when empty.
 func New(endpoint, apiKey, apiVersion string, opts ...Option) *Client {
-	cfg := &config{httpClient: &http.Client{Timeout: 30 * time.Second}, userAgent: "skycloak-go/dev"}
+	cfg := &config{httpClient: &http.Client{}, userAgent: "skycloak-go/dev", perAttemptTimeout: defaultPerAttemptTimeout}
 	for _, o := range opts {
 		o(cfg)
 	}
 	if endpoint == "" {
 		endpoint = defaultEndpoint
 	}
+	// Copy rather than mutate: the caller's client is theirs, and installing our
+	// transport on it would leak retry behavior into their other requests.
+	hc := *cfg.httpClient
 	// Retry 429/5xx with Retry-After-aware backoff.
-	cfg.httpClient.Transport = &retryTransport{base: cfg.httpClient.Transport, maxRetries: 4}
+	hc.Transport = &retryTransport{base: hc.Transport, maxRetries: 4, perAttempt: cfg.perAttemptTimeout, totalWaitBudget: defaultTotalWaitBudget}
+	cfg.httpClient = &hc
 
 	editor := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("API-Key", apiKey)

@@ -176,7 +176,7 @@ func toolError(err error) *mcp.CallToolResult {
 	if apiErr, ok := skycloak.AsAPIError(err); ok {
 		switch apiErr.StatusCode {
 		case 401:
-			msg = "Unauthorized — check that SKYCLOAK_API_KEY is set and valid. " + msg
+			msg = "Unauthorized — the API key is missing or invalid. " + msg
 		case 403:
 			msg = "Forbidden — your API key lacks the required scope for this action. " + msg
 		case 429:
