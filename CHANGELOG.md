@@ -6,6 +6,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- The hosted OAuth sign-in advertises the scopes it needs, so it stops failing at the token exchange with `stage=exchange status=403 dashboard_status=401`. The protected-resource metadata carried no `scopes_supported` and the `WWW-Authenticate` challenge carried no `scope`, so a client following RFC 9728 had nothing to ask for and requested none. Keycloak then issued a token without `openid`, which verifies and passes introspection but makes Keycloak's userinfo endpoint answer `403` when the dashboard validates it, so a sign-in that looked correct at every earlier step died at the last one. Both the document and the challenge now name `openid profile email`.
+- A token granted without `openid` is refused at verification, as `no_openid_scope`, instead of being carried to an exchange that cannot succeed. Advertising the scopes only helps a client that has yet to sign in: one that connected before holds a refresh token from the old grant, and every access token minted from it inherits the gap. Those requests used to end in a `403` with nothing to act on, so the client retried the same doomed token until its realm session lapsed. They are now answered with a `401` and the challenge, which is what makes a client authorize again and come back with the right scopes.
+
 ## [0.6.1] - 2026-08-14
 
 ### Added

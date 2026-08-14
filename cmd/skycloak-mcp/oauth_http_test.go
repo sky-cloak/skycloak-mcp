@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 )
 
 // oauthConfig is the minimum httpConfig that turns the OAuth path on.
@@ -72,6 +75,68 @@ func TestProtectedResourceMetadataIsServedUnauthenticated(t *testing.T) {
 	}
 	if len(md.AuthorizationServers) != 1 || md.AuthorizationServers[0] != "https://login.example/realms/skycloak" {
 		t.Fatalf("authorization_servers = %v, want the realm issuer", md.AuthorizationServers)
+	}
+}
+
+// A client only asks for the scopes something advertises. When the document is
+// silent the authorization request omits `openid`, Keycloak issues a token
+// without it, and the dashboard's userinfo call on that token answers 403,
+// which is the sign-in failure this document exists to prevent.
+func TestProtectedResourceMetadataAdvertisesTheOIDCScopes(t *testing.T) {
+	ts := httptest.NewServer(newHTTPHandler(oauthConfig("https://login.example/realms/skycloak", "https://app.example")))
+	defer ts.Close()
+
+	// Both documents describe the same flow, so both have to carry the scopes.
+	for _, path := range []string{"/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"} {
+		t.Run(path, func(t *testing.T) {
+			resp, err := http.Get(ts.URL + path)
+			if err != nil {
+				t.Fatalf("get metadata: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			var md struct {
+				ScopesSupported []string `json:"scopes_supported"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&md); err != nil {
+				t.Fatalf("decode metadata: %v", err)
+			}
+			// Exactly these: an extra advertised scope is one the client would
+			// request and the realm could refuse, failing the whole flow.
+			if !slices.Equal(md.ScopesSupported, []string{"openid", "profile", "email"}) {
+				t.Fatalf("scopes_supported = %v, want [openid profile email]", md.ScopesSupported)
+			}
+		})
+	}
+}
+
+// A client that reads the challenge and never fetches the document still has to
+// end up asking for `openid`, so the challenge names the scopes too (RFC 6750
+// §3). The go-sdk client prefers this over `scopes_supported`.
+func TestUnauthenticatedChallengeNamesTheOIDCScopes(t *testing.T) {
+	ts := httptest.NewServer(newHTTPHandler(oauthConfig("https://login.example/realms/skycloak", "https://app.example")))
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/mcp", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Read back through the SDK's own parser rather than by substring, so a
+	// quoting or separator slip is caught as the client would meet it.
+	challenges, err := oauthex.ParseWWWAuthenticate(resp.Header.Values("WWW-Authenticate"))
+	if err != nil {
+		t.Fatalf("parse challenge %q: %v", resp.Header.Get("WWW-Authenticate"), err)
+	}
+	var got []string
+	for _, c := range challenges {
+		if c.Scheme == "bearer" {
+			got = strings.Fields(c.Params["scope"])
+		}
+	}
+	if !slices.Equal(got, []string{"openid", "profile", "email"}) {
+		t.Fatalf("challenge scope = %v, want [openid profile email]", got)
 	}
 }
 
