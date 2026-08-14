@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-08-14
+
 ### Fixed
 - `get_logs` accepts a log level in any case, so `level="ERROR"` stops failing with `422 Invalid parameter: level`. The API's enum is lowercase (`info`, `warn`, `error`, `debug`) but the tool's own description advertised `ERROR, WARN, INFO`, so a model that followed the documentation got a validation error with nothing in it to suggest the case was the problem. The value is now lowercased and trimmed before the request, and the description names the four values the API actually accepts. `query_events` takes its `category` (`user`, `admin`) the same way.
 
@@ -117,7 +119,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
 - `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
-[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.1...v0.6.0
