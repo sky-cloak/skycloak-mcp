@@ -6,7 +6,9 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for **
 
 ## Authentication & safety
 
-- **Hosted HTTP.** Create an API key in the [Skycloak dashboard](https://app.skycloak.io) and configure your MCP client to send it as `Authorization: Bearer <key>` (or `API-Key: <key>`) to `https://mcp.skycloak.io`. Every request carries its own key and acts only as that key's workspace. The server keeps no session state, so a request never inherits another caller's credential. Keys are not verified before use: the Skycloak API is the authority, so an invalid key surfaces as a `401` on the first tool call rather than at connect time.
+- **Hosted HTTP, with OAuth (no credential to configure).** Point your client at `https://mcp.skycloak.io` with no header. The server answers `401` with a pointer to its [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html) metadata at `/.well-known/oauth-protected-resource`, the client runs the browser authorization-code flow against the Skycloak login realm, and the access token it gets back is exchanged for a short-lived, workspace-scoped API key that the session runs on. The key lasts an hour and is renewed automatically. Nothing is stored in your client configuration.
+- **Hosted HTTP, with an API key.** Create a key in the [Skycloak dashboard](https://app.skycloak.io) and send it as `Authorization: Bearer <key>` (or `API-Key: <key>`). Every request carries its own credential and acts only as that credential's workspace. The server keeps no session state, so a request never inherits another caller's. Keys are not verified before use: the Skycloak API is the authority, so an invalid key surfaces as a `401` on the first tool call rather than at connect time.
+- **Tools match your role.** Over OAuth, the tool list is trimmed to what the session's scopes allow, so a read-only workspace member is not shown write tools that would answer `403`. With an API key the whole surface is registered, because a key's scopes are not visible to the server, and an unauthorized call surfaces as a `403` from the API.
 - **Local stdio.** Run `skycloak-mcp init` and approve in your browser (OAuth 2.0 device authorization flow). It mints a workspace-scoped API key, stores it in your operating-system keychain, and detects your default workspace automatically (pass `--workspace <id>` to pick another). `skycloak-mcp logout` removes the stored key.
 - **Headless / CI.** Set the `SKYCLOAK_API_KEY` environment variable (create a key in the [Skycloak dashboard](https://app.skycloak.io)) to skip the browser entirely. It always takes precedence over the keychain.
 - **Read-only by default.** Mutating tools are registered only when the server starts with `--allow-writes`.
@@ -39,7 +41,19 @@ Read-only tools are always available. **Write** tools are registered only when t
 
 ## Connecting
 
-For hosted HTTP, create an API key in the Skycloak dashboard and configure your MCP client to send it as a bearer token:
+For hosted HTTP the simplest route is OAuth, which needs no credential at all:
+
+```bash
+claude mcp add --transport http skycloak https://mcp.skycloak.io
+```
+
+The first call opens your browser, you approve in the Skycloak login page, and the tools appear. If you belong to more than one workspace, name the one you want:
+
+```bash
+claude mcp add --transport http skycloak "https://mcp.skycloak.io?workspace=<workspace-id>"
+```
+
+Otherwise, create an API key in the Skycloak dashboard and configure your MCP client to send it as a bearer token:
 
 ```bash
 claude mcp add --transport http skycloak https://mcp.skycloak.io --header "Authorization: Bearer sk_sc_XXX"
@@ -92,6 +106,8 @@ Add `--allow-writes` only when you intend to make changes (sign in with `skycloa
 
 Add `?readonly=true` to a hosted HTTP URL to expose only read-only tools for that HTTP session, or `?readonly=false` to request the write-capable tool surface. The query parameter defaults to `false`, but write tools are registered only when the server was started with `--allow-writes`.
 
+Add `?workspace=<uuid>` to pick which workspace an OAuth session acts on. It is only needed when you belong to more than one; with a single workspace the server picks it for you, and if you belong to several and name none, the connection fails with a message listing them.
+
 ### Running the HTTP transport
 
 ```bash
@@ -100,6 +116,8 @@ skycloak-mcp run --transport http --http-addr :8080
 
 It needs no credential of its own: callers supply theirs per request, so nothing is injected at deploy time. `GET /healthz` and `GET /readyz` are unauthenticated and report only that the process is up; they deliberately do not probe the Skycloak API, so an upstream blip cannot fail every replica's probe at once. The server holds no session state, so replicas need no session affinity and can be scaled or rolled freely. `SIGTERM` stops new connections and drains in-flight calls.
 
+The OAuth path is on whenever `SKYCLOAK_ISSUER` and `SKYCLOAK_DASHBOARD_URL` are set, which they are by default. `GET /.well-known/oauth-protected-resource` is then served unauthenticated, naming the realm as the authorization server. Its `resource` value is taken from `SKYCLOAK_PUBLIC_URL` when set, and otherwise from the request's own `Host` and scheme, so a single-host deployment behind an ingress needs no extra configuration. The scheme comes from `X-Forwarded-Proto` when present, and otherwise defaults to `https` for anything but a loopback host, since TLS terminates upstream and publishing an `http://` identifier would not match the URL the client connected on. Set `SKYCLOAK_PUBLIC_URL` if your ingress rewrites `Host`. Blanking either of the issuer or dashboard variables turns OAuth off entirely, and the server goes back to challenging for an API key and nothing else.
+
 ## Configuration
 
 | Env var | Default |
@@ -107,9 +125,10 @@ It needs no credential of its own: callers supply theirs per request, so nothing
 | `SKYCLOAK_API_KEY` | none (optional for stdio; HTTP clients provide `API-Key` headers instead) |
 | `SKYCLOAK_ENDPOINT` | `https://api.skycloak.io` |
 | `SKYCLOAK_API_VERSION` | current API version |
-| `SKYCLOAK_ISSUER` | `https://login.app.skycloak.io/realms/skycloak` |
-| `SKYCLOAK_CLIENT_ID` | `skycloak-mcp` |
-| `SKYCLOAK_DASHBOARD_URL` | `https://app.skycloak.io` |
+| `SKYCLOAK_ISSUER` | `https://login.app.skycloak.io/realms/skycloak` (CLI sign-in, and the authorization server the HTTP transport verifies tokens against) |
+| `SKYCLOAK_CLIENT_ID` | `skycloak-mcp` (CLI device flow only) |
+| `SKYCLOAK_DASHBOARD_URL` | `https://app.skycloak.io` (mints CLI keys and HTTP session keys) |
+| `SKYCLOAK_PUBLIC_URL` | none (derived from each request; set it when the ingress rewrites `Host`) |
 
 Commands: `init` (browser sign-in), `run` (serve), `logout` (remove the stored key). `init` accepts `--workspace <id>`, `--allow-writes`, `--allow-credentials`, and `--ttl-days` (default 90).
 

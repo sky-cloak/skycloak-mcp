@@ -872,7 +872,7 @@ func TestListRealmsHandler_MissingClusterID(t *testing.T) {
 // tool's input/output) does not panic — this is what would break at startup.
 func TestRegister(_ *testing.T) {
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "test"}, nil)
-	Register(s, stubAPI{}, true) // allowWrites=true exercises both paths; must not panic
+	Register(s, stubAPI{}, true, nil) // allowWrites=true, scopes unknown: exercises every path; must not panic
 }
 
 func (s stubAPI) CreateRealmExport(_ context.Context, _, realm, _ string) (*skycloak.RealmExport, error) {
