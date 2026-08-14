@@ -8,7 +8,7 @@ import (
 )
 
 func TestGetLogsHandler(t *testing.T) {
-	api := stubAPI{logs: []skycloak.LogEntry{{Timestamp: "t", Level: "ERROR", Category: "org.kc", Message: "boom"}}}
+	api := stubAPI{logs: []skycloak.LogEntry{{Timestamp: "t", Level: "error", Category: "org.kc", Message: "boom"}}}
 	res, out, err := getLogsHandler(api)(context.Background(), nil, GetLogsInput{ClusterID: "c1", Level: "ERROR"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -22,6 +22,56 @@ func TestGetLogsHandler_MissingCluster(t *testing.T) {
 	res, _, err := getLogsHandler(stubAPI{})(context.Background(), nil, GetLogsInput{})
 	if err != nil || !res.IsError {
 		t.Fatalf("expected IsError for missing cluster_id (err=%v)", err)
+	}
+}
+
+func TestGetLogsHandler_LowercasesLevel(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"ERROR", "error"},
+		{"Warn", "warn"},
+		{" info ", "info"},
+		{"error", "error"},
+		{"", ""},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			var got skycloak.LogQuery
+			api := stubAPI{gotLogQuery: &got}
+			if _, _, err := getLogsHandler(api)(context.Background(), nil, GetLogsInput{ClusterID: "c1", Level: tc.in, Search: "Boom", Limit: 7}); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Level != tc.want {
+				t.Errorf("sent level %q to the API, want %q", got.Level, tc.want)
+			}
+			// The other filters ride along untouched: search is free text, not an enum.
+			if got.Search != "Boom" || got.Limit != 7 {
+				t.Errorf("sibling filters altered: %+v", got)
+			}
+		})
+	}
+}
+
+func TestQueryEventsHandler_LowercasesCategory(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"USER", "user"},
+		{"Admin", "admin"},
+		{"user", "user"},
+		{"", ""},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			var got skycloak.EventQuery
+			api := stubAPI{gotEventQuery: &got}
+			in := QueryEventsInput{ClusterID: "c1", Category: tc.in, Realm: "MyRealm", Username: "Bob"}
+			if _, _, err := queryEventsHandler(api)(context.Background(), nil, in); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Category != tc.want {
+				t.Errorf("sent category %q to the API, want %q", got.Category, tc.want)
+			}
+			// Realm and username are case-sensitive on the API side; they must not be folded.
+			if got.Realm != "MyRealm" || got.Username != "Bob" {
+				t.Errorf("case-sensitive filters altered: %+v", got)
+			}
+		})
 	}
 }
 

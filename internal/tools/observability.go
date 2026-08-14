@@ -12,6 +12,14 @@ import (
 
 const defaultLogLimit = 50
 
+// lowerEnum canonicalises a value whose API enum is lowercase. The API answers
+// any other case with a 422 that does not say the case was the problem. It is
+// applied per parameter, not blanket: other Skycloak enums (event types, admin
+// operations, DNS record types) are uppercase.
+func lowerEnum(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
 func registerObservabilityReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_logs",
@@ -35,7 +43,7 @@ func registerObservabilityReadTools(s *mcp.Server, api API) {
 // GetLogsInput is the input schema for skycloak_get_logs.
 type GetLogsInput struct {
 	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
-	Level     string `json:"level,omitempty" jsonschema:"filter by log level (e.g. ERROR, WARN, INFO)"`
+	Level     string `json:"level,omitempty" jsonschema:"filter by log level: info, warn, error, or debug (case-insensitive)"`
 	Search    string `json:"search,omitempty" jsonschema:"free-text search"`
 	Limit     int    `json:"limit,omitempty" jsonschema:"max entries to return (default 50)"`
 }
@@ -55,7 +63,7 @@ func getLogsHandler(api API) mcp.ToolHandlerFor[GetLogsInput, LogsOutput] {
 		if limit <= 0 {
 			limit = defaultLogLimit
 		}
-		logs, err := api.GetLogs(ctx, in.ClusterID, skycloak.LogQuery{Limit: limit, Level: in.Level, Search: in.Search})
+		logs, err := api.GetLogs(ctx, in.ClusterID, skycloak.LogQuery{Limit: limit, Level: lowerEnum(in.Level), Search: in.Search})
 		if err != nil {
 			return toolError(err), LogsOutput{}, nil
 		}
@@ -110,7 +118,7 @@ func getSecurityLogsHandler(api API) mcp.ToolHandlerFor[GetSecurityLogsInput, Se
 // QueryEventsInput is the input schema for skycloak_query_events.
 type QueryEventsInput struct {
 	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
-	Category  string `json:"category,omitempty" jsonschema:"event category: user or admin"`
+	Category  string `json:"category,omitempty" jsonschema:"event category: user or admin (case-insensitive)"`
 	Realm     string `json:"realm,omitempty" jsonschema:"filter by realm name"`
 	Username  string `json:"username,omitempty" jsonschema:"filter by username"`
 	Search    string `json:"search,omitempty" jsonschema:"free-text search"`
@@ -132,7 +140,7 @@ func queryEventsHandler(api API) mcp.ToolHandlerFor[QueryEventsInput, EventsOutp
 		if limit <= 0 {
 			limit = defaultLogLimit
 		}
-		events, err := api.QueryEvents(ctx, in.ClusterID, skycloak.EventQuery{Limit: limit, Category: in.Category, Realm: in.Realm, Username: in.Username, Search: in.Search})
+		events, err := api.QueryEvents(ctx, in.ClusterID, skycloak.EventQuery{Limit: limit, Category: lowerEnum(in.Category), Realm: in.Realm, Username: in.Username, Search: in.Search})
 		if err != nil {
 			return toolError(err), EventsOutput{}, nil
 		}

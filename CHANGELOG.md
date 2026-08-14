@@ -6,6 +6,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- `get_logs` accepts a log level in any case, so `level="ERROR"` stops failing with `422 Invalid parameter: level`. The API's enum is lowercase (`info`, `warn`, `error`, `debug`) but the tool's own description advertised `ERROR, WARN, INFO`, so a model that followed the documentation got a validation error with nothing in it to suggest the case was the problem. The value is now lowercased and trimmed before the request, and the description names the four values the API actually accepts. `query_events` takes its `category` (`user`, `admin`) the same way.
+
 ## [0.6.2] - 2026-08-14
 
 ### Fixed

@@ -58,6 +58,10 @@ type stubAPI struct {
 	webhook      *skycloak.WebhookSubscription
 	webhooks     []skycloak.WebhookSubscription
 	err          error
+
+	// Set to capture the query a handler built, for tests that assert on it.
+	gotLogQuery   *skycloak.LogQuery
+	gotEventQuery *skycloak.EventQuery
 }
 
 func (s stubAPI) ListClusters(context.Context, skycloak.ListClustersParams) ([]skycloak.Cluster, error) {
@@ -131,7 +135,10 @@ func (s stubAPI) DeleteIdentityProvider(context.Context, string, string, string)
 	return s.err
 }
 
-func (s stubAPI) GetLogs(context.Context, string, skycloak.LogQuery) ([]skycloak.LogEntry, error) {
+func (s stubAPI) GetLogs(_ context.Context, _ string, q skycloak.LogQuery) ([]skycloak.LogEntry, error) {
+	if s.gotLogQuery != nil {
+		*s.gotLogQuery = q
+	}
 	return s.logs, s.err
 }
 
@@ -139,7 +146,10 @@ func (s stubAPI) GetSecurityLogs(context.Context, string, skycloak.SecurityLogQu
 	return s.secLogs, s.err
 }
 
-func (s stubAPI) QueryEvents(context.Context, string, skycloak.EventQuery) ([]skycloak.EventEntry, error) {
+func (s stubAPI) QueryEvents(_ context.Context, _ string, q skycloak.EventQuery) ([]skycloak.EventEntry, error) {
+	if s.gotEventQuery != nil {
+		*s.gotEventQuery = q
+	}
 	return s.events, s.err
 }
 
