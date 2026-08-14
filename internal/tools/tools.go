@@ -168,6 +168,13 @@ func NewScopes(list []string) Scopes {
 }
 
 // grants reports whether every listed scope is held. Unknown scopes allow all.
+//
+// Requiring all of them rests on the dashboard issuing whole read or write
+// sets, which is what the roles behind a session key do today. Were it ever to
+// issue a partial set, this would drop tools with nothing said: a caller with
+// `realms:read` but no `clusters:read` would lose every area naming both, and
+// the tests would stay green because they assume the same whole sets. Granular
+// roles would mean gating per tool rather than per area.
 func (sc Scopes) grants(want ...string) bool {
 	if sc == nil {
 		return true

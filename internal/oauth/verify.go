@@ -108,10 +108,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 	var claims realmClaims
 	_, err := jwt.ParseWithClaims(raw, &claims,
 		func(t *jwt.Token) (any, error) { return v.keyFor(ctx, t) },
-		jwt.WithValidMethods([]string{"RS256", "RS384", "RS512"}),
-		jwt.WithIssuer(v.issuer),
-		jwt.WithExpirationRequired(),
-		jwt.WithLeeway(30*time.Second),
+		parserOptions(v.issuer)...,
 	)
 	if err != nil {
 		// The token itself never appears in the message: it is a live credential,
@@ -138,6 +135,20 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 		return nil, fmt.Errorf("%w: %q is not an access token", ErrInvalidToken, claims.Type)
 	}
 	return &Claims{Subject: claims.Subject}, nil
+}
+
+// parserOptions is every check the token itself must pass, independent of which
+// key verifies it. It is a function rather than inline so a test can exercise
+// the algorithm pin on its own: through Verify the pin is masked, because
+// keyFor hands back an *rsa.PublicKey and the library rejects an HS256 or
+// unsigned token on the key type before the pin is ever consulted.
+func parserOptions(issuer string) []jwt.ParserOption {
+	return []jwt.ParserOption{
+		jwt.WithValidMethods([]string{"RS256", "RS384", "RS512"}),
+		jwt.WithIssuer(issuer),
+		jwt.WithExpirationRequired(),
+		jwt.WithLeeway(30 * time.Second),
+	}
 }
 
 // realmClaims is the registered set plus Keycloak's `typ`, which says what kind

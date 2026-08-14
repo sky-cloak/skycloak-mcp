@@ -404,6 +404,59 @@ func TestVerifyRejectsAlgorithmConfusion(t *testing.T) {
 	}
 }
 
+// The test above passes with or without the algorithm pin: keyFor returns an
+// *rsa.PublicKey, so the library refuses an HS256 or unsigned token on the key
+// type long before the pin is consulted. That leaves the pin, which is the last
+// defence if keyFor ever returns []byte or any, unexercised. This test hands
+// the parser exactly the key each algorithm asks for, so the pin is the only
+// thing left standing between a forged token and acceptance.
+func TestParserOptionsPinTheSigningAlgorithm(t *testing.T) {
+	const issuer = "https://realm.example/realms/skycloak"
+	secret := []byte("whatever-a-forger-picked")
+	claims := func() jwt.MapClaims {
+		return jwt.MapClaims{"iss": issuer, "sub": "u", "typ": "Bearer", "exp": time.Now().Add(time.Hour).Unix()}
+	}
+
+	realmKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	obliging := func(tok *jwt.Token) (any, error) {
+		switch tok.Method.Alg() {
+		case "none":
+			return jwt.UnsafeAllowNoneSignatureType, nil
+		case "HS256":
+			return secret, nil
+		default:
+			return &realmKey.PublicKey, nil
+		}
+	}
+	parse := func(raw string) error {
+		_, err := jwt.ParseWithClaims(raw, jwt.MapClaims{}, obliging, parserOptions(issuer)...)
+		return err
+	}
+	sign := func(method jwt.SigningMethod, key any) string {
+		t.Helper()
+		raw, err := jwt.NewWithClaims(method, claims()).SignedString(key)
+		if err != nil {
+			t.Fatalf("sign %s: %v", method.Alg(), err)
+		}
+		return raw
+	}
+
+	// A genuine RS256 token has to pass, or a refusal below could be the issuer
+	// or expiry check rather than the pin.
+	if err := parse(sign(jwt.SigningMethodRS256, realmKey)); err != nil {
+		t.Fatalf("a well-formed RS256 token was rejected: %v", err)
+	}
+	if err := parse(sign(jwt.SigningMethodHS256, secret)); err == nil {
+		t.Fatal("an HS256 token was accepted: the parser does not pin the signing algorithm")
+	}
+	if err := parse(sign(jwt.SigningMethodNone, jwt.UnsafeAllowNoneSignatureType)); err == nil {
+		t.Fatal("an unsigned (alg=none) token was accepted: the parser does not pin the signing algorithm")
+	}
+}
+
 // A signing key far below modern strength is forgeable. The issuer is trusted
 // configuration, but installing whatever it hands us without a floor means one
 // bad key in the set silently becomes a way to mint valid tokens.

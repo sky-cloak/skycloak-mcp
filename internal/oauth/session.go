@@ -78,6 +78,12 @@ type Session struct {
 // The cache is keyed by a digest of the token's subject and the requested
 // workspace, never by the token or the key: two tokens for the same user are
 // the same session, and nothing secret is used as a map key.
+//
+// A cached session also freezes the caller's scopes, so a role changed mid-key
+// is only picked up at the next refresh. Re-minting sooner to catch that would
+// cost more than it buys: the dashboard rotates its one key per (user,
+// workspace) in place, so every extra mint invalidates the key another replica
+// is still serving. An empty grant is the exception, and is never cached.
 type Exchanger struct {
 	dashboardURL string
 	hc           *http.Client
@@ -137,6 +143,15 @@ func (e *Exchanger) Session(ctx context.Context, token, subject, workspaceID str
 			// Deliberately not cached: a dashboard blip must not lock the caller
 			// out for the rest of the key's lifetime.
 			return nil, err
+		}
+		if len(minted.Scopes) == 0 {
+			// A grant of nothing is what a user gets between connecting and having
+			// their workspace role granted, and the transport refuses on it. Caching
+			// it would hold that refusal for the key's whole life, so the admin's
+			// grant would not take effect until it lapsed. Re-exchanging costs one
+			// dashboard call per request, and only for a caller who cannot use the
+			// server yet anyway.
+			return minted, nil
 		}
 		e.mu.Lock()
 		e.evictLocked(e.clock())

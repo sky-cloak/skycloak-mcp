@@ -359,6 +359,55 @@ func TestConcurrentFirstRequestsMintOneKey(t *testing.T) {
 	}
 }
 
+// A grant of nothing is not worth remembering. A user who connects before their
+// workspace role is granted gets an empty scope list, and the transport refuses
+// the session on it; caching that answer would pin them to the refusal for the
+// rest of the key's life, with no way back but waiting it out.
+func TestSessionDoesNotCacheAnEmptyGrant(t *testing.T) {
+	dash := newFakeDashboard(t)
+	dash.keyFor = func(n int) map[string]any {
+		scopes := []string{}
+		if n > 1 {
+			scopes = []string{"clusters:read"} // an admin has since granted the role
+		}
+		return map[string]any{
+			"api_key":      "sk_sc_minted",
+			"workspace_id": "ws-1",
+			"expires_at":   time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+			"scopes":       scopes,
+		}
+	}
+	ex := NewExchanger(dash.srv.URL, dash.srv.Client())
+
+	first, err := ex.Session(t.Context(), "tok", "user-1", "")
+	if err != nil {
+		t.Fatalf("Session: %v", err)
+	}
+	if len(first.Scopes) != 0 {
+		t.Fatalf("scopes = %v, want none", first.Scopes)
+	}
+
+	second, err := ex.Session(t.Context(), "tok", "user-1", "")
+	if err != nil {
+		t.Fatalf("Session after the role was granted: %v", err)
+	}
+	if calls, _, _ := dash.snapshot(); calls != 2 {
+		t.Fatalf("dashboard called %d times, want 2: the empty grant was cached", calls)
+	}
+	if len(second.Scopes) != 1 {
+		t.Fatalf("scopes = %v, want the newly granted one", second.Scopes)
+	}
+
+	// Asking by the id the dashboard resolved must not find it either: the empty
+	// grant is also indexed under that spelling.
+	if _, err := ex.Session(t.Context(), "tok", "user-1", "ws-1"); err != nil {
+		t.Fatalf("Session by explicit id: %v", err)
+	}
+	if calls, _, _ := dash.snapshot(); calls != 2 {
+		t.Fatalf("dashboard called %d times, want 2: the second, non-empty grant should be cached", calls)
+	}
+}
+
 // A failed exchange must not be remembered as a session, or one blip locks the
 // caller out until the entry ages away.
 func TestSessionDoesNotCacheFailures(t *testing.T) {

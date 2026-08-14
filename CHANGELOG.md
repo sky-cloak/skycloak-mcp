@@ -15,6 +15,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `SKYCLOAK_PUBLIC_URL` overrides the resource identifier published in the OAuth metadata. It is only needed when the URL clients use differs from the `Host` they send.
 
 ### Fixed
+- An OAuth session that the dashboard grants no scopes is no longer cached. Connecting before your workspace role was granted used to pin you to that empty answer for the key's whole life: the server refused with a `403`, every retry hit the cached session, and an admin granting the role changed nothing until the key lapsed nearly an hour later. The next request now asks the dashboard again, so the grant takes effect immediately.
 - `update_cluster_security` reads the cluster's current configuration so the sections it does not manage, CAPTCHA among them, survive the update. A refused read used to fall through to an empty body, so the update silently wiped them. It now fails instead of writing.
 
 ### Changed
