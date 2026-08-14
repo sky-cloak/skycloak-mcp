@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
+
+	"github.com/sky-cloak/skycloak-mcp/internal/oauth"
 )
 
 // oidcMetadata is the subset of the OpenID Connect discovery document we use.
@@ -68,7 +70,7 @@ func deviceLogin(ctx context.Context, hc *http.Client, cfg Config, prompt func(D
 			TokenURL:      meta.TokenEndpoint,
 			DeviceAuthURL: meta.DeviceAuthorizationEndpoint,
 		},
-		Scopes: []string{"openid", "profile", "email"},
+		Scopes: oauth.OIDCScopes,
 	}
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, hc)
 

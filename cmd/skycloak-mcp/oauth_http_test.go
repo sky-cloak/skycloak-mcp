@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -72,6 +73,57 @@ func TestProtectedResourceMetadataIsServedUnauthenticated(t *testing.T) {
 	}
 	if len(md.AuthorizationServers) != 1 || md.AuthorizationServers[0] != "https://login.example/realms/skycloak" {
 		t.Fatalf("authorization_servers = %v, want the realm issuer", md.AuthorizationServers)
+	}
+}
+
+// A client only asks for the scopes something advertises. When the document is
+// silent the authorization request omits `openid`, Keycloak issues a token
+// without it, and the dashboard's userinfo call on that token answers 403,
+// which is the sign-in failure this document exists to prevent.
+func TestProtectedResourceMetadataAdvertisesTheOIDCScopes(t *testing.T) {
+	ts := httptest.NewServer(newHTTPHandler(oauthConfig("https://login.example/realms/skycloak", "https://app.example")))
+	defer ts.Close()
+
+	// Both documents describe the same flow, so both have to carry the scopes.
+	for _, path := range []string{"/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"} {
+		t.Run(path, func(t *testing.T) {
+			resp, err := http.Get(ts.URL + path)
+			if err != nil {
+				t.Fatalf("get metadata: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			var md struct {
+				ScopesSupported []string `json:"scopes_supported"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&md); err != nil {
+				t.Fatalf("decode metadata: %v", err)
+			}
+			for _, want := range []string{"openid", "profile", "email"} {
+				if !slices.Contains(md.ScopesSupported, want) {
+					t.Fatalf("scopes_supported = %v, want it to contain %q", md.ScopesSupported, want)
+				}
+			}
+		})
+	}
+}
+
+// A client that reads the challenge and never fetches the document still has to
+// end up asking for `openid`, so the challenge names the scopes too (RFC 6750
+// §3). The go-sdk client prefers this over `scopes_supported`.
+func TestUnauthenticatedChallengeNamesTheOIDCScopes(t *testing.T) {
+	ts := httptest.NewServer(newHTTPHandler(oauthConfig("https://login.example/realms/skycloak", "https://app.example")))
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL+"/mcp", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	want := `scope="openid profile email"`
+	if got := resp.Header.Get("WWW-Authenticate"); !strings.Contains(got, want) {
+		t.Fatalf("WWW-Authenticate = %q, want it to contain %s", got, want)
 	}
 }
 

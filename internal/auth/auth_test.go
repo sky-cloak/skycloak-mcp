@@ -104,6 +104,45 @@ func TestDiscover(t *testing.T) {
 	}
 }
 
+// The CLI sign-in has the same stake in `openid` as the hosted OAuth path: the
+// key it mints comes from the dashboard, which validates the device token
+// against Keycloak's userinfo endpoint and gets a 403 for a token granted
+// without it.
+func TestDeviceLoginRequestsTheOIDCScopes(t *testing.T) {
+	var gotScope string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/openid-configuration":
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"token_endpoint":                "http://" + r.Host + "/token",
+				"device_authorization_endpoint": "http://" + r.Host + "/device",
+			})
+		case "/device":
+			_ = r.ParseForm()
+			gotScope = r.Form.Get("scope")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"device_code": "dc", "user_code": "UC",
+				"verification_uri": "https://kc/device", "interval": 1, "expires_in": 300,
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	// Stop at the prompt: the authorization request is already on the wire by
+	// then, and polling for an approval nobody will give just costs a second.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, _ = deviceLogin(ctx, srv.Client(), Config{Issuer: srv.URL, ClientID: "cli"}, func(DevicePrompt) { cancel() })
+
+	for _, want := range []string{"openid", "profile", "email"} {
+		if !strings.Contains(gotScope, want) {
+			t.Fatalf("device authorization scope = %q, want it to contain %q", gotScope, want)
+		}
+	}
+}
+
 func TestMintCLIKey(t *testing.T) {
 	var gotAuth string
 	var gotBody cliKeyRequest

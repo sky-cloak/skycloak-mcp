@@ -89,6 +89,7 @@ func protectedResourceMetadataHandler(cfg httpConfig, resourceSuffix string) htt
 		md := &oauthex.ProtectedResourceMetadata{
 			Resource:               publicBaseURL(cfg.publicURL, r) + resourceSuffix,
 			AuthorizationServers:   []string{cfg.issuer},
+			ScopesSupported:        oauth.OIDCScopes,
 			BearerMethodsSupported: []string{"header"},
 			ResourceName:           "Skycloak MCP",
 			ResourceDocumentation:  "https://github.com/sky-cloak/skycloak-mcp",
@@ -99,7 +100,10 @@ func protectedResourceMetadataHandler(cfg httpConfig, resourceSuffix string) htt
 
 // challengeHeader builds the WWW-Authenticate value for an unauthenticated
 // request. With OAuth on it names the metadata document, which is the only
-// thing a first-time client has to follow to reach the browser flow.
+// thing a first-time client has to follow to reach the browser flow, and the
+// scopes that flow must ask for (RFC 6750 §3). Naming them twice is deliberate:
+// a client reads whichever of the two it supports, and the go-sdk client
+// prefers the challenge over the document's `scopes_supported`.
 //
 // The document it names is the one whose `resource` matches the URL the client
 // actually used: a client that connected to `<origin>/mcp` and is handed the
@@ -109,6 +113,7 @@ func challengeHeader(cfg httpConfig, r *http.Request) string {
 	challenge := `Bearer realm="skycloak-mcp"`
 	if cfg.oauthEnabled() {
 		challenge += `, resource_metadata="` + publicBaseURL(cfg.publicURL, r) + resourceMetadataPath + metadataSuffixFor(r) + `"`
+		challenge += `, scope="` + strings.Join(oauth.OIDCScopes, " ") + `"`
 	}
 	return challenge
 }

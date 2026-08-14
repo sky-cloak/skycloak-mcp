@@ -31,6 +31,17 @@ var (
 	ErrBadRequest = errors.New("invalid request")
 )
 
+// OIDCScopes are the scopes a Skycloak sign-in has to be granted, whichever
+// flow obtains the token. Treat it as read-only.
+//
+// `openid` is load-bearing, not cosmetic: exchanging a token for a session key
+// makes the dashboard call Keycloak's userinfo endpoint, and Keycloak answers
+// 403 there for any token whose grant lacks it. Such a token still verifies and
+// still passes introspection, so the omission looks like a permissions problem
+// rather than a missing scope. `profile` and `email` carry the identity that
+// same validation reads.
+var OIDCScopes = []string{"openid", "profile", "email"}
+
 const (
 	// refreshSkew mints a replacement before the current key lapses, so a tool
 	// call started just under the wire does not 401 halfway through.
