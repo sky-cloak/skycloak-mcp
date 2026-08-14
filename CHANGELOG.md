@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-14
+
 ### Added
 - The hosted HTTP transport accepts OAuth, so a client can connect with no credential in its configuration: `claude mcp add --transport http skycloak https://mcp.skycloak.io` now opens a browser, the user approves in the Skycloak login realm, and the tools appear. The server publishes RFC 9728 protected-resource metadata at `/.well-known/oauth-protected-resource` and names it in the `WWW-Authenticate` challenge, which is what a first-time client follows to find the authorization server. Skycloak API keys keep working exactly as before, on both `Authorization: Bearer sk_sc_...` and `API-Key:`.
 - A verified realm access token is exchanged, at the dashboard, for a short-lived workspace-scoped API key, and the session runs on that. The exchange is cached per user and workspace and refreshed before the key lapses, and concurrent first requests share one mint rather than racing to rotate each other's key. Naming your only workspace explicitly resolves to the same session as not naming it, so the two spellings cannot mint over one another. Neither the token nor the key is ever logged.
@@ -100,7 +102,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
 - `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
-[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.3.0...v0.4.0
