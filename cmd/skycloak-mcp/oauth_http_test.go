@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 )
 
 // oauthConfig is the minimum httpConfig that turns the OAuth path on.
@@ -99,10 +101,10 @@ func TestProtectedResourceMetadataAdvertisesTheOIDCScopes(t *testing.T) {
 			if err := json.NewDecoder(resp.Body).Decode(&md); err != nil {
 				t.Fatalf("decode metadata: %v", err)
 			}
-			for _, want := range []string{"openid", "profile", "email"} {
-				if !slices.Contains(md.ScopesSupported, want) {
-					t.Fatalf("scopes_supported = %v, want it to contain %q", md.ScopesSupported, want)
-				}
+			// Exactly these: an extra advertised scope is one the client would
+			// request and the realm could refuse, failing the whole flow.
+			if !slices.Equal(md.ScopesSupported, []string{"openid", "profile", "email"}) {
+				t.Fatalf("scopes_supported = %v, want [openid profile email]", md.ScopesSupported)
 			}
 		})
 	}
@@ -121,9 +123,20 @@ func TestUnauthenticatedChallengeNamesTheOIDCScopes(t *testing.T) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	want := `scope="openid profile email"`
-	if got := resp.Header.Get("WWW-Authenticate"); !strings.Contains(got, want) {
-		t.Fatalf("WWW-Authenticate = %q, want it to contain %s", got, want)
+	// Read back through the SDK's own parser rather than by substring, so a
+	// quoting or separator slip is caught as the client would meet it.
+	challenges, err := oauthex.ParseWWWAuthenticate(resp.Header.Values("WWW-Authenticate"))
+	if err != nil {
+		t.Fatalf("parse challenge %q: %v", resp.Header.Get("WWW-Authenticate"), err)
+	}
+	var got []string
+	for _, c := range challenges {
+		if c.Scheme == "bearer" {
+			got = strings.Fields(c.Params["scope"])
+		}
+	}
+	if !slices.Equal(got, []string{"openid", "profile", "email"}) {
+		t.Fatalf("challenge scope = %v, want [openid profile email]", got)
 	}
 }
 

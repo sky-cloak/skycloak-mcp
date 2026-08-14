@@ -19,6 +19,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +50,7 @@ const (
 	ReasonUnknownKeyID   VerifyReason = "unknown_key_id"
 	ReasonKeysUnusable   VerifyReason = "signing_keys_unusable"
 	ReasonWrongTokenType VerifyReason = "wrong_token_type"
+	ReasonNoOpenIDScope  VerifyReason = "no_openid_scope"
 	ReasonNoSubject      VerifyReason = "no_subject"
 	ReasonNoExpiry       VerifyReason = "no_expiry"
 	ReasonRejected       VerifyReason = "rejected"
@@ -211,6 +213,19 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 	if claims.Type != "" && !strings.EqualFold(claims.Type, "Bearer") {
 		return nil, rejected(ReasonWrongTokenType, fmt.Sprintf("%q is not an access token", claims.Type))
 	}
+	// A token granted without `openid` is one Keycloak's userinfo endpoint will
+	// refuse, so the exchange that follows cannot succeed. Refusing it here makes
+	// that a 401 carrying the challenge, which is what sends the client back
+	// through authorization asking for the right scopes; letting it through
+	// produces a 403 with nothing to act on, and a client holding a refresh token
+	// from a grant made before the scopes were advertised would stay stuck on it
+	// until its SSO session lapsed.
+	//
+	// Absence of the claim is allowed, for the same reason `typ` is: it is not
+	// part of the OAuth core, and no sign-in should hinge on a realm setting.
+	if claims.Scope != nil && !slices.Contains(strings.Fields(*claims.Scope), "openid") {
+		return nil, rejected(ReasonNoOpenIDScope, "token was granted without the openid scope")
+	}
 	return &Claims{Subject: claims.Subject}, nil
 }
 
@@ -233,6 +248,10 @@ func parserOptions(issuer string) []jwt.ParserOption {
 type realmClaims struct {
 	jwt.RegisteredClaims
 	Type string `json:"typ"`
+	// Scope is a pointer so an absent claim is distinguishable from an empty
+	// grant. The two mean different things here: one is a realm that does not
+	// emit the claim, the other is a token that was granted nothing.
+	Scope *string `json:"scope"`
 }
 
 // keyFor resolves the signing key for a token.

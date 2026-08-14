@@ -54,12 +54,17 @@ func newFakeRealm(t *testing.T) *fakeRealm {
 
 func (f *fakeRealm) token(t *testing.T, subject string) string {
 	t.Helper()
-	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+	return f.tokenWithClaims(t, jwt.MapClaims{
 		"iss": f.srv.URL,
 		"sub": subject,
 		"exp": time.Now().Add(time.Hour).Unix(),
 		"iat": time.Now().Add(-time.Minute).Unix(),
 	})
+}
+
+func (f *fakeRealm) tokenWithClaims(t *testing.T, claims jwt.MapClaims) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	tok.Header["kid"] = "test-kid"
 	signed, err := tok.SignedString(f.key)
 	if err != nil {
@@ -271,6 +276,41 @@ func TestOAuthRejectsTokensItCannotVerify(t *testing.T) {
 				t.Fatalf("challenge = %q, want it to point at the metadata document", resp.Header.Get("WWW-Authenticate"))
 			}
 		})
+	}
+}
+
+// Advertising the scopes only helps a client that has yet to sign in. One that
+// signed in before holds a refresh token from a grant with no `openid`, and
+// every access token it mints from that inherits the gap. Those tokens have to
+// be refused with a 401, because the challenge on a 401 is what makes the client
+// authorize again; answering 403 leaves it retrying a token that can never work
+// until its realm session lapses.
+func TestOAuthRefusesATokenGrantedWithoutOpenIDAndReChallenges(t *testing.T) {
+	st := newOAuthStack(t, writeSessionScopes)
+
+	stale := st.realm.tokenWithClaims(t, jwt.MapClaims{
+		"iss":   st.realm.srv.URL,
+		"sub":   "user-1",
+		"exp":   time.Now().Add(time.Hour).Unix(),
+		"iat":   time.Now().Add(-time.Minute).Unix(),
+		"scope": "profile email",
+	})
+
+	resp := mcpPost(t, st.ts.URL, stale, "", initBody)
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 so the client starts a new authorization", resp.StatusCode)
+	}
+	challenge := resp.Header.Get("WWW-Authenticate")
+	if !strings.Contains(challenge, `scope="openid profile email"`) {
+		t.Fatalf("challenge = %q, want it to name the scopes the retry must ask for", challenge)
+	}
+	// The dashboard is never called: the token could not have survived its
+	// userinfo check, so asking would only turn a 401 into a slower 403.
+	if calls, _, _ := st.dash.snapshot(); calls != 0 {
+		t.Fatalf("dashboard called %d times, want the exchange skipped entirely", calls)
 	}
 }
 

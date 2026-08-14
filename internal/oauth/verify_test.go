@@ -232,6 +232,57 @@ func TestVerifyNamesAWrongTokenType(t *testing.T) {
 	}
 }
 
+// A token granted without `openid` passes every signature and issuer check and
+// then fails at the exchange, because Keycloak's userinfo endpoint refuses it.
+// Refusing it here instead turns a dead end into a 401, and the challenge that
+// answers a 401 now names the scopes the client has to ask for.
+func TestVerifyRefusesATokenGrantedWithoutOpenID(t *testing.T) {
+	iss := newFakeIssuer(t)
+	v := NewVerifier(iss.srv.URL, iss.srv.Client())
+
+	for _, tt := range []struct {
+		name  string
+		scope any
+		want  VerifyReason
+	}{
+		{"granted openid", "openid profile email", ""},
+		{"openid alone", "openid", ""},
+		{"no openid", "profile email", ReasonNoOpenIDScope},
+		{"empty scope", "", ReasonNoOpenIDScope},
+		// A substring is not a scope: scopes are space-delimited, and a realm is
+		// free to define one whose name contains "openid".
+		{"lookalike scope", "openid-connect profile", ReasonNoOpenIDScope},
+		// The claim is not part of the OAuth core. A realm that omits it must not
+		// have every sign-in refused on its absence, the way `typ` is treated.
+		{"claim absent", nil, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			claims := jwt.MapClaims{
+				"iss": iss.srv.URL, "sub": "u", "typ": "Bearer", "exp": time.Now().Add(time.Hour).Unix(),
+			}
+			if tt.scope != nil {
+				claims["scope"] = tt.scope
+			}
+			_, err := v.Verify(t.Context(), signWithRealmKey(t, iss, "kid-1", claims))
+			if tt.want == "" {
+				if err != nil {
+					t.Fatalf("verify = %v, want the token accepted", err)
+				}
+				return
+			}
+			var verr *VerifyError
+			if !errors.As(err, &verr) || verr.Reason != tt.want {
+				t.Fatalf("error = %v, want reason %q", err, tt.want)
+			}
+			// The transport keys the 401 off this, and a 401 is what makes the
+			// client start a fresh authorization request.
+			if !errors.Is(err, ErrInvalidToken) {
+				t.Fatalf("error = %v, want it to be ErrInvalidToken", err)
+			}
+		})
+	}
+}
+
 // A realm rotates its signing keys. A token signed by a key we have not seen
 // must trigger a refetch once the rate-limit floor has passed, not a permanent
 // rejection.
