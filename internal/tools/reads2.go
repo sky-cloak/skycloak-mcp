@@ -10,13 +10,18 @@ import (
 	"github.com/sky-cloak/skycloak-mcp/internal/skycloak"
 )
 
-func registerReads2Tools(s *mcp.Server, api API) {
+// registerClusterCredentialsTool is separate from the rest of the cluster reads
+// because it is the only tool gated on clusters:credentials:read, a scope no
+// OAuth session ever carries.
+func registerClusterCredentialsTool(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_credentials",
 		Description: "Get a cluster's Keycloak automation client credentials for OAuth2 client_credentials. Needs a key with the clusters:credentials:read scope, which is not granted by default.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get cluster credentials"},
 	}, getClusterCredentialsHandler(api))
+}
 
+func registerReads2Tools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_maintenance_window",
 		Description: "Get a cluster-specific maintenance window. A 404 means the cluster follows the workspace default.",

@@ -6,6 +6,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- The hosted HTTP transport accepts OAuth, so a client can connect with no credential in its configuration: `claude mcp add --transport http skycloak https://mcp.skycloak.io` now opens a browser, the user approves in the Skycloak login realm, and the tools appear. The server publishes RFC 9728 protected-resource metadata at `/.well-known/oauth-protected-resource` and names it in the `WWW-Authenticate` challenge, which is what a first-time client follows to find the authorization server. Skycloak API keys keep working exactly as before, on both `Authorization: Bearer sk_sc_...` and `API-Key:`.
+- A verified realm access token is exchanged, at the dashboard, for a short-lived workspace-scoped API key, and the session runs on that. The exchange is cached per user and workspace and refreshed before the key lapses, and concurrent first requests share one mint rather than racing to rotate each other's key. Neither the token nor the key is ever logged.
+- Tools are tailored to what the session may actually do. A read-only workspace member no longer sees dozens of write tools that would answer 403; a workspace owner sees the full surface. `get_cluster_credentials` stays hidden unless the credential carries `clusters:credentials:read`, which no OAuth session is granted. Stdio and API-key callers are unchanged: their grant is not enumerable, so every tool is registered as before.
+- `?workspace=<uuid>` on the hosted URL picks which workspace an OAuth session acts on, alongside the existing `?readonly=true`. A user who belongs to several workspaces and names none gets a `400` that lists them and says how to choose.
+- `SKYCLOAK_PUBLIC_URL` overrides the resource identifier published in the OAuth metadata. It is only needed when the URL clients use differs from the `Host` they send.
+
+### Changed
+- The realm issuer and dashboard URL (`SKYCLOAK_ISSUER`, `SKYCLOAK_DASHBOARD_URL`) now configure the HTTP transport as well as the CLI sign-in. Blanking either turns the OAuth path off, and the server goes back to advertising nothing but the API-key challenge.
+
 ## [0.5.1] - 2026-08-13
 
 ### Fixed

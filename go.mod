@@ -3,12 +3,14 @@ module github.com/sky-cloak/skycloak-mcp
 go 1.25.0
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/oapi-codegen/nullable v1.1.0
 	github.com/oapi-codegen/runtime v1.4.1
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/oauth2 v0.35.0
+	golang.org/x/sync v0.19.0
 	golang.org/x/term v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -37,7 +39,6 @@ require (
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/mod v0.33.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/tools v0.42.0 // indirect

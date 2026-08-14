@@ -3,11 +3,15 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/sky-cloak/skycloak-mcp/internal/tools"
 )
 
 // Building a server registers every tool and infers a JSON schema per tool,
@@ -34,11 +38,11 @@ type serverCache struct {
 	entries map[string]*cachedServer
 	max     int
 	ttl     time.Duration
-	build   func(apiKey string, allowWrites bool) *mcp.Server
+	build   func(apiKey string, allowWrites bool, scopes tools.Scopes) *mcp.Server
 	now     func() time.Time
 }
 
-func newServerCache(maxEntries int, ttl time.Duration, build func(string, bool) *mcp.Server) *serverCache {
+func newServerCache(maxEntries int, ttl time.Duration, build func(string, bool, tools.Scopes) *mcp.Server) *serverCache {
 	return &serverCache{
 		entries: make(map[string]*cachedServer, maxEntries),
 		max:     maxEntries,
@@ -48,8 +52,8 @@ func newServerCache(maxEntries int, ttl time.Duration, build func(string, bool) 
 	}
 }
 
-func (c *serverCache) get(apiKey string, allowWrites bool) *mcp.Server {
-	key := cacheKey(apiKey, allowWrites)
+func (c *serverCache) get(apiKey string, allowWrites bool, scopes tools.Scopes) *mcp.Server {
+	key := cacheKey(apiKey, allowWrites, scopes)
 
 	c.mu.Lock()
 	now := c.now()
@@ -70,7 +74,7 @@ func (c *serverCache) get(apiKey string, allowWrites bool) *mcp.Server {
 	// would make one unknown credential stall every other caller, and a flood of
 	// them would serialize the whole process. The Once collapses concurrent
 	// misses for the same credential into a single build.
-	entry.once.Do(func() { entry.server = c.build(apiKey, allowWrites) })
+	entry.once.Do(func() { entry.server = c.build(apiKey, allowWrites, scopes) })
 	return entry.server
 }
 
@@ -101,7 +105,22 @@ func (c *serverCache) len() int {
 	return len(c.entries)
 }
 
-func cacheKey(apiKey string, allowWrites bool) string {
+// cacheKey identifies a built server. The scope set is part of it because it
+// decides which tools the server carries, so two grants must never collide on
+// one entry. "unknown" (nil scopes) is its own key, distinct from any grant.
+func cacheKey(apiKey string, allowWrites bool, scopes tools.Scopes) string {
 	sum := sha256.Sum256([]byte(apiKey))
-	return hex.EncodeToString(sum[:]) + "|" + strconv.FormatBool(allowWrites)
+	return hex.EncodeToString(sum[:]) + "|" + strconv.FormatBool(allowWrites) + "|" + scopeKey(scopes)
+}
+
+func scopeKey(scopes tools.Scopes) string {
+	if scopes == nil {
+		return "*"
+	}
+	names := make([]string, 0, len(scopes))
+	for s := range scopes {
+		names = append(names, s)
+	}
+	slices.Sort(names)
+	return strings.Join(names, " ")
 }

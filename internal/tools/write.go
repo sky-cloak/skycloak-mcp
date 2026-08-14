@@ -9,24 +9,13 @@ import (
 	"github.com/sky-cloak/skycloak-mcp/internal/skycloak"
 )
 
-// registerWriteTools registers mutating tools. These are gated behind
-// --allow-writes and (once the public scopes endpoint ships) the API key's
-// write scopes. Destructive tools set DestructiveHint and require a typed
-// confirmation argument.
-func registerWriteTools(s *mcp.Server, api API) {
-	registerDomainWriteTools(s, api)
-	registerBrandingWriteTools(s, api)
-	registerExtensionWriteTools(s, api)
-	registerExportWriteTools(s, api)
-	registerRBACWriteTools(s, api)
-	registerApplicationRoleWriteTools(s, api)
-	registerParityWriteTools(s, api)
-	registerActionWriteTools(s, api)
-	registerSecurityWriteTools(s, api)
-	registerSIEMWriteTools(s, api)
-	registerWebhookWriteTools(s, api)
-	registerWrites2Tools(s, api)
-	registerRealmTransferWriteTools(s, api)
+// The mutating tools below are gated behind --allow-writes and, for a caller
+// whose scopes are known, the matching write scope. Destructive tools set
+// DestructiveHint and require a typed confirmation argument. They are grouped
+// by the scope they need rather than by file, so a caller who may write realms
+// but not clusters sees only what they can use.
+
+func registerClusterWriteTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_cluster",
 		Description: "Provision a new Keycloak cluster. Asynchronous: the returned cluster starts in a provisioning state — poll skycloak_get_cluster until its status is 'available'. Requires --allow-writes.",
@@ -38,7 +27,9 @@ func registerWriteTools(s *mcp.Server, api API) {
 		Description: "Permanently delete a Keycloak cluster and all of its realms and data. Irreversible. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{Title: "Delete cluster", ReadOnlyHint: false, DestructiveHint: ptr(true)},
 	}, deleteClusterHandler(api))
+}
 
+func registerApplicationWriteTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_application",
 		Description: "Create an OIDC/SAML client (application) in a realm. Returns the client secret for confidential clients (store it; it is not retrievable later).",
@@ -50,7 +41,9 @@ func registerWriteTools(s *mcp.Server, api API) {
 		Description: "Delete an application (OIDC/SAML client) from a realm. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{Title: "Delete application", ReadOnlyHint: false, DestructiveHint: ptr(true)},
 	}, deleteApplicationHandler(api))
+}
 
+func registerIdentityProviderWriteTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_identity_provider",
 		Description: "Create an OIDC identity provider (SSO connection) in a realm.",
@@ -62,7 +55,9 @@ func registerWriteTools(s *mcp.Server, api API) {
 		Description: "Delete an identity provider from a realm. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{Title: "Delete identity provider", ReadOnlyHint: false, DestructiveHint: ptr(true)},
 	}, deleteIdentityProviderHandler(api))
+}
 
+func registerRealmWriteTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_realm",
 		Description: "Create a new Keycloak realm in a cluster. Requires the server to be started with --allow-writes and a write-scoped API key.",

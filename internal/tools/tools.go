@@ -143,32 +143,116 @@ type API interface {
 	DownloadThemeContent(ctx context.Context, clusterID, themeID string) ([]byte, error)
 }
 
-// Register adds all tools to the server.
+// clusterCredentialsScope reads a cluster's Keycloak admin credentials. It is
+// never part of an OAuth session's grant, so the tool behind it is registered
+// only for a credential that explicitly carries the scope.
+const clusterCredentialsScope = "clusters:credentials:read"
+
+// Scopes is the set of API scopes the caller's credential carries.
 //
-// Read-only tools are always registered. Mutating tools are registered only
-// when allowWrites is true and the API key carries the matching write scope.
-func Register(s *mcp.Server, api API, allowWrites bool) {
-	registerClusterReadTools(s, api)
-	registerRealmReadTools(s, api)
-	registerApplicationReadTools(s, api)
-	registerIdentityProviderReadTools(s, api)
-	registerObservabilityReadTools(s, api)
-	registerDomainReadTools(s, api)
-	registerBrandingReadTools(s, api)
-	registerExtensionReadTools(s, api)
-	registerExportReadTools(s, api)
-	registerRBACReadTools(s, api)
-	registerApplicationRoleReadTools(s, api)
-	registerReadParityTools(s, api)
-	registerParityReadTools(s, api)
-	registerActionReadTools(s, api)
-	registerSecurityReadTools(s, api)
-	registerSIEMReadTools(s, api)
-	registerWebhookReadTools(s, api)
-	registerReads2Tools(s, api)
-	registerRealmTransferReadTools(s, api)
-	if allowWrites {
-		registerWriteTools(s, api)
+// A nil Scopes means "unknown", and allows everything. Stdio and the API-key
+// HTTP path are in that position: the key's scopes are not enumerable from
+// here, and the Skycloak API is the authority anyway, so an over-broad tool
+// list costs a 403 rather than access. A non-nil but empty set means the
+// opposite: the caller is known to hold nothing.
+type Scopes map[string]bool
+
+// NewScopes builds a known scope set. The result is never nil, so an empty
+// grant is not mistaken for an unknown one.
+func NewScopes(list []string) Scopes {
+	sc := make(Scopes, len(list))
+	for _, s := range list {
+		sc[s] = true
+	}
+	return sc
+}
+
+// grants reports whether every listed scope is held. Unknown scopes allow all.
+func (sc Scopes) grants(want ...string) bool {
+	if sc == nil {
+		return true
+	}
+	for _, w := range want {
+		if !sc[w] {
+			return false
+		}
+	}
+	return true
+}
+
+// toolArea is one group of tools and the scopes a caller needs to be shown it.
+//
+// An area that spans several API areas lists all of their scopes, and is
+// registered only when the caller holds the lot. That errs toward hiding a tool
+// the caller could have used rather than advertising one that would 403, and it
+// costs nothing in practice: a session key's scopes come from the caller's role
+// as a whole read-only or read-write set, never a partial mix.
+type toolArea struct {
+	name     string
+	write    bool
+	scopes   []string
+	register func(*mcp.Server, API)
+}
+
+// toolAreas maps every group of tools to the scopes it needs. Adding a tool to
+// an area whose scope it does not have makes that tool 403 for scoped callers,
+// so a new area belongs here with its own entry.
+var toolAreas = []toolArea{
+	{name: "clusters", scopes: []string{"clusters:read"}, register: registerClusterReadTools},
+	{name: "realms", scopes: []string{"realms:read"}, register: registerRealmReadTools},
+	{name: "applications", scopes: []string{"applications:read"}, register: registerApplicationReadTools},
+	{name: "identity providers", scopes: []string{"identity-providers:read"}, register: registerIdentityProviderReadTools},
+	{name: "observability", scopes: []string{"clusters:logs:read", "clusters:events:read", "clusters:security:read"}, register: registerObservabilityReadTools},
+	{name: "domains", scopes: []string{"domains:read"}, register: registerDomainReadTools},
+	{name: "branding", scopes: []string{"themes:read", "branding:read"}, register: registerBrandingReadTools},
+	{name: "extensions", scopes: []string{"extensions:read", "clusters:extensions:read"}, register: registerExtensionReadTools},
+	{name: "exports", scopes: []string{"clusters:exports:read"}, register: registerExportReadTools},
+	{name: "rbac", scopes: []string{"realm-roles:read", "realm-groups:read", "realm-users:read"}, register: registerRBACReadTools},
+	{name: "application roles", scopes: []string{"applications:read"}, register: registerApplicationRoleReadTools},
+	{name: "read parity", scopes: []string{"realms:read", "applications:read", "identity-providers:read", "clusters:read", "domains:read"}, register: registerReadParityTools},
+	{name: "parity reads", scopes: []string{"smtp:read", "themes:read", "domains:read", "realm-users:read"}, register: registerParityReadTools},
+	{name: "actions", scopes: []string{"identity-providers:read"}, register: registerActionReadTools},
+	{name: "edge security", scopes: []string{"clusters:security:read"}, register: registerSecurityReadTools},
+	{name: "siem", scopes: []string{"siem:read"}, register: registerSIEMReadTools},
+	{name: "webhooks", scopes: []string{"webhooks:read"}, register: registerWebhookReadTools},
+	{name: "cluster detail reads", scopes: []string{"clusters:read", "clusters:insights:read", "realm-roles:read", "realm-groups:read", "realm-users:read"}, register: registerReads2Tools},
+	{name: "cluster credentials", scopes: []string{clusterCredentialsScope}, register: registerClusterCredentialsTool},
+	{name: "realm transfer reads", scopes: []string{"clusters:exports:read", "clusters:imports:read", "themes:read"}, register: registerRealmTransferReadTools},
+
+	{name: "domain writes", write: true, scopes: []string{"domains:write"}, register: registerDomainWriteTools},
+	{name: "branding writes", write: true, scopes: []string{"themes:write"}, register: registerBrandingWriteTools},
+	{name: "extension writes", write: true, scopes: []string{"clusters:extensions:write"}, register: registerExtensionWriteTools},
+	{name: "export writes", write: true, scopes: []string{"clusters:exports:write"}, register: registerExportWriteTools},
+	{name: "rbac writes", write: true, scopes: []string{"realm-roles:write", "realm-groups:write", "realm-users:write"}, register: registerRBACWriteTools},
+	{name: "application role writes", write: true, scopes: []string{"applications:write"}, register: registerApplicationRoleWriteTools},
+	{name: "parity writes", write: true, scopes: []string{"applications:write", "realms:write", "smtp:write", "domains:write", "themes:write", "extensions:write", "clusters:exports:write"}, register: registerParityWriteTools},
+	{name: "action writes", write: true, scopes: []string{"smtp:write", "identity-providers:write", "clusters:write"}, register: registerActionWriteTools},
+	{name: "edge security writes", write: true, scopes: []string{"clusters:security:write"}, register: registerSecurityWriteTools},
+	{name: "siem writes", write: true, scopes: []string{"siem:write"}, register: registerSIEMWriteTools},
+	{name: "webhook writes", write: true, scopes: []string{"webhooks:write"}, register: registerWebhookWriteTools},
+	{name: "detail writes", write: true, scopes: []string{"realm-roles:write", "realm-groups:write", "realm-users:write", "domains:write", "applications:write", "identity-providers:write", "clusters:write", "extensions:write", "themes:write", "smtp:write", "branding:write", "clusters:events:read"}, register: registerWrites2Tools},
+	{name: "realm transfer writes", write: true, scopes: []string{"clusters:exports:write", "clusters:imports:write"}, register: registerRealmTransferWriteTools},
+	{name: "cluster writes", write: true, scopes: []string{"clusters:write"}, register: registerClusterWriteTools},
+	{name: "application writes", write: true, scopes: []string{"applications:write"}, register: registerApplicationWriteTools},
+	{name: "identity provider writes", write: true, scopes: []string{"identity-providers:write"}, register: registerIdentityProviderWriteTools},
+	{name: "realm writes", write: true, scopes: []string{"realms:write"}, register: registerRealmWriteTools},
+}
+
+// Register adds tools to the server.
+//
+// Read-only tools are registered when the caller's scopes cover them. Mutating
+// tools additionally need allowWrites, so a server started read-only stays
+// read-only whatever the credential could do. Pass nil scopes when the
+// credential's grant is not knowable.
+func Register(s *mcp.Server, api API, allowWrites bool, scopes Scopes) {
+	for _, area := range toolAreas {
+		if area.write && !allowWrites {
+			continue
+		}
+		if !scopes.grants(area.scopes...) {
+			continue
+		}
+		area.register(s, api)
 	}
 }
 
