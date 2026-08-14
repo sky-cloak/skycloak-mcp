@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 
@@ -34,18 +35,42 @@ func publicBaseURL(configured string, r *http.Request) string {
 	if configured != "" {
 		return strings.TrimRight(configured, "/")
 	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	// Behind an ingress the TLS terminates upstream, so the only evidence of the
-	// client's scheme is the forwarded header. Take the first hop.
+	return requestScheme(r) + "://" + r.Host
+}
+
+// requestScheme works out the scheme the client used.
+//
+// Behind an ingress the TLS terminates upstream, so the forwarded header is the
+// only evidence; when even that is missing, anything but a loopback host is
+// assumed to be HTTPS. Guessing `http` there would publish a resource
+// identifier that does not match the URL the client connected on, and a
+// conforming client rejects the mismatch rather than proceeding.
+func requestScheme(r *http.Request) string {
 	if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
 		if first := strings.TrimSpace(strings.Split(fwd, ",")[0]); first != "" {
-			scheme = first
+			return first
 		}
 	}
-	return scheme + "://" + r.Host
+	if r.TLS != nil {
+		return "https"
+	}
+	if isLoopbackHost(r.Host) {
+		return "http"
+	}
+	return "https"
+}
+
+func isLoopbackHost(hostport string) bool {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // protectedResourceMetadataHandler serves the discovery document that tells a

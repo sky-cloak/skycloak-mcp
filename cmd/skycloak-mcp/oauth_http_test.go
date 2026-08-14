@@ -13,6 +13,33 @@ func oauthConfig(issuer, dashboard string) httpConfig {
 	return httpConfig{issuer: issuer, dashboardURL: dashboard, allowWrites: true}
 }
 
+// The published resource identifier has to match the URL the client connected
+// on, or a conforming client rejects the mismatch and the flow never starts.
+// TLS terminates at the ingress, so the request itself is plain HTTP.
+func TestPublicBaseURLResolvesTheClientsScheme(t *testing.T) {
+	for _, tt := range []struct {
+		name, host, forwarded, want string
+	}{
+		{"forwarded proto wins", "mcp.example.io", "https", "https://mcp.example.io"},
+		{"first hop of a chain", "mcp.example.io", "https, http", "https://mcp.example.io"},
+		{"forwarded says http", "mcp.example.io", "http", "http://mcp.example.io"},
+		{"remote host with no hint is https", "mcp.example.io", "", "https://mcp.example.io"},
+		{"localhost with no hint is http", "localhost:8080", "", "http://localhost:8080"},
+		{"loopback ip with no hint is http", "127.0.0.1:8080", "", "http://127.0.0.1:8080"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "http://"+tt.host+resourceMetadataPath, nil)
+			req.Host = tt.host
+			if tt.forwarded != "" {
+				req.Header.Set("X-Forwarded-Proto", tt.forwarded)
+			}
+			if got := publicBaseURL("", req); got != tt.want {
+				t.Fatalf("publicBaseURL = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // A client with no credential discovers how to authenticate from RFC 9728
 // metadata. Without it `claude mcp add` has nothing to go on but the 401.
 func TestProtectedResourceMetadataIsServedUnauthenticated(t *testing.T) {
