@@ -148,6 +148,90 @@ func TestVerifyRejectsTamperedAndInvalidTokens(t *testing.T) {
 	}
 }
 
+// Every rejection is answered with the same 401, so the reason is the only
+// thing that separates an expired token from one signed by another realm. It
+// has to survive being wrapped by the JWT library rather than collapsing into
+// "invalid token".
+func TestVerifyNamesWhyItRejected(t *testing.T) {
+	iss := newFakeIssuer(t)
+	other := newFakeIssuer(t)
+	v := NewVerifier(iss.srv.URL, iss.srv.Client())
+
+	// Both of these are signed by a key the realm does publish: what is wrong with
+	// them is the key id in the header, which is the part the realm never signs.
+	unkeyed := signWithRealmKey(t, iss, "", jwt.MapClaims{
+		"iss": iss.srv.URL, "sub": "u", "exp": time.Now().Add(time.Hour).Unix(),
+	})
+	strangeKeyID := signWithRealmKey(t, iss, "kid-nope", jwt.MapClaims{
+		"iss": iss.srv.URL, "sub": "u", "exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	for _, tt := range []struct {
+		name  string
+		token string
+		want  VerifyReason
+	}{
+		{"empty", "", ReasonEmptyToken},
+		{"not a jwt", "sk_sc_not_a_token", ReasonMalformed},
+		{"expired", iss.token(t, "kid-1", iss.srv.URL, "u", time.Now().Add(-time.Hour)), ReasonExpired},
+		{"wrong issuer", iss.token(t, "kid-1", "https://evil.example/realms/x", "u", time.Now().Add(time.Hour)), ReasonWrongIssuer},
+		{"another realm's key", other.token(t, "kid-1", iss.srv.URL, "u", time.Now().Add(time.Hour)), ReasonBadSignature},
+		{"unknown key id", strangeKeyID, ReasonUnknownKeyID},
+		{"no key id", unkeyed, ReasonNoKeyID},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := v.Verify(t.Context(), tt.token)
+			var verr *VerifyError
+			if !errors.As(err, &verr) {
+				t.Fatalf("error = %v (%T), want a *VerifyError", err, err)
+			}
+			if verr.Reason != tt.want {
+				t.Fatalf("reason = %q, want %q (%v)", verr.Reason, tt.want, err)
+			}
+			if !errors.Is(err, ErrInvalidToken) {
+				t.Fatalf("error = %v, want it to still unwrap to ErrInvalidToken", err)
+			}
+		})
+	}
+}
+
+// signWithRealmKey signs arbitrary claims with the realm's kid-1 key, under a
+// key id of the test's choosing.
+func signWithRealmKey(t *testing.T, iss *fakeIssuer, kid string, claims jwt.MapClaims) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	if kid != "" {
+		tok.Header["kid"] = kid
+	} else {
+		delete(tok.Header, "kid")
+	}
+	iss.mu.Lock()
+	key := iss.keys["kid-1"]
+	iss.mu.Unlock()
+	signed, err := tok.SignedString(key)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	return signed
+}
+
+// An ID token is handed to browser front-ends and handled far more loosely, so
+// it must be refused as such rather than as a generic bad token.
+func TestVerifyNamesAWrongTokenType(t *testing.T) {
+	iss := newFakeIssuer(t)
+	v := NewVerifier(iss.srv.URL, iss.srv.Client())
+
+	signed := signWithRealmKey(t, iss, "kid-1", jwt.MapClaims{
+		"iss": iss.srv.URL, "sub": "u", "typ": "ID", "exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	_, err := v.Verify(t.Context(), signed)
+	var verr *VerifyError
+	if !errors.As(err, &verr) || verr.Reason != ReasonWrongTokenType {
+		t.Fatalf("error = %v, want reason %q", err, ReasonWrongTokenType)
+	}
+}
+
 // A realm rotates its signing keys. A token signed by a key we have not seen
 // must trigger a refetch once the rate-limit floor has passed, not a permanent
 // rejection.

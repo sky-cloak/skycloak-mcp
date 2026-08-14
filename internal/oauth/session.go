@@ -250,6 +250,17 @@ func (e *Exchanger) request(ctx context.Context, token, workspaceID string) (*Se
 	}, nil
 }
 
+// StatusError carries the status the dashboard answered with. Every refusal is
+// remapped onto a status of our own, so without this the answer that actually
+// caused it is lost.
+type StatusError struct {
+	Status int
+	Err    error
+}
+
+func (e *StatusError) Error() string { return e.Err.Error() }
+func (e *StatusError) Unwrap() error { return e.Err }
+
 // exchangeError turns a non-200 into something the caller can act on.
 func exchangeError(resp *http.Response) error {
 	var payload struct {
@@ -259,17 +270,20 @@ func exchangeError(resp *http.Response) error {
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 	_ = json.Unmarshal(raw, &payload)
 
+	var err error
 	switch resp.StatusCode {
 	case http.StatusBadRequest:
 		if len(payload.Workspaces) > 0 {
-			return &AmbiguousWorkspaceError{Choices: payload.Workspaces}
+			err = &AmbiguousWorkspaceError{Choices: payload.Workspaces}
+		} else {
+			err = fmt.Errorf("%w: %s", ErrBadRequest, message(payload.Error, "the dashboard rejected the request"))
 		}
-		return fmt.Errorf("%w: %s", ErrBadRequest, message(payload.Error, "the dashboard rejected the request"))
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return fmt.Errorf("%w: %s", ErrNotPermitted, message(payload.Error, "the dashboard refused this sign-in"))
+		err = fmt.Errorf("%w: %s", ErrNotPermitted, message(payload.Error, "the dashboard refused this sign-in"))
 	default:
-		return fmt.Errorf("%w: status %d: %s", ErrExchangeFailed, resp.StatusCode, message(payload.Error, "no detail"))
+		err = fmt.Errorf("%w: status %d: %s", ErrExchangeFailed, resp.StatusCode, message(payload.Error, "no detail"))
 	}
+	return &StatusError{Status: resp.StatusCode, Err: err}
 }
 
 func message(from, fallback string) string {

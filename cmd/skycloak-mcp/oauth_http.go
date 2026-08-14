@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -160,6 +163,29 @@ func newOAuthBridge(cfg httpConfig) *oauthBridge {
 	}
 }
 
+// oauthStage names the step a request was refused at. The three fail for
+// entirely different reasons and are answered with statuses that overlap, so
+// the stage travels with the error rather than being guessed from it later.
+type oauthStage string
+
+const (
+	stageVerify   oauthStage = "verify"
+	stageExchange oauthStage = "exchange"
+	stageScopes   oauthStage = "scopes"
+)
+
+// oauthFailure is a refusal plus what the request had established by then.
+type oauthFailure struct {
+	stage oauthStage
+	// subject is empty at the verify stage: there is no verified caller yet.
+	subject   string
+	workspace string
+	err       error
+}
+
+func (f *oauthFailure) Error() string { return f.err.Error() }
+func (f *oauthFailure) Unwrap() error { return f.err }
+
 // resolve verifies the token and exchanges it for a workspace-scoped key.
 //
 // Nothing here logs the token or the key: both are live credentials, and this
@@ -168,42 +194,120 @@ func (b *oauthBridge) resolve(ctx context.Context, token, workspaceID string) (r
 	if b == nil {
 		// No authorization server configured, so a non-key bearer is not something
 		// this server can make sense of.
-		return resolvedCredential{}, oauth.ErrInvalidToken
+		return resolvedCredential{}, &oauthFailure{stage: stageVerify, workspace: workspaceID, err: oauth.ErrInvalidToken}
 	}
 	claims, err := b.verifier.Verify(ctx, token)
 	if err != nil {
-		return resolvedCredential{}, err
+		return resolvedCredential{}, &oauthFailure{stage: stageVerify, workspace: workspaceID, err: err}
 	}
 	session, err := b.exchanger.Session(ctx, token, claims.Subject, workspaceID)
 	if err != nil {
-		return resolvedCredential{}, err
+		return resolvedCredential{}, &oauthFailure{stage: stageExchange, subject: claims.Subject, workspace: workspaceID, err: err}
 	}
 	if len(session.Scopes) == 0 {
-		return resolvedCredential{}, errNoScopes
+		return resolvedCredential{}, &oauthFailure{stage: stageScopes, subject: claims.Subject, workspace: workspaceID, err: errNoScopes}
 	}
 	return resolvedCredential{apiKey: session.APIKey, scopes: tools.NewScopes(session.Scopes)}, nil
 }
 
-// writeOAuthError maps a failed resolution onto a status the client can act on.
+// writeOAuthError maps a failed resolution onto a status the client can act on,
+// and records why. The body deliberately says little, so the log line is the
+// only place a rejected sign-in leaves a trace.
 func writeOAuthError(w http.ResponseWriter, r *http.Request, cfg httpConfig, err error) {
+	status, body := http.StatusBadGateway, "could not obtain a Skycloak session key; try again shortly"
 	var ambiguous *oauth.AmbiguousWorkspaceError
 	switch {
 	case errors.Is(err, oauth.ErrInvalidToken):
 		// Re-challenge: the client's token is stale or wrong, and the challenge is
 		// how it learns to start the flow again.
 		w.Header().Set("WWW-Authenticate", challengeHeader(cfg, r))
-		http.Error(w, "the access token was not accepted; sign in again", http.StatusUnauthorized)
+		status, body = http.StatusUnauthorized, "the access token was not accepted; sign in again"
 	case errors.As(err, &ambiguous):
-		http.Error(w, ambiguous.Error(), http.StatusBadRequest)
+		status, body = http.StatusBadRequest, ambiguous.Error()
 	case errors.Is(err, oauth.ErrBadRequest):
 		// The caller asked for something that does not parse, typically a bad
 		// ?workspace= value. Their request to fix, not their permissions.
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		status, body = http.StatusBadRequest, err.Error()
 	case errors.Is(err, errNoScopes), errors.Is(err, oauth.ErrNotPermitted):
-		http.Error(w, err.Error(), http.StatusForbidden)
+		status, body = http.StatusForbidden, err.Error()
 	default:
 		// The exchange itself failed. That is our dependency, not the caller's
 		// request, so say so without echoing anything the dashboard returned.
-		http.Error(w, "could not obtain a Skycloak session key; try again shortly", http.StatusBadGateway)
 	}
+	logOAuthRejection(cfg, status, err)
+	http.Error(w, body, status)
+}
+
+// logOAuthRejection writes one line per refused request: the stage that failed,
+// the status the caller got, and what the failing dependency said.
+//
+// The caller is identified by the token's subject only, and only once it has
+// been verified. The access token, the Authorization header and the minted API
+// key are all credentials and never appear; every value here comes from an
+// error message or from configuration.
+func logOAuthRejection(cfg httpConfig, status int, err error) {
+	fields := []string{"stage=unknown", fmt.Sprintf("status=%d", status)}
+
+	var failure *oauthFailure
+	if errors.As(err, &failure) {
+		fields[0] = "stage=" + string(failure.stage)
+		if failure.subject != "" {
+			// Quoted: the subject is a claim from a token, so it is only as
+			// well-behaved as the realm that issued it, and a newline in it would
+			// otherwise forge a second log line.
+			fields = append(fields, "subject="+strconv.Quote(failure.subject))
+		}
+		if failure.workspace != "" {
+			fields = append(fields, "workspace="+failure.workspace)
+		}
+		if failure.stage == stageExchange {
+			// Which dashboard we called: a deployment pointed at the wrong control
+			// plane fails exactly like a broken one otherwise.
+			fields = append(fields, "dashboard_host="+hostOf(cfg.dashboardURL))
+		}
+	}
+
+	var verifyErr *oauth.VerifyError
+	if errors.As(err, &verifyErr) {
+		fields = append(fields, "reason="+string(verifyErr.Reason))
+	}
+	// Absent when the dashboard never answered at all, which a missing field says
+	// more plainly than a zero would.
+	var statusErr *oauth.StatusError
+	if errors.As(err, &statusErr) {
+		fields = append(fields, fmt.Sprintf("dashboard_status=%d", statusErr.Status))
+	}
+
+	fields = append(fields, "err="+strconv.Quote(err.Error()))
+	cfg.logf("oauth request rejected: %s", strings.Join(fields, " "))
+}
+
+// logStartupConfig records the wiring this process resolved, once. Both of the
+// last two production problems were a value nobody could read back from a
+// running pod: a public URL advertising the wrong scheme, and a deployment
+// exchanging tokens at the wrong dashboard.
+func logStartupConfig(cfg httpConfig) {
+	publicURL := cfg.publicURL
+	if publicURL == "" {
+		publicURL = "(derived per request)"
+	}
+	cfg.logf("http config: oauth=%t issuer=%s dashboard=%s public_url=%s endpoint=%s allow_writes=%t",
+		cfg.oauthEnabled(), orNone(cfg.issuer), orNone(cfg.dashboardURL), publicURL, cfg.endpoint, cfg.allowWrites)
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "(unset)"
+	}
+	return s
+}
+
+// hostOf reduces a configured base URL to its host, which is the part that says
+// which environment is being called.
+func hostOf(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return raw
+	}
+	return u.Host
 }
