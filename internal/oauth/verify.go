@@ -24,28 +24,36 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/sync/singleflight"
 )
 
 // ErrInvalidToken wraps every rejection, so callers can answer 401 without
 // matching on message text.
 var ErrInvalidToken = errors.New("invalid token")
 
-// minRefetchInterval bounds how often an unknown key id may trigger a JWKS
-// fetch. A kid sits in the unsigned header, so anyone can put anything there;
-// without a floor, junk tokens would turn into a request to Keycloak apiece.
+// minRefetchInterval bounds how often the key set may be refetched. A kid sits
+// in the unsigned header, so anyone can put anything there; without a floor,
+// junk tokens from an unauthenticated caller would turn into a request to
+// Keycloak apiece. The floor counts failed attempts too, so an issuer that is
+// down does not become an amplifier.
 const minRefetchInterval = 30 * time.Second
+
+// maxKeySetAge is how long a fetched key set is trusted before it is refreshed,
+// even for a key id already in it. Without it, a key withdrawn from the realm
+// (rotated out, or revoked after a compromise) would keep verifying tokens
+// until this process restarted, because a known kid never triggers a refetch.
+const maxKeySetAge = 10 * time.Minute
 
 // discoveryTimeout bounds the calls to the realm. They sit in the request path,
 // so a hanging Keycloak must not hold the caller open.
 const discoveryTimeout = 10 * time.Second
 
-// Claims is what the server needs from a verified token.
+// Claims is what the server needs from a verified token: who the caller is.
+// Expiry is enforced during verification rather than returned, because every
+// request is verified afresh, so there is nothing downstream to age.
 type Claims struct {
 	// Subject is the Keycloak user id (`sub`). It keys the session-key cache.
 	Subject string
-	// Expiry is the token's own expiry, an upper bound on any session built
-	// from it.
-	Expiry time.Time
 }
 
 // Verifier validates realm-issued access tokens against the realm's published
@@ -61,10 +69,16 @@ type Verifier struct {
 	issuer string
 	hc     *http.Client
 
-	mu          sync.Mutex
-	jwksURI     string
-	keys        map[string]*rsa.PublicKey
-	lastRefetch time.Time
+	mu      sync.Mutex
+	jwksURI string
+	keys    map[string]*rsa.PublicKey
+	// lastAttempt covers failures too, so an unreachable issuer cannot be used
+	// to drive one outbound request per inbound request.
+	lastAttempt time.Time
+	lastSuccess time.Time
+	// group collapses concurrent refetches. Without it, a burst of requests
+	// carrying the same unknown kid would each open its own fetch.
+	group singleflight.Group
 	// clock is overridable so tests can drive the refetch floor.
 	clock func() time.Time
 }
@@ -107,11 +121,14 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 	if claims.ExpiresAt == nil {
 		return nil, fmt.Errorf("%w: token carries no expiry", ErrInvalidToken)
 	}
-	return &Claims{Subject: claims.Subject, Expiry: claims.ExpiresAt.Time}, nil
+	return &Claims{Subject: claims.Subject}, nil
 }
 
-// keyFor resolves the signing key for a token, refetching the key set once if
-// the key id is one we have not seen.
+// keyFor resolves the signing key for a token.
+//
+// It refetches the key set when the key id is unknown, and also when the set
+// has aged past maxKeySetAge, so a key the realm has withdrawn stops verifying
+// tokens rather than living on in this cache. Both are rate limited.
 func (v *Verifier) keyFor(ctx context.Context, t *jwt.Token) (*rsa.PublicKey, error) {
 	kid, _ := t.Header["kid"].(string)
 	if kid == "" {
@@ -119,57 +136,78 @@ func (v *Verifier) keyFor(ctx context.Context, t *jwt.Token) (*rsa.PublicKey, er
 	}
 
 	v.mu.Lock()
-	key, ok := v.keys[kid]
-	stale := v.clock().Sub(v.lastRefetch) >= minRefetchInterval
+	key, known := v.keys[kid]
+	fresh := v.clock().Sub(v.lastSuccess) < maxKeySetAge
 	v.mu.Unlock()
-	if ok {
+	if known && fresh {
 		return key, nil
 	}
-	if !stale {
-		return nil, fmt.Errorf("unknown signing key id %q", kid)
-	}
 
-	if err := v.refetch(ctx); err != nil {
+	// Either the key id is new to us or the set has aged out. refetch is both
+	// rate limited and coalesced, so calling it here is cheap even under a flood
+	// of junk key ids, and a caller that arrives mid-fetch waits for that fetch
+	// rather than deciding on the empty map it read a moment earlier.
+	err := v.refetch(ctx)
+
+	v.mu.Lock()
+	key, known = v.keys[kid]
+	v.mu.Unlock()
+	if known {
+		// Either the refresh confirmed the key, or it did not happen and we still
+		// hold it. Serving a slightly stale key beats rejecting every caller
+		// because the realm is briefly unreachable.
+		return key, nil
+	}
+	if err != nil {
 		return nil, err
 	}
-	v.mu.Lock()
-	key, ok = v.keys[kid]
-	v.mu.Unlock()
-	if !ok {
-		return nil, fmt.Errorf("unknown signing key id %q", kid)
-	}
-	return key, nil
+	return nil, fmt.Errorf("unknown signing key id %q", kid)
 }
 
 // refetch reloads the realm's key set, discovering the JWKS URI first if it is
-// not known yet.
+// not known yet. Concurrent callers share one fetch, and a fetch that happened
+// very recently is not repeated.
 func (v *Verifier) refetch(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, discoveryTimeout)
-	defer cancel()
-
-	v.mu.Lock()
-	uri := v.jwksURI
-	v.mu.Unlock()
-
-	if uri == "" {
-		discovered, err := v.discoverJWKSURI(ctx)
-		if err != nil {
-			return err
+	_, err, _ := v.group.Do("jwks", func() (any, error) {
+		v.mu.Lock()
+		// The floor lives inside the flight so it is evaluated once per fetch,
+		// and is recorded before the attempt: a fetch that fails or hangs still
+		// holds off the next caller, which is what stops an unreachable issuer
+		// turning every inbound request into an outbound one.
+		if v.clock().Sub(v.lastAttempt) < minRefetchInterval {
+			v.mu.Unlock()
+			return nil, nil
 		}
-		uri = discovered
-	}
+		uri := v.jwksURI
+		v.lastAttempt = v.clock()
+		v.mu.Unlock()
 
-	keys, err := fetchJWKS(ctx, v.hc, uri)
-	if err != nil {
-		return err
-	}
+		// Detached from the initiating request: the result serves every caller
+		// waiting on this flight. discoveryTimeout still bounds it.
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), discoveryTimeout)
+		defer cancel()
 
-	v.mu.Lock()
-	v.jwksURI = uri
-	v.keys = keys
-	v.lastRefetch = v.clock()
-	v.mu.Unlock()
-	return nil
+		if uri == "" {
+			discovered, err := v.discoverJWKSURI(fetchCtx)
+			if err != nil {
+				return nil, err
+			}
+			uri = discovered
+		}
+
+		keys, err := fetchJWKS(fetchCtx, v.hc, uri)
+		if err != nil {
+			return nil, err
+		}
+
+		v.mu.Lock()
+		v.jwksURI = uri
+		v.keys = keys
+		v.lastSuccess = v.clock()
+		v.mu.Unlock()
+		return nil, nil
+	})
+	return err
 }
 
 func (v *Verifier) discoverJWKSURI(ctx context.Context) (string, error) {

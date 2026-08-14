@@ -250,9 +250,42 @@ func TestSessionErrorsNeverEchoSecrets(t *testing.T) {
 	}
 }
 
+// Naming your only workspace explicitly is the same session as not naming it.
+// The dashboard rotates one key per (user, workspace) in place, so treating the
+// two spellings as separate sessions would have each mint invalidate the
+// other's key, and both would keep serving a dead one.
+func TestNamingTheResolvedWorkspaceHitsTheSameSession(t *testing.T) {
+	dash := newFakeDashboard(t)
+	dash.keyFor = func(n int) map[string]any {
+		return map[string]any{
+			"api_key":      "sk_sc_key_" + string(rune('0'+n)),
+			"workspace_id": "ws-only",
+			"expires_at":   time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+			"scopes":       []string{"clusters:read"},
+		}
+	}
+	ex := NewExchanger(dash.srv.URL, dash.srv.Client())
+
+	first, err := ex.Session(t.Context(), "tok", "user-1", "")
+	if err != nil {
+		t.Fatalf("Session: %v", err)
+	}
+	second, err := ex.Session(t.Context(), "tok", "user-1", "ws-only")
+	if err != nil {
+		t.Fatalf("Session by explicit id: %v", err)
+	}
+
+	if calls, _, _ := dash.snapshot(); calls != 1 {
+		t.Fatalf("the same workspace minted %d times, want 1", calls)
+	}
+	if second.APIKey != first.APIKey {
+		t.Fatalf("explicit id got %q, implicit got %q; they must be one session", second.APIKey, first.APIKey)
+	}
+}
+
 // An MCP client opens with several requests at once. The dashboard keeps one
-// live key per user and rotates it in place, so two concurrent mints would
-// leave one of the two requests holding a key that has already been replaced.
+// live key per (user, workspace) and rotates it in place, so two concurrent
+// mints would leave one of the two requests holding a replaced key.
 func TestConcurrentFirstRequestsMintOneKey(t *testing.T) {
 	dash := newFakeDashboard(t)
 	dash.keyFor = func(n int) map[string]any {

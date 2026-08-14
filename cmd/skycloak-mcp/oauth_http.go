@@ -93,12 +93,26 @@ func protectedResourceMetadataHandler(cfg httpConfig, resourceSuffix string) htt
 // challengeHeader builds the WWW-Authenticate value for an unauthenticated
 // request. With OAuth on it names the metadata document, which is the only
 // thing a first-time client has to follow to reach the browser flow.
+//
+// The document it names is the one whose `resource` matches the URL the client
+// actually used: a client that connected to `<origin>/mcp` and is handed the
+// bare-origin document sees a resource that is not the URL it asked for, and a
+// strict client treats that mismatch as a reason to stop (RFC 9728 §3.3).
 func challengeHeader(cfg httpConfig, r *http.Request) string {
 	challenge := `Bearer realm="skycloak-mcp"`
 	if cfg.oauthEnabled() {
-		challenge += `, resource_metadata="` + publicBaseURL(cfg.publicURL, r) + resourceMetadataPath + `"`
+		challenge += `, resource_metadata="` + publicBaseURL(cfg.publicURL, r) + resourceMetadataPath + metadataSuffixFor(r) + `"`
 	}
 	return challenge
+}
+
+// metadataSuffixFor maps the MCP endpoint the caller used onto the metadata
+// document that describes it.
+func metadataSuffixFor(r *http.Request) string {
+	if strings.TrimSuffix(r.URL.Path, "/") == "/mcp" {
+		return "/mcp"
+	}
+	return ""
 }
 
 // resolvedCredential is the Skycloak API key a request will act with, plus what

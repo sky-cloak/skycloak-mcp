@@ -111,9 +111,29 @@ func TestUnauthenticatedChallengeAdvertisesResourceMetadata(t *testing.T) {
 		t.Fatalf("status = %d, want 401", resp.StatusCode)
 	}
 	challenge := resp.Header.Get("WWW-Authenticate")
-	want := `resource_metadata="` + ts.URL + `/.well-known/oauth-protected-resource"`
+	// The client connected to /mcp, so it must be sent to the document whose
+	// `resource` is <origin>/mcp, not the bare-origin one.
+	want := `resource_metadata="` + ts.URL + `/.well-known/oauth-protected-resource/mcp"`
 	if !strings.Contains(challenge, want) {
 		t.Fatalf("WWW-Authenticate = %q, want it to contain %s", challenge, want)
+	}
+}
+
+// The bare origin is the other endpoint clients connect to, and it must be
+// pointed at the document describing the bare origin.
+func TestChallengeOnTheBareOriginNamesTheRootMetadata(t *testing.T) {
+	ts := httptest.NewServer(newHTTPHandler(oauthConfig("https://login.example/realms/skycloak", "https://app.example")))
+	defer ts.Close()
+
+	resp, err := http.Post(ts.URL, "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	want := `resource_metadata="` + ts.URL + `/.well-known/oauth-protected-resource"`
+	if got := resp.Header.Get("WWW-Authenticate"); !strings.Contains(got, want) {
+		t.Fatalf("WWW-Authenticate = %q, want it to contain %s", got, want)
 	}
 }
 

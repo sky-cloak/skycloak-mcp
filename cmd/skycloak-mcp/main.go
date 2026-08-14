@@ -250,8 +250,8 @@ func newHTTPHandler(cfg httpConfig) http.Handler {
 
 		resolved := resolvedCredential{apiKey: raw} // scopes unknown: an API key's grant is not enumerable here
 		// With no authorization server there is nothing a bearer could be but a
-		// key, whatever it looks like, so keys minted before the `sk_sc_` prefix
-		// keep working.
+		// key, whatever it looks like, so an API-key-only deployment behaves
+		// exactly as it did before OAuth existed.
 		if kind == credentialToken && bridge != nil {
 			var err error
 			resolved, err = bridge.resolve(r.Context(), raw, workspaceParam(r))
@@ -309,9 +309,10 @@ const (
 	credentialToken
 )
 
-// apiKeyPrefix is what every Skycloak API key starts with. It is what separates
-// a key from an access token on the same header, and it is unambiguous: a JWT
-// is three base64url segments and can never begin with it.
+// apiKeyPrefix is what every Skycloak API key starts with, including the older
+// environment-tagged form (`sk_sc_<env>_...`). It is what separates a key from
+// an access token on the same header, and it is unambiguous: a JWT is three
+// base64url segments and can never begin with it.
 const apiKeyPrefix = "sk_sc_"
 
 // classifyCredential extracts the caller's credential and says what it is.

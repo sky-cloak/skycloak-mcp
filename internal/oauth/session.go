@@ -86,8 +86,9 @@ type Exchanger struct {
 	sessions map[string]*Session
 	clock    func() time.Time
 	// mint coalesces concurrent misses for the same session. The dashboard keeps
-	// one live key per user and rotates it in place, so two mints racing would
-	// leave whichever request finished first holding a key already replaced.
+	// one live key per (user, workspace) and rotates it in place, so two mints
+	// racing would leave whichever request finished first holding a key that has
+	// already been replaced.
 	mint singleflight.Group
 }
 
@@ -140,6 +141,14 @@ func (e *Exchanger) Session(ctx context.Context, token, subject, workspaceID str
 		e.mu.Lock()
 		e.evictLocked(e.clock())
 		e.sessions[key] = minted
+		// Also index under the workspace the dashboard actually chose. Asking for
+		// no workspace and asking for that same workspace by id are the same
+		// session, and the dashboard rotates one key per (user, workspace) in
+		// place: without this, the two spellings would mint over each other and
+		// each would go on serving a key the other had just replaced.
+		if resolved := sessionKey(subject, minted.WorkspaceID); resolved != key {
+			e.sessions[resolved] = minted
+		}
 		e.mu.Unlock()
 		return minted, nil
 	})
