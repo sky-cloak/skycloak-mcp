@@ -46,10 +46,14 @@ func publicBaseURL(configured string, r *http.Request) string {
 // identifier that does not match the URL the client connected on, and a
 // conforming client rejects the mismatch rather than proceeding.
 func requestScheme(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
-		if first := strings.TrimSpace(strings.Split(fwd, ",")[0]); first != "" {
-			return first
-		}
+	// Only the two schemes we could actually be served over. The header is
+	// attacker-controlled on a direct connection and this value is interpolated
+	// into a quoted WWW-Authenticate parameter, so echoing it back verbatim would
+	// let a `"` inject a second resource_metadata into the challenge the client
+	// parses to find its authorization server.
+	switch first := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]); first {
+	case "http", "https":
+		return first
 	}
 	if r.TLS != nil {
 		return "https"

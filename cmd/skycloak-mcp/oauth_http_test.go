@@ -24,6 +24,11 @@ func TestPublicBaseURLResolvesTheClientsScheme(t *testing.T) {
 		{"first hop of a chain", "mcp.example.io", "https, http", "https://mcp.example.io"},
 		{"forwarded says http", "mcp.example.io", "http", "http://mcp.example.io"},
 		{"remote host with no hint is https", "mcp.example.io", "", "https://mcp.example.io"},
+		// The header is attacker-controlled and lands inside a quoted
+		// WWW-Authenticate parameter, so anything but the two real schemes is
+		// ignored rather than echoed.
+		{"injected auth-param is ignored", "mcp.example.io", `https", resource_metadata="https://evil.example/x`, "https://mcp.example.io"},
+		{"nonsense scheme is ignored", "mcp.example.io", "javascript", "https://mcp.example.io"},
 		{"localhost with no hint is http", "localhost:8080", "", "http://localhost:8080"},
 		{"loopback ip with no hint is http", "127.0.0.1:8080", "", "http://127.0.0.1:8080"},
 	} {

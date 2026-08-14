@@ -195,6 +195,10 @@ func TestVerifyCachesTheKeySet(t *testing.T) {
 
 // An attacker can put any kid they like in an unsigned header. Refetching on
 // each one turns a stream of junk tokens into a stream of requests to Keycloak.
+//
+// The clock is stepped past the floor midway, so this distinguishes "the floor
+// holds them off" from "a refetch never happens at all": exactly one of the two
+// batches is allowed to reach the issuer.
 func TestVerifyRateLimitsRefetchOnUnknownKeyIDs(t *testing.T) {
 	iss := newFakeIssuer(t)
 	v := NewVerifier(iss.srv.URL, iss.srv.Client())
@@ -205,13 +209,24 @@ func TestVerifyRateLimitsRefetchOnUnknownKeyIDs(t *testing.T) {
 	before := iss.jwksCalls.Load()
 
 	junk := newFakeIssuer(t)
-	for i := range 10 {
-		kid := "junk-" + string(rune('a'+i))
-		junk.addKey(t, kid)
-		_, _ = v.Verify(t.Context(), junk.token(t, kid, iss.srv.URL, "u", time.Now().Add(time.Hour)))
+	sendJunk := func(prefix string) {
+		for i := range 10 {
+			kid := prefix + string(rune('a'+i))
+			junk.addKey(t, kid)
+			_, _ = v.Verify(t.Context(), junk.token(t, kid, iss.srv.URL, "u", time.Now().Add(time.Hour)))
+		}
 	}
-	if got := iss.jwksCalls.Load() - before; got > 1 {
-		t.Fatalf("10 unknown key ids caused %d JWKS refetches, want at most 1", got)
+
+	sendJunk("first-")
+	if got := iss.jwksCalls.Load() - before; got != 0 {
+		t.Fatalf("10 unknown key ids inside the floor caused %d refetches, want 0", got)
+	}
+
+	later := time.Now().Add(2 * minRefetchInterval)
+	v.clock = func() time.Time { return later }
+	sendJunk("second-")
+	if got := iss.jwksCalls.Load() - before; got != 1 {
+		t.Fatalf("20 unknown key ids across two floor windows caused %d refetches, want exactly 1", got)
 	}
 }
 
@@ -305,5 +320,108 @@ func TestVerifyCoalescesConcurrentRefetches(t *testing.T) {
 	}
 	if got := iss.discCalls.Load(); got != 1 {
 		t.Fatalf("8 concurrent cold verifications made %d discovery fetches, want 1", got)
+	}
+}
+
+// tokenOfType mints a token carrying an explicit Keycloak `typ` claim.
+func (f *fakeIssuer) tokenOfType(t *testing.T, kid, typ string) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"iss": f.srv.URL,
+		"sub": "user-1",
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"typ": typ,
+	})
+	tok.Header["kid"] = kid
+	f.mu.Lock()
+	key := f.keys[kid]
+	f.mu.Unlock()
+	signed, err := tok.SignedString(key)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	return signed
+}
+
+// The realm issues more than access tokens, and they all carry the same issuer
+// and signature. An ID token is handed to browser front-ends and handled far
+// more loosely than an access token, so accepting one here would let anything
+// that can read a user's ID token act as them against the whole API.
+func TestVerifyRejectsTokensThatAreNotAccessTokens(t *testing.T) {
+	iss := newFakeIssuer(t)
+	v := NewVerifier(iss.srv.URL, iss.srv.Client())
+
+	for _, typ := range []string{"ID", "Refresh", "Offline"} {
+		t.Run(typ, func(t *testing.T) {
+			if _, err := v.Verify(t.Context(), iss.tokenOfType(t, "kid-1", typ)); err == nil {
+				t.Fatalf("a %q token was accepted as an access token", typ)
+			} else if !errors.Is(err, ErrInvalidToken) {
+				t.Fatalf("error = %v, want it to unwrap to ErrInvalidToken", err)
+			}
+		})
+	}
+
+	if _, err := v.Verify(t.Context(), iss.tokenOfType(t, "kid-1", "Bearer")); err != nil {
+		t.Fatalf("a Bearer access token was rejected: %v", err)
+	}
+}
+
+// The signature is the only thing binding a token to the realm, so the accepted
+// algorithms must stay pinned to the asymmetric ones. Letting HS256 through
+// would make the realm's *public* key a signing secret anyone can use.
+func TestVerifyRejectsAlgorithmConfusion(t *testing.T) {
+	iss := newFakeIssuer(t)
+	v := NewVerifier(iss.srv.URL, iss.srv.Client())
+
+	// Prime the key cache so the verifier holds the realm's public key.
+	if _, err := v.Verify(t.Context(), iss.token(t, "kid-1", iss.srv.URL, "u", time.Now().Add(time.Hour))); err != nil {
+		t.Fatalf("prime: %v", err)
+	}
+
+	claims := jwt.MapClaims{"iss": iss.srv.URL, "sub": "u", "typ": "Bearer", "exp": time.Now().Add(time.Hour).Unix()}
+
+	iss.mu.Lock()
+	pub := iss.keys["kid-1"].PublicKey
+	iss.mu.Unlock()
+	hs := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	hs.Header["kid"] = "kid-1"
+	hsToken, err := hs.SignedString(pub.N.Bytes()) // the public modulus as an HMAC secret
+	if err != nil {
+		t.Fatalf("sign hs256: %v", err)
+	}
+	if _, err := v.Verify(t.Context(), hsToken); err == nil {
+		t.Fatal("an HS256 token signed with the realm's public key was accepted")
+	}
+
+	none := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
+	none.Header["kid"] = "kid-1"
+	noneToken, err := none.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	if err != nil {
+		t.Fatalf("sign none: %v", err)
+	}
+	if _, err := v.Verify(t.Context(), noneToken); err == nil {
+		t.Fatal("an unsigned (alg=none) token was accepted")
+	}
+}
+
+// A signing key far below modern strength is forgeable. The issuer is trusted
+// configuration, but installing whatever it hands us without a floor means one
+// bad key in the set silently becomes a way to mint valid tokens.
+func TestJWKSSkipsUndersizedKeys(t *testing.T) {
+	weak, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"keys": []map[string]string{{
+			"kty": "RSA", "kid": "weak", "use": "sig",
+			"n": base64.RawURLEncoding.EncodeToString(weak.N.Bytes()),
+			"e": base64.RawURLEncoding.EncodeToString(big.NewInt(int64(weak.E)).Bytes()),
+		}}})
+	}))
+	defer srv.Close()
+
+	if _, err := fetchJWKS(t.Context(), srv.Client(), srv.URL); err == nil {
+		t.Fatal("a 1024-bit signing key was installed as trusted")
 	}
 }

@@ -304,13 +304,32 @@ func TestWorkspaceQueryParameterReachesTheExchange(t *testing.T) {
 	st := newOAuthStack(t, writeSessionScopes)
 	token := st.realm.token(t, "user-1")
 
-	resp := mcpPost(t, st.ts.URL+"?workspace=ws-chosen", token, "", initBody)
+	const chosen = "3f1a6c4e-5b2d-4a91-8f77-9c0e1d2b3a45"
+	resp := mcpPost(t, st.ts.URL+"?workspace="+chosen, token, "", initBody)
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
 
 	_, workspaces, _ := st.dash.snapshot()
-	if len(workspaces) == 0 || workspaces[0] != "ws-chosen" {
-		t.Fatalf("dashboard saw workspaces %v, want ws-chosen", workspaces)
+	if len(workspaces) == 0 || workspaces[0] != chosen {
+		t.Fatalf("dashboard saw workspaces %v, want %s", workspaces, chosen)
+	}
+}
+
+// A workspace id is part of the session cache key, and a miss costs a round
+// trip to the dashboard. One caller varying the parameter must not be able to
+// spend an unbounded number of them, so the shape is checked here.
+func TestMalformedWorkspaceIsRefusedWithoutCallingTheDashboard(t *testing.T) {
+	st := newOAuthStack(t, writeSessionScopes)
+
+	resp := mcpPost(t, st.ts.URL+"?workspace=not-a-uuid", st.realm.token(t, "user-1"), "", initBody)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, truncate(body))
+	}
+	if calls, _, _ := st.dash.snapshot(); calls != 0 {
+		t.Fatalf("a malformed workspace id reached the dashboard %d times, want 0", calls)
 	}
 }
 

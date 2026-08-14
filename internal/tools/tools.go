@@ -230,7 +230,9 @@ var toolAreas = []toolArea{
 	{name: "application role writes", write: true, scopes: []string{"applications:write"}, register: registerApplicationRoleWriteTools},
 	{name: "parity writes", write: true, scopes: []string{"applications:write", "realms:write", "smtp:write", "domains:write", "themes:write", "extensions:write", "clusters:exports:write"}, register: registerParityWriteTools},
 	{name: "action writes", write: true, scopes: []string{"smtp:write", "identity-providers:write", "clusters:write"}, register: registerActionWriteTools},
-	{name: "edge security writes", write: true, scopes: []string{"clusters:security:write"}, register: registerSecurityWriteTools},
+	// update_cluster_security is a read-modify-write: it reads the current
+	// config so the sections it does not manage survive the update.
+	{name: "edge security writes", write: true, scopes: []string{"clusters:security:write", "clusters:security:read"}, register: registerSecurityWriteTools},
 	{name: "siem writes", write: true, scopes: []string{"siem:write"}, register: registerSIEMWriteTools},
 	{name: "webhook writes", write: true, scopes: []string{"webhooks:write"}, register: registerWebhookWriteTools},
 	{name: "detail writes", write: true, scopes: []string{"realm-roles:write", "realm-groups:write", "realm-users:write", "domains:write", "applications:write", "identity-providers:write", "clusters:write", "extensions:write", "themes:write", "smtp:write", "branding:write", "clusters:events:read"}, register: registerWrites2Tools},

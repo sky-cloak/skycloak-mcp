@@ -218,10 +218,14 @@ func (c *Client) UpdateClusterSecurity(ctx context.Context, clusterID string, se
 	if err != nil {
 		return nil, err
 	}
-	body := apiclient.ClusterSecurityConfig{}
-	if cur.JSON200 != nil {
-		body = *cur.JSON200
+	// The read is what preserves the sections this call does not manage, CAPTCHA
+	// among them. A non-200 here (a 403 from a key without clusters:security:read
+	// is the likely one) used to fall through to an empty body, so the update
+	// silently wiped everything the caller had not supplied. Fail instead.
+	if cur.JSON200 == nil {
+		return nil, statusError(cur.HTTPResponse, cur.Body)
 	}
+	body := *cur.JSON200
 	body.IpAccessControl, body.RateLimiting, body.Waf, body.GeoBlocking, body.BotManagement = nil, nil, nil, nil, nil
 	sec.applyToAPI(&body)
 	resp, err := c.gen.UpdateClusterSecurityWithResponse(ctx, cid(clusterID), nil, apiclient.UpdateClusterSecurityJSONRequestBody(body))

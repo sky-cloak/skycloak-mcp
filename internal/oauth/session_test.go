@@ -234,19 +234,53 @@ func TestSessionClassifiesRefusals(t *testing.T) {
 }
 
 // Neither the access token nor the minted key may appear in an error a caller
-// or a log line could see.
+// or a log line could see, on any of the paths that can fail.
 func TestSessionErrorsNeverEchoSecrets(t *testing.T) {
-	dash := newFakeDashboard(t)
-	dash.status = http.StatusInternalServerError
-	dash.body = map[string]string{"error": "boom"}
-	ex := NewExchanger(dash.srv.URL, dash.srv.Client())
+	const token = "super-secret-token"
 
-	_, err := ex.Session(t.Context(), "super-secret-token", "user-1", "")
+	t.Run("dashboard refuses", func(t *testing.T) {
+		dash := newFakeDashboard(t)
+		dash.status = http.StatusInternalServerError
+		dash.body = map[string]string{"error": "boom"}
+		ex := NewExchanger(dash.srv.URL, dash.srv.Client())
+
+		_, err := ex.Session(t.Context(), token, "user-1", "")
+		assertNoSecret(t, err, token)
+	})
+
+	// The transport error is the path that carries the whole request, so it is
+	// the one most likely to quote something it should not.
+	t.Run("dashboard unreachable", func(t *testing.T) {
+		dead := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		url := dead.URL
+		dead.Close()
+
+		_, err := NewExchanger(url, nil).Session(t.Context(), token, "user-1", "")
+		assertNoSecret(t, err, token)
+	})
+
+	// A response the dashboard did answer, carrying a real key, must not end up
+	// quoted back when decoding it fails.
+	t.Run("undecodable success", func(t *testing.T) {
+		dash := newFakeDashboard(t)
+		dash.status = http.StatusOK
+		dash.body = "sk_sc_leaked_key_in_a_bad_shape"
+		ex := NewExchanger(dash.srv.URL, dash.srv.Client())
+
+		_, err := ex.Session(t.Context(), token, "user-1", "")
+		assertNoSecret(t, err, token, "sk_sc_leaked_key_in_a_bad_shape")
+	})
+}
+
+func assertNoSecret(t *testing.T, err error, secrets ...string) {
+	t.Helper()
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	if strings.Contains(err.Error(), "super-secret-token") {
-		t.Fatalf("error leaked the access token: %v", err)
+	for _, s := range secrets {
+		if strings.Contains(err.Error(), s) {
+			t.Fatalf("error leaked %q: %v", s, err)
+		}
 	}
 }
 

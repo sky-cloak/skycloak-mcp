@@ -44,6 +44,9 @@ const minRefetchInterval = 30 * time.Second
 // until this process restarted, because a known kid never triggers a refetch.
 const maxKeySetAge = 10 * time.Minute
 
+// minRSAModulusBits is the smallest signing key accepted from the realm's JWKS.
+const minRSAModulusBits = 2048
+
 // discoveryTimeout bounds the calls to the realm. They sit in the request path,
 // so a hanging Keycloak must not hold the caller open.
 const discoveryTimeout = 10 * time.Second
@@ -102,7 +105,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 		return nil, fmt.Errorf("%w: empty bearer token", ErrInvalidToken)
 	}
 
-	var claims jwt.RegisteredClaims
+	var claims realmClaims
 	_, err := jwt.ParseWithClaims(raw, &claims,
 		func(t *jwt.Token) (any, error) { return v.keyFor(ctx, t) },
 		jwt.WithValidMethods([]string{"RS256", "RS384", "RS512"}),
@@ -121,7 +124,27 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 	if claims.ExpiresAt == nil {
 		return nil, fmt.Errorf("%w: token carries no expiry", ErrInvalidToken)
 	}
+	// The realm signs more than access tokens, and they share an issuer and a
+	// signing key. An ID token in particular is handed to browser front-ends and
+	// handled far more loosely, so accepting one would let anything that can read
+	// a user's ID token act as them here. Keycloak labels the kind in `typ`; a
+	// token that declares a kind other than Bearer is not an access token.
+	//
+	// A token with no `typ` at all is allowed through rather than refused: the
+	// claim is not part of the OAuth core, and refusing on its absence would put
+	// the whole sign-in at the mercy of a realm setting. Issuer, expiry and
+	// signature still bind it.
+	if claims.Type != "" && !strings.EqualFold(claims.Type, "Bearer") {
+		return nil, fmt.Errorf("%w: %q is not an access token", ErrInvalidToken, claims.Type)
+	}
 	return &Claims{Subject: claims.Subject}, nil
+}
+
+// realmClaims is the registered set plus Keycloak's `typ`, which says what kind
+// of token this is (Bearer, ID, Refresh, Offline).
+type realmClaims struct {
+	jwt.RegisteredClaims
+	Type string `json:"typ"`
 }
 
 // keyFor resolves the signing key for a token.
@@ -272,7 +295,14 @@ func (k jwk) rsaPublicKey() (*rsa.PublicKey, error) {
 	if !exp.IsInt64() || exp.Int64() > 1<<31-1 || exp.Int64() < 3 {
 		return nil, errors.New("implausible RSA exponent")
 	}
-	return &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: int(exp.Int64())}, nil
+	modulus := new(big.Int).SetBytes(n)
+	// A short modulus is forgeable. The issuer is trusted configuration, but a
+	// single weak key in an otherwise good set would quietly become a way to
+	// mint tokens this server accepts.
+	if modulus.BitLen() < minRSAModulusBits {
+		return nil, errors.New("RSA modulus below the minimum size")
+	}
+	return &rsa.PublicKey{N: modulus, E: int(exp.Int64())}, nil
 }
 
 func getJSON(ctx context.Context, hc *http.Client, url string, into any) error {

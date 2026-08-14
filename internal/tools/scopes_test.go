@@ -203,3 +203,14 @@ func TestAreaScopesAreRealAPIScopes(t *testing.T) {
 		}
 	}
 }
+
+// An area with no scopes registers for every caller, because "all of none" is
+// vacuously satisfied. That is the one way a tool can slip past the filter
+// entirely, and it looks like an ordinary table entry.
+func TestEveryToolAreaDeclaresAtLeastOneScope(t *testing.T) {
+	for _, area := range toolAreas {
+		if len(area.scopes) == 0 {
+			t.Errorf("area %q declares no scopes, so it registers for everyone", area.name)
+		}
+	}
+}

@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/term"
 
@@ -247,14 +248,18 @@ func newHTTPHandler(cfg httpConfig) http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		workspace, err := workspaceParam(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		resolved := resolvedCredential{apiKey: raw} // scopes unknown: an API key's grant is not enumerable here
 		// With no authorization server there is nothing a bearer could be but a
 		// key, whatever it looks like, so an API-key-only deployment behaves
 		// exactly as it did before OAuth existed.
 		if kind == credentialToken && bridge != nil {
-			var err error
-			resolved, err = bridge.resolve(r.Context(), raw, workspaceParam(r))
+			resolved, err = bridge.resolve(r.Context(), raw, workspace)
 			if err != nil {
 				writeOAuthError(w, r, cfg, err)
 				return
@@ -349,12 +354,24 @@ func credentialFromRequest(r *http.Request) (string, error) {
 
 // workspaceParam returns the workspace the caller asked this session to act on,
 // or "" for the caller's only workspace.
-func workspaceParam(r *http.Request) string {
+//
+// The shape is checked here rather than left to the dashboard because this
+// value is part of the session-key cache key and a miss costs a round trip to
+// the dashboard. Without a check, one caller could spend an unbounded number of
+// them by varying the parameter.
+func workspaceParam(r *http.Request) (string, error) {
 	values := r.URL.Query()["workspace"]
 	if len(values) == 0 {
-		return ""
+		return "", nil
 	}
-	return strings.TrimSpace(values[len(values)-1])
+	raw := strings.TrimSpace(values[len(values)-1])
+	if raw == "" {
+		return "", nil
+	}
+	if _, err := uuid.Parse(raw); err != nil {
+		return "", fmt.Errorf("invalid workspace query parameter: %q is not a workspace ID", raw)
+	}
+	return raw, nil
 }
 
 // httpAllowWrites returns true if the server is configured to allow writes and
