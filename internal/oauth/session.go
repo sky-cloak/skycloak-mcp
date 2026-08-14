@@ -25,6 +25,10 @@ var (
 	ErrNotPermitted = errors.New("not permitted")
 	// ErrExchangeFailed means the exchange itself did not complete.
 	ErrExchangeFailed = errors.New("session key exchange failed")
+	// ErrBadRequest means the dashboard rejected what we asked for, typically a
+	// malformed ?workspace= value. That is the caller's request to fix, not
+	// their permissions, so it must not be reported as a refusal.
+	ErrBadRequest = errors.New("invalid request")
 )
 
 const (
@@ -236,7 +240,7 @@ func exchangeError(resp *http.Response) error {
 		if len(payload.Workspaces) > 0 {
 			return &AmbiguousWorkspaceError{Choices: payload.Workspaces}
 		}
-		return fmt.Errorf("%w: %s", ErrNotPermitted, message(payload.Error, "the dashboard rejected the request"))
+		return fmt.Errorf("%w: %s", ErrBadRequest, message(payload.Error, "the dashboard rejected the request"))
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return fmt.Errorf("%w: %s", ErrNotPermitted, message(payload.Error, "the dashboard refused this sign-in"))
 	default:

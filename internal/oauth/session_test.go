@@ -214,6 +214,7 @@ func TestSessionClassifiesRefusals(t *testing.T) {
 		status int
 		want   error
 	}{
+		{"malformed workspace id", http.StatusBadRequest, ErrBadRequest},
 		{"token rejected", http.StatusUnauthorized, ErrNotPermitted},
 		{"not a member", http.StatusForbidden, ErrNotPermitted},
 		{"dashboard broken", http.StatusInternalServerError, ErrExchangeFailed},

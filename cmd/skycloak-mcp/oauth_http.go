@@ -152,6 +152,10 @@ func writeOAuthError(w http.ResponseWriter, r *http.Request, cfg httpConfig, err
 		http.Error(w, "the access token was not accepted; sign in again", http.StatusUnauthorized)
 	case errors.As(err, &ambiguous):
 		http.Error(w, ambiguous.Error(), http.StatusBadRequest)
+	case errors.Is(err, oauth.ErrBadRequest):
+		// The caller asked for something that does not parse, typically a bad
+		// ?workspace= value. Their request to fix, not their permissions.
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, errNoScopes), errors.Is(err, oauth.ErrNotPermitted):
 		http.Error(w, err.Error(), http.StatusForbidden)
 	default:

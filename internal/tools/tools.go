@@ -202,7 +202,9 @@ var toolAreas = []toolArea{
 	{name: "realms", scopes: []string{"realms:read"}, register: registerRealmReadTools},
 	{name: "applications", scopes: []string{"applications:read"}, register: registerApplicationReadTools},
 	{name: "identity providers", scopes: []string{"identity-providers:read"}, register: registerIdentityProviderReadTools},
-	{name: "observability", scopes: []string{"clusters:logs:read", "clusters:events:read", "clusters:security:read"}, register: registerObservabilityReadTools},
+	// Security logs are a log endpoint, not a security-settings one, so this
+	// area needs no clusters:security:read.
+	{name: "observability", scopes: []string{"clusters:logs:read", "clusters:events:read"}, register: registerObservabilityReadTools},
 	{name: "domains", scopes: []string{"domains:read"}, register: registerDomainReadTools},
 	{name: "branding", scopes: []string{"themes:read", "branding:read"}, register: registerBrandingReadTools},
 	{name: "extensions", scopes: []string{"extensions:read", "clusters:extensions:read"}, register: registerExtensionReadTools},

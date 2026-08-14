@@ -340,19 +340,37 @@ func TestAmbiguousWorkspaceIsAnActionableError(t *testing.T) {
 	}
 }
 
-// A refusal from the dashboard is the caller's problem (403), not ours (500).
-func TestDashboardRefusalIsForbidden(t *testing.T) {
-	st := newOAuthStack(t, writeSessionScopes)
-	st.dash.mu.Lock()
-	st.dash.status = http.StatusForbidden
-	st.dash.body = map[string]string{"error": "Email verification required"}
-	st.dash.mu.Unlock()
+// The dashboard's refusals have to keep their meaning: "you may not" is 403,
+// "that is not a workspace id" is 400, and a broken dashboard is 502 rather
+// than something the caller will waste time re-authenticating over.
+func TestDashboardRefusalsKeepTheirStatus(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		status   int
+		body     any
+		want     int
+		wantText string
+	}{
+		{"not permitted", http.StatusForbidden, map[string]string{"error": "Email verification required"}, http.StatusForbidden, "Email verification required"},
+		{"bad workspace id", http.StatusBadRequest, map[string]string{"error": "Invalid workspace ID"}, http.StatusBadRequest, "Invalid workspace ID"},
+		{"dashboard down", http.StatusInternalServerError, map[string]string{"error": "boom"}, http.StatusBadGateway, "session key"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			st := newOAuthStack(t, writeSessionScopes)
+			st.dash.mu.Lock()
+			st.dash.status, st.dash.body = tt.status, tt.body
+			st.dash.mu.Unlock()
 
-	resp := mcpPost(t, st.ts.URL, st.realm.token(t, "user-1"), "", initBody)
-	_, _ = io.Copy(io.Discard, resp.Body)
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", resp.StatusCode)
+			resp := mcpPost(t, st.ts.URL, st.realm.token(t, "user-1"), "", initBody)
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if resp.StatusCode != tt.want {
+				t.Fatalf("status = %d, want %d: %s", resp.StatusCode, tt.want, truncate(body))
+			}
+			if !strings.Contains(string(body), tt.wantText) {
+				t.Fatalf("body %q does not mention %q", truncate(body), tt.wantText)
+			}
+		})
 	}
 }
 
