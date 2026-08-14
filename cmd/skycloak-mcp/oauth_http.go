@@ -278,8 +278,24 @@ func logOAuthRejection(cfg httpConfig, status int, err error) {
 		fields = append(fields, fmt.Sprintf("dashboard_status=%d", statusErr.Status))
 	}
 
-	fields = append(fields, "err="+strconv.Quote(err.Error()))
+	fields = append(fields, "err="+quoteDetail(err.Error()))
 	cfg.logf("oauth request rejected: %s", strings.Join(fields, " "))
+}
+
+// maxLoggedDetail caps the error text a rejection line carries. Part of that
+// text is the caller's own: the key id sits in the unsigned token header and is
+// bounded only by how much of a request the server will read, so an uncapped
+// line lets one unauthenticated request write a log entry its own size.
+const maxLoggedDetail = 256
+
+// quoteDetail bounds and quotes an error message for the log. Quoting is what
+// keeps a newline in it from forging a second line; the cut can land inside a
+// multi-byte rune, which quoting renders as an escape rather than broken output.
+func quoteDetail(msg string) string {
+	if len(msg) > maxLoggedDetail {
+		return strconv.Quote(msg[:maxLoggedDetail]) + "(truncated)"
+	}
+	return strconv.Quote(msg)
 }
 
 // logStartupConfig records the wiring this process resolved, once. Both of the

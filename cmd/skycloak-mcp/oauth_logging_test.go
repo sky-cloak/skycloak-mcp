@@ -51,9 +51,12 @@ func (f *fakeRealm) signed(t *testing.T, kid string, claims jwt.MapClaims) strin
 // very different causes and no way to tell them apart.
 func TestRejectedOAuthRequestsAreLogged(t *testing.T) {
 	for _, tt := range []struct {
-		name  string
-		setup func(t *testing.T, st *oauthStack) string // returns the bearer to send
-		want  []string
+		name string
+		// noGrant makes the dashboard mint a key that carries no scopes, which is
+		// what the zero-scope check refuses.
+		noGrant bool
+		setup   func(t *testing.T, st *oauthStack) string // returns the bearer to send
+		want    []string
 	}{
 		{
 			name: "expired token",
@@ -103,7 +106,7 @@ func TestRejectedOAuthRequestsAreLogged(t *testing.T) {
 			want: []string{"stage=verify", "status=401", "reason=wrong_token_type"},
 		},
 		{
-			name: "malformed bearer",
+			name:  "malformed bearer",
 			setup: func(*testing.T, *oauthStack) string { return "not.a.jwt" },
 			want:  []string{"stage=verify", "status=401", "reason=malformed"},
 		},
@@ -125,10 +128,11 @@ func TestRejectedOAuthRequestsAreLogged(t *testing.T) {
 				st.dash.mu.Unlock()
 				return st.realm.token(t, "user-1")
 			},
-			want: []string{"stage=exchange", "status=403", "dashboard_status=403"},
+			want: []string{"stage=exchange", " status=403", "dashboard_status=403"},
 		},
 		{
-			name: "grant is empty",
+			name:    "grant is empty",
+			noGrant: true,
 			setup: func(t *testing.T, st *oauthStack) string {
 				return st.realm.token(t, "user-1")
 			},
@@ -137,7 +141,7 @@ func TestRejectedOAuthRequestsAreLogged(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			scopes := writeSessionScopes
-			if tt.name == "grant is empty" {
+			if tt.noGrant {
 				scopes = nil
 			}
 			st := newOAuthStack(t, scopes)
@@ -203,8 +207,8 @@ func TestOAuthRejectionLogsNeverCarryCredentials(t *testing.T) {
 	}
 }
 
-// tokenParts is every segment of a JWT long enough to be a credential on its
-// own; the header is short and shared, so it is not one.
+// tokenParts is every segment of a JWT big enough that finding it in a log
+// would mean part of the credential got there.
 func tokenParts(token string) []string {
 	var out []string
 	for _, part := range strings.Split(token, ".") {
@@ -213,6 +217,31 @@ func tokenParts(token string) []string {
 		}
 	}
 	return out
+}
+
+// Part of the logged error comes from the unsigned token header, which anyone
+// can fill with as much as the server will read. Without a cap, one
+// unauthenticated request writes a log line the size of the request.
+func TestRejectionLogLineIsBounded(t *testing.T) {
+	st := newOAuthStack(t, writeSessionScopes)
+
+	huge := strings.Repeat("k", 64<<10)
+	token := st.realm.signed(t, huge, jwt.MapClaims{
+		"iss": st.realm.srv.URL, "sub": "user-1",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+
+	resp := mcpPost(t, st.ts.URL, token, "", initBody)
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
+	got := st.logs.String()
+	if !strings.Contains(got, "reason=unknown_key_id") {
+		t.Fatalf("log %q does not name the rejection", truncate([]byte(got)))
+	}
+	if len(got) > 1024 {
+		t.Fatalf("one rejection wrote %d bytes of log; the caller's key id is not capped", len(got))
+	}
 }
 
 // A verification failure happens before there is a verified subject, so nothing
@@ -238,6 +267,11 @@ func TestSuccessfulResolutionIsNotLogged(t *testing.T) {
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
 
+	// Without this the test also passes when the request was refused on a path
+	// that happens not to log, which proves nothing about a successful one.
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200: the request under test was not accepted", resp.StatusCode)
+	}
 	if got := st.logs.String(); got != "" {
 		t.Fatalf("a successful request logged %q, want nothing", got)
 	}
