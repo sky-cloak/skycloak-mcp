@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-14
+
 ### Fixed
 - The hosted OAuth sign-in advertises the scopes it needs, so it stops failing at the token exchange with `stage=exchange status=403 dashboard_status=401`. The protected-resource metadata carried no `scopes_supported` and the `WWW-Authenticate` challenge carried no `scope`, so a client following RFC 9728 had nothing to ask for and requested none. Keycloak then issued a token without `openid`, which verifies and passes introspection but makes Keycloak's userinfo endpoint answer `403` when the dashboard validates it, so a sign-in that looked correct at every earlier step died at the last one. Both the document and the challenge now name `openid profile email`.
 - A token granted without `openid` is refused at verification, as `no_openid_scope`, instead of being carried to an exchange that cannot succeed. Advertising the scopes only helps a client that has yet to sign in: one that connected before holds a refresh token from the old grant, and every access token minted from it inherits the gap. Those requests used to end in a `403` with nothing to act on, so the client retried the same doomed token until its realm session lapsed. They are now answered with a `401` and the challenge, which is what makes a client authorize again and come back with the right scopes.
@@ -112,7 +114,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
 - `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
-[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.5.0...v0.5.1
