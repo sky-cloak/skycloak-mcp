@@ -31,6 +31,83 @@ import (
 // matching on message text.
 var ErrInvalidToken = errors.New("invalid token")
 
+// VerifyReason names the check a token failed. Every rejection is answered with
+// the same 401, so this is what tells an expired token from one signed by
+// another realm, or from a key the realm has rotated out.
+type VerifyReason string
+
+// Every way a token can be refused, from the shape of the bearer through to the
+// claims the realm signed.
+const (
+	ReasonEmptyToken     VerifyReason = "empty_token"
+	ReasonMalformed      VerifyReason = "malformed"
+	ReasonBadSignature   VerifyReason = "bad_signature"
+	ReasonWrongIssuer    VerifyReason = "wrong_issuer"
+	ReasonExpired        VerifyReason = "expired"
+	ReasonNotYetValid    VerifyReason = "not_yet_valid"
+	ReasonNoKeyID        VerifyReason = "no_key_id"
+	ReasonUnknownKeyID   VerifyReason = "unknown_key_id"
+	ReasonKeysUnusable   VerifyReason = "signing_keys_unusable"
+	ReasonWrongTokenType VerifyReason = "wrong_token_type"
+	ReasonNoSubject      VerifyReason = "no_subject"
+	ReasonNoExpiry       VerifyReason = "no_expiry"
+	ReasonRejected       VerifyReason = "rejected"
+)
+
+// VerifyError is a rejection that carries which check produced it. Detail is
+// the underlying message, which never contains the token.
+type VerifyError struct {
+	Reason VerifyReason
+	Detail string
+}
+
+func (e *VerifyError) Error() string {
+	return fmt.Sprintf("%s (%s): %s", ErrInvalidToken, e.Reason, e.Detail)
+}
+
+// Unwrap keeps errors.Is(err, ErrInvalidToken) working for callers that only
+// care about the status to answer with.
+func (e *VerifyError) Unwrap() error { return ErrInvalidToken }
+
+// Sentinels for the two ways key resolution fails, so a rejection can name them
+// rather than being flattened into "unverifiable" by the JWT library.
+var (
+	errNoKeyID      = errors.New("token header carries no key id")
+	errUnknownKeyID = errors.New("unknown signing key id")
+)
+
+func rejected(reason VerifyReason, detail string) error {
+	return &VerifyError{Reason: reason, Detail: detail}
+}
+
+// classify maps a parse failure onto the check that caused it. Key resolution
+// is tested first: the library reports both as "unverifiable", which would hide
+// a rotated-out key behind an unreachable issuer.
+func classify(err error) VerifyReason {
+	switch {
+	case errors.Is(err, errUnknownKeyID):
+		return ReasonUnknownKeyID
+	case errors.Is(err, errNoKeyID):
+		return ReasonNoKeyID
+	case errors.Is(err, jwt.ErrTokenExpired):
+		return ReasonExpired
+	case errors.Is(err, jwt.ErrTokenNotValidYet):
+		return ReasonNotYetValid
+	case errors.Is(err, jwt.ErrTokenInvalidIssuer):
+		return ReasonWrongIssuer
+	case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+		return ReasonBadSignature
+	case errors.Is(err, jwt.ErrTokenMalformed):
+		return ReasonMalformed
+	case errors.Is(err, jwt.ErrTokenUnverifiable):
+		// The key set itself could not be resolved or the algorithm is one we do
+		// not accept: the realm, not the token.
+		return ReasonKeysUnusable
+	default:
+		return ReasonRejected
+	}
+}
+
 // minRefetchInterval bounds how often the key set may be refetched. A kid sits
 // in the unsigned header, so anyone can put anything there; without a floor,
 // junk tokens from an unauthenticated caller would turn into a request to
@@ -102,7 +179,7 @@ func NewVerifier(issuer string, hc *http.Client) *Verifier {
 // Verify checks a raw access token and returns its claims.
 func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 	if strings.TrimSpace(raw) == "" {
-		return nil, fmt.Errorf("%w: empty bearer token", ErrInvalidToken)
+		return nil, rejected(ReasonEmptyToken, "empty bearer token")
 	}
 
 	var claims realmClaims
@@ -113,13 +190,13 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 	if err != nil {
 		// The token itself never appears in the message: it is a live credential,
 		// and this error is returned to the caller and may be logged.
-		return nil, fmt.Errorf("%w: %s", ErrInvalidToken, err)
+		return nil, rejected(classify(err), err.Error())
 	}
 	if claims.Subject == "" {
-		return nil, fmt.Errorf("%w: token carries no subject", ErrInvalidToken)
+		return nil, rejected(ReasonNoSubject, "token carries no subject")
 	}
 	if claims.ExpiresAt == nil {
-		return nil, fmt.Errorf("%w: token carries no expiry", ErrInvalidToken)
+		return nil, rejected(ReasonNoExpiry, "token carries no expiry")
 	}
 	// The realm signs more than access tokens, and they share an issuer and a
 	// signing key. An ID token in particular is handed to browser front-ends and
@@ -132,7 +209,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (*Claims, error) {
 	// the whole sign-in at the mercy of a realm setting. Issuer, expiry and
 	// signature still bind it.
 	if claims.Type != "" && !strings.EqualFold(claims.Type, "Bearer") {
-		return nil, fmt.Errorf("%w: %q is not an access token", ErrInvalidToken, claims.Type)
+		return nil, rejected(ReasonWrongTokenType, fmt.Sprintf("%q is not an access token", claims.Type))
 	}
 	return &Claims{Subject: claims.Subject}, nil
 }
@@ -166,7 +243,7 @@ type realmClaims struct {
 func (v *Verifier) keyFor(ctx context.Context, t *jwt.Token) (*rsa.PublicKey, error) {
 	kid, _ := t.Header["kid"].(string)
 	if kid == "" {
-		return nil, errors.New("token header carries no key id")
+		return nil, errNoKeyID
 	}
 
 	v.mu.Lock()
@@ -195,7 +272,7 @@ func (v *Verifier) keyFor(ctx context.Context, t *jwt.Token) (*rsa.PublicKey, er
 	if err != nil {
 		return nil, err
 	}
-	return nil, fmt.Errorf("unknown signing key id %q", kid)
+	return nil, fmt.Errorf("%w %q", errUnknownKeyID, kid)
 }
 
 // refetch reloads the realm's key set, discovering the JWKS URI first if it is

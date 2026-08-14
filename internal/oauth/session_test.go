@@ -208,6 +208,27 @@ func TestSessionSurfacesTheAmbiguousWorkspaceChoice(t *testing.T) {
 	}
 }
 
+// Every refusal is remapped onto a status of our own, so the dashboard's own
+// answer has to travel with the error or a 502 says nothing about what the
+// dashboard actually did.
+func TestSessionCarriesTheDashboardStatus(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusForbidden, http.StatusInternalServerError, http.StatusBadGateway} {
+		dash := newFakeDashboard(t)
+		dash.status = status
+		dash.body = map[string]string{"error": "nope"}
+		ex := NewExchanger(dash.srv.URL, dash.srv.Client())
+
+		_, err := ex.Session(t.Context(), "tok", "user-1", "")
+		var statusErr *StatusError
+		if !errors.As(err, &statusErr) {
+			t.Fatalf("error = %v (%T), want a *StatusError", err, err)
+		}
+		if statusErr.Status != status {
+			t.Fatalf("Status = %d, want %d", statusErr.Status, status)
+		}
+	}
+}
+
 func TestSessionClassifiesRefusals(t *testing.T) {
 	for _, tt := range []struct {
 		name   string

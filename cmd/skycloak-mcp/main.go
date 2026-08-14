@@ -148,7 +148,7 @@ func runServer(ctx context.Context, args []string) {
 		// production defaults, so the OAuth path is on unless a deployment
 		// deliberately blanks them.
 		authCfg := auth.ConfigFromEnv()
-		handler := newHTTPHandler(httpConfig{
+		cfg := httpConfig{
 			endpoint:     endpoint,
 			apiVersion:   apiVersion,
 			userAgent:    userAgent,
@@ -156,8 +156,8 @@ func runServer(ctx context.Context, args []string) {
 			issuer:       authCfg.Issuer,
 			dashboardURL: authCfg.DashboardURL,
 			publicURL:    os.Getenv("SKYCLOAK_PUBLIC_URL"),
-		})
-		srv := newHTTPServer(*httpAddr, handler)
+		}
+		srv := newHTTPServer(*httpAddr, newHTTPHandler(cfg))
 		ln, err := net.Listen("tcp", *httpAddr)
 		if err != nil {
 			log.Fatalf("listen %s: %v", *httpAddr, err)
@@ -165,6 +165,7 @@ func runServer(ctx context.Context, args []string) {
 		signalCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		log.Printf("skycloak-mcp %s listening on %s (streamable HTTP)", version, ln.Addr())
+		logStartupConfig(cfg)
 		if err := serveWithShutdown(signalCtx, srv, ln); err != nil {
 			log.Fatalf("server error: %v", err)
 		}
@@ -197,6 +198,20 @@ type httpConfig struct {
 	// `resource` identifier in RFC 9728 metadata. Empty means derive it from each
 	// request, which is what a single-host deployment behind a proxy wants.
 	publicURL string
+
+	// logger receives the diagnostic lines this transport writes. Nil is the
+	// standard logger, which is what the process uses; a test supplies its own to
+	// read back what a rejected request recorded.
+	logger *log.Logger
+}
+
+// logf writes one diagnostic line. Nothing it is given may be a credential.
+func (c httpConfig) logf(format string, args ...any) {
+	logger := c.logger
+	if logger == nil {
+		logger = log.Default()
+	}
+	logger.Printf(format, args...)
 }
 
 // newHTTPHandler serves MCP over streamable HTTP, authenticating every request

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"log"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -149,12 +150,15 @@ func readSessionScopes() []string {
 	return out
 }
 
-// oauthStack wires a realm, a dashboard, an upstream API and the handler.
+// oauthStack wires a realm, a dashboard, an upstream API and the handler. Its
+// logs are captured rather than printed, so a test can read what a rejected
+// request recorded.
 type oauthStack struct {
 	realm    *fakeRealm
 	dash     *fakeSessionKeyAPI
 	upstream *fakeUpstream
 	ts       *httptest.Server
+	logs     *safeBuffer
 }
 
 func newOAuthStack(t *testing.T, scopes []string) *oauthStack {
@@ -163,6 +167,7 @@ func newOAuthStack(t *testing.T, scopes []string) *oauthStack {
 		realm:    newFakeRealm(t),
 		dash:     newFakeSessionKeyAPI(t, scopes),
 		upstream: newFakeUpstream(t),
+		logs:     &safeBuffer{},
 	}
 	st.ts = httptest.NewServer(newHTTPHandler(httpConfig{
 		endpoint:     st.upstream.srv.URL,
@@ -171,6 +176,7 @@ func newOAuthStack(t *testing.T, scopes []string) *oauthStack {
 		allowWrites:  true,
 		issuer:       st.realm.srv.URL,
 		dashboardURL: st.dash.srv.URL,
+		logger:       log.New(st.logs, "", 0),
 	}))
 	t.Cleanup(st.ts.Close)
 	return st
