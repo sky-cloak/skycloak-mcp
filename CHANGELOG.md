@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-08-15
+
 ### Fixed
 - Every tool parameter that maps to an API enum accepts any case, not just the two #31 reached. Thirty-one more were forwarding the model's spelling untouched, so `create_cluster(size="Large")`, `create_export(format="SQL")`, `upsert_smtp(encryption="STARTTLS")`, the SIEM destination transports and the WAF, geo-blocking and bot-management modes all answered `422 Validation Failed: Invalid parameter` with nothing in it pointing at the case. Each parameter is folded to the case its own enum uses, which cannot be a blanket lowercase because `UserEventType`, `AdminOperationType` and `DnsRecordType` are uppercase. A value the enum does not list is still passed through untouched, so a value the API grows after this release reaches it and the API's own error is what the caller sees.
 - `get_cluster_insights` refuses a `type` it does not recognise instead of answering with the overview document. The five insight kinds are five endpoints, so the client picks the path and the value never reaches the API: a typo, or the right word in the wrong case, used to return a different document than the one asked for, successfully. Correct values in any case still work; anything else now names the five that are valid.
@@ -127,7 +129,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Automatic `Retry-After`-aware retries on `429`/`5xx` responses.
 - `spec-sync` workflow + `scripts/check-api-coverage.sh` that detect upstream OpenAPI drift and report API operations not yet exposed as tools.
 
-[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/sky-cloak/skycloak-mcp/compare/v0.6.0...v0.6.1
