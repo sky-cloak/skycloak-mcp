@@ -73,7 +73,7 @@ type SIEMBatchConfig struct {
 
 // SIEMSourceConfig selects workspace data forwarded to SIEM.
 type SIEMSourceConfig struct {
-	Type               string   `json:"type"`
+	Type               string   `json:"type" jsonschema:"data to forward: keycloak_events, application_logs, security_logs, or skycloak_audit (case-insensitive)"`
 	ClusterIDs         []string `json:"cluster_ids,omitempty"`
 	Realms             []string `json:"realms,omitempty"`
 	KeycloakEventTypes []string `json:"keycloak_event_types,omitempty"`
@@ -83,13 +83,13 @@ type SIEMSourceConfig struct {
 type SIEMSyslogConfig struct {
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
-	Protocol string `json:"protocol"`
-	Format   string `json:"format"`
+	Protocol string `json:"protocol" jsonschema:"transport: udp, tcp, or tls (case-insensitive)"`
+	Format   string `json:"format" jsonschema:"message format: cef, leef, rfc5424, or json (case-insensitive)"`
 }
 
 // SIEMS3Config configures an S3 SIEM destination request.
 type SIEMS3Config struct {
-	AuthType        string `json:"auth_type"`
+	AuthType        string `json:"auth_type" jsonschema:"authentication: access_key, iam_role, assume_role, or irsa (case-insensitive)"`
 	Bucket          string `json:"bucket"`
 	Region          string `json:"region"`
 	Prefix          string `json:"prefix,omitempty"`
@@ -102,7 +102,7 @@ type SIEMS3Config struct {
 // SIEMHTTPConfig configures an HTTP SIEM destination request.
 type SIEMHTTPConfig struct {
 	URL         string            `json:"url"`
-	AuthType    string            `json:"auth_type"`
+	AuthType    string            `json:"auth_type" jsonschema:"authentication: none, bearer, or basic (case-insensitive)"`
 	Username    string            `json:"username,omitempty"`
 	Password    string            `json:"password,omitempty"`
 	BearerToken string            `json:"bearer_token,omitempty"`
@@ -153,7 +153,7 @@ type SIEMDestination struct {
 // CreateSIEMDestinationRequest creates a SIEM destination.
 type CreateSIEMDestinationRequest struct {
 	Name   string            `json:"name"`
-	Type   string            `json:"type"`
+	Type   string            `json:"type" jsonschema:"destination transport: syslog, s3, or http (case-insensitive)"`
 	Source SIEMSourceConfig  `json:"source"`
 	Batch  *SIEMBatchConfig  `json:"batch,omitempty"`
 	Syslog *SIEMSyslogConfig `json:"syslog,omitempty"`
@@ -386,7 +386,7 @@ type WebhookEventType struct {
 
 // ListWebhookSubscriptionsFilter filters webhook subscriptions.
 type ListWebhookSubscriptionsFilter struct {
-	Source    string `json:"source,omitempty"`
+	Source    string `json:"source,omitempty" jsonschema:"optional source filter: keycloak or platform (case-insensitive)"`
 	ClusterID string `json:"cluster_id,omitempty"`
 	Enabled   *bool  `json:"enabled,omitempty"`
 }
@@ -411,7 +411,7 @@ type WebhookSubscription struct {
 type CreateWebhookSubscriptionRequest struct {
 	Name                string   `json:"name"`
 	URL                 string   `json:"url"`
-	Source              string   `json:"source"`
+	Source              string   `json:"source" jsonschema:"event source: keycloak or platform (case-insensitive)"`
 	EventTypes          []string `json:"event_types"`
 	SigningSecret       string   `json:"signing_secret"`
 	AuthorizationHeader string   `json:"authorization_header,omitempty"`
@@ -424,7 +424,7 @@ type CreateWebhookSubscriptionRequest struct {
 type UpdateWebhookSubscriptionRequest struct {
 	Name                     *string   `json:"name,omitempty"`
 	URL                      *string   `json:"url,omitempty"`
-	Source                   *string   `json:"source,omitempty"`
+	Source                   *string   `json:"source,omitempty" jsonschema:"new event source: keycloak or platform (case-insensitive)"`
 	EventTypes               *[]string `json:"event_types,omitempty"`
 	SigningSecret            *string   `json:"signing_secret,omitempty"`
 	AuthorizationHeader      *string   `json:"authorization_header,omitempty"`

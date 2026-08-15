@@ -73,6 +73,7 @@ func updateClusterSecurityHandler(api API) mcp.ToolHandlerFor[UpdateClusterSecur
 			IPAccessControl: in.IPAccessControl, RateLimiting: in.RateLimiting, WAF: in.WAF,
 			GeoBlocking: in.GeoBlocking, BotManagement: in.BotManagement,
 		}
+		normaliseClusterSecurity(sec)
 		updated, err := api.UpdateClusterSecurity(ctx, in.ClusterID, sec)
 		if err != nil {
 			return toolError(err), skycloak.ClusterSecurity{}, nil

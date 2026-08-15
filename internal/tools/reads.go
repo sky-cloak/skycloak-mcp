@@ -109,7 +109,7 @@ func getApplicationHandler(api API) mcp.ToolHandlerFor[AppRef, skycloak.Applicat
 type IDPRef struct {
 	ClusterID  string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm      string `json:"realm" jsonschema:"the Keycloak realm name"`
-	ProviderID string `json:"provider_id" jsonschema:"the identity provider ID"`
+	ProviderID string `json:"provider_id" jsonschema:"the identity provider alias, exactly as skycloak_list_identity_providers reports it (case-sensitive)"`
 }
 
 func getIdentityProviderHandler(api API) mcp.ToolHandlerFor[IDPRef, skycloak.IdentityProvider] {
@@ -187,7 +187,7 @@ func listClusterFeaturesHandler(api API) mcp.ToolHandlerFor[NoInput, FeaturesOut
 
 // ClusterTypeInput selects a cluster type.
 type ClusterTypeInput struct {
-	Type string `json:"type" jsonschema:"cluster type: keycloak or tidecloak"`
+	Type string `json:"type" jsonschema:"cluster type: keycloak or tidecloak (case-insensitive)"`
 }
 
 // VersionsOutput is the structured version list.
@@ -197,10 +197,11 @@ type VersionsOutput struct {
 
 func listClusterVersionsHandler(api API) mcp.ToolHandlerFor[ClusterTypeInput, VersionsOutput] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in ClusterTypeInput) (*mcp.CallToolResult, VersionsOutput, error) {
-		if in.Type == "" {
+		clusterType := enumClusterType.canonical(in.Type)
+		if clusterType == "" {
 			return errResult("type is required"), VersionsOutput{}, nil
 		}
-		versions, err := api.ClusterTypeVersions(ctx, in.Type)
+		versions, err := api.ClusterTypeVersions(ctx, clusterType)
 		if err != nil {
 			return toolError(err), VersionsOutput{}, nil
 		}

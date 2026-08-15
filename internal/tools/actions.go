@@ -82,7 +82,7 @@ func testSMTPHandler(api API) mcp.ToolHandlerFor[TestSMTPInput, skycloak.TestRes
 type TestIDPInput struct {
 	ClusterID    string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm        string `json:"realm" jsonschema:"the Keycloak realm name"`
-	ProviderID   string `json:"provider_id" jsonschema:"the identity provider ID"`
+	ProviderID   string `json:"provider_id" jsonschema:"the identity provider alias, exactly as skycloak_list_identity_providers reports it (case-sensitive)"`
 	ClientID     string `json:"client_id,omitempty" jsonschema:"override client ID for this test only"`
 	ClientSecret string `json:"client_secret,omitempty" jsonschema:"override client secret for this test only"`
 }

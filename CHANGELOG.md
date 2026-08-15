@@ -6,6 +6,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Every tool parameter that maps to an API enum accepts any case, not just the two #31 reached. Thirty-one more were forwarding the model's spelling untouched, so `create_cluster(size="Large")`, `create_export(format="SQL")`, `upsert_smtp(encryption="STARTTLS")`, the SIEM destination transports and the WAF, geo-blocking and bot-management modes all answered `422 Validation Failed: Invalid parameter` with nothing in it pointing at the case. Each parameter is folded to the case its own enum uses, which cannot be a blanket lowercase because `UserEventType`, `AdminOperationType` and `DnsRecordType` are uppercase. A value the enum does not list is still passed through untouched, so a value the API grows after this release reaches it and the API's own error is what the caller sees.
+- `get_cluster_insights` refuses a `type` it does not recognise instead of answering with the overview document. The five insight kinds are five endpoints, so the client picks the path and the value never reaches the API: a typo, or the right word in the wrong case, used to return a different document than the one asked for, successfully. Correct values in any case still work; anything else now names the five that are valid.
+- The affected tool descriptions state the values they accept and that case does not matter, across all of them rather than the two that already did. Two of fifteen advertising case-insensitivity was worse than none: a model generalising from those two hit an opaque failure everywhere else. `create_identity_provider` described its `provider_id` as a free-form alias when the spec declares it the `SkycloakProviderId` enum; the description now says so and points at `skycloak_list_identity_provider_templates` for the values. The provider alias in the other four identity-provider tools is a free-form string in the spec, so it stays case-sensitive and its description says so.
+
+### Added
+- The enum inventory is checked against the committed `openapi.yaml`, so it cannot drift back. A value spelled differently from the spec, an enum that gains or loses one, a normalised parameter whose description stops naming what it accepts, and a newly added tool parameter that carries an API enum with no normalisation each fail the build instead of a user's call. The checks drive the registered tools by name over an in-memory MCP session, so a tool wired to a handler that skips the normalisation fails too.
+
 ## [0.6.3] - 2026-08-14
 
 ### Fixed

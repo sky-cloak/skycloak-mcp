@@ -12,14 +12,6 @@ import (
 
 const defaultLogLimit = 50
 
-// lowerEnum canonicalises a value whose API enum is lowercase. The API answers
-// any other case with a 422 that does not say the case was the problem. It is
-// applied per parameter, not blanket: other Skycloak enums (event types, admin
-// operations, DNS record types) are uppercase.
-func lowerEnum(s string) string {
-	return strings.ToLower(strings.TrimSpace(s))
-}
-
 func registerObservabilityReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_logs",
@@ -63,7 +55,7 @@ func getLogsHandler(api API) mcp.ToolHandlerFor[GetLogsInput, LogsOutput] {
 		if limit <= 0 {
 			limit = defaultLogLimit
 		}
-		logs, err := api.GetLogs(ctx, in.ClusterID, skycloak.LogQuery{Limit: limit, Level: lowerEnum(in.Level), Search: in.Search})
+		logs, err := api.GetLogs(ctx, in.ClusterID, skycloak.LogQuery{Limit: limit, Level: enumLogLevel.canonical(in.Level), Search: in.Search})
 		if err != nil {
 			return toolError(err), LogsOutput{}, nil
 		}
@@ -140,7 +132,7 @@ func queryEventsHandler(api API) mcp.ToolHandlerFor[QueryEventsInput, EventsOutp
 		if limit <= 0 {
 			limit = defaultLogLimit
 		}
-		events, err := api.QueryEvents(ctx, in.ClusterID, skycloak.EventQuery{Limit: limit, Category: lowerEnum(in.Category), Realm: in.Realm, Username: in.Username, Search: in.Search})
+		events, err := api.QueryEvents(ctx, in.ClusterID, skycloak.EventQuery{Limit: limit, Category: enumEventCategory.canonical(in.Category), Realm: in.Realm, Username: in.Username, Search: in.Search})
 		if err != nil {
 			return toolError(err), EventsOutput{}, nil
 		}
