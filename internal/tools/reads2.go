@@ -140,6 +140,9 @@ func getClusterInsightsHandler(api API) mcp.ToolHandlerFor[InsightsInput, Insigh
 		if in.ClusterID == "" {
 			return errResult("cluster_id is required"), InsightsOutput{}, nil
 		}
+		if in.Type != "" && !enumInsightType.has(in.Type) {
+			return errResult(fmt.Sprintf("type %q is not an insight document; use one of: %s", in.Type, enumInsightType.list())), InsightsOutput{}, nil
+		}
 		raw, err := api.ClusterInsights(ctx, in.ClusterID, enumInsightType.canonical(in.Type))
 		if err != nil {
 			return toolError(err), InsightsOutput{}, nil

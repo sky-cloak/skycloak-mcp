@@ -72,7 +72,7 @@ type WAF struct {
 // GeoBlocking restricts access by country.
 type GeoBlocking struct {
 	Enabled   bool     `json:"enabled"`
-	Mode      string   `json:"mode" jsonschema:"how countries is read: allowlist or blocklist (case-insensitive)"`
+	Mode      string   `json:"mode" jsonschema:"how the countries list is applied: allowlist or blocklist (case-insensitive)"`
 	Countries []string `json:"countries"`
 }
 

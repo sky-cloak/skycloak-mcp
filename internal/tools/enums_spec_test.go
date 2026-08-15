@@ -141,7 +141,7 @@ func TestEnumValuesMatchTheSpec(t *testing.T) {
 func TestInsightTypesMatchTheSpecPaths(t *testing.T) {
 	doc := specDoc(t)
 	paths, _ := doc["paths"].(map[string]any)
-	re := regexp.MustCompile(`^/clusters/\{[^}]+\}/insights/([a-z_]+)$`)
+	re := regexp.MustCompile(`^/clusters/\{[^}]+\}/insights/([a-z0-9_-]+)$`)
 
 	var want []string
 	for p := range paths {
@@ -299,8 +299,19 @@ func schemaHasType(prop map[string]any, want string) bool {
 
 // enumParamExemptions lists tool fields that share a name with an enum-backed
 // API field but are not one, so the coverage check can stay strict. Each entry
-// needs a reason; an empty map means every name-matched field is normalised.
-var enumParamExemptions = map[string]string{}
+// needs a reason.
+//
+// provider_id is the same name on both sides of a real distinction: the create
+// request body types it as the SkycloakProviderId enum, while the four lookups
+// take it as a path segment the spec types as ProviderId, a free-form alias
+// matching ^[a-zA-Z0-9_-]+$. Folding the alias would point a lookup, or a
+// delete, at whichever provider happens to differ from it only by case.
+var enumParamExemptions = map[string]string{
+	"skycloak_get_identity_provider.provider_id":    "path segment: an alias (ProviderId), not the SkycloakProviderId enum",
+	"skycloak_update_identity_provider.provider_id": "path segment: an alias (ProviderId), not the SkycloakProviderId enum",
+	"skycloak_delete_identity_provider.provider_id": "path segment: an alias (ProviderId), not the SkycloakProviderId enum",
+	"skycloak_test_identity_provider.provider_id":   "path segment: an alias (ProviderId), not the SkycloakProviderId enum",
+}
 
 // The point of the sweep: a parameter that carries an API enum and is not
 // normalised fails the caller with a 422 that never mentions the case. Adding a

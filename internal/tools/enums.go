@@ -19,12 +19,16 @@ type apiEnum struct {
 	// or "" when they come from the paths rather than a named schema.
 	schema string
 	values []string
+	// closed marks an enum this package resolves itself rather than forwarding.
+	// An unrecognised value cannot be passed to the API for it to reject,
+	// because the API never sees it, so the tool has to refuse it here.
+	closed bool
 }
 
 // canonical folds v to the casing its own enum uses. A value that matches
 // nothing is returned trimmed but otherwise untouched, so a value the API has
 // grown since this build still reaches it and the API's own error is what the
-// caller sees.
+// caller sees. That only works for values we forward: see closed.
 func (e apiEnum) canonical(v string) string {
 	t := strings.TrimSpace(v)
 	for _, want := range e.values {
@@ -34,6 +38,20 @@ func (e apiEnum) canonical(v string) string {
 	}
 	return t
 }
+
+// has reports whether v is one of the values, in any case.
+func (e apiEnum) has(v string) bool {
+	t := strings.TrimSpace(v)
+	for _, want := range e.values {
+		if strings.EqualFold(t, want) {
+			return true
+		}
+	}
+	return false
+}
+
+// list renders the values for an error message.
+func (e apiEnum) list() string { return strings.Join(e.values, ", ") }
 
 // canonicalPtr normalises through a pointer, leaving an absent value absent.
 func (e apiEnum) canonicalPtr(v *string) *string {
@@ -45,28 +63,28 @@ func (e apiEnum) canonicalPtr(v *string) *string {
 }
 
 var (
-	enumLogLevel            = apiEnum{"LogLevel", []string{"info", "warn", "error", "debug"}}
-	enumEventCategory       = apiEnum{"EventCategory", []string{"user", "admin"}}
-	enumExportFormat        = apiEnum{"ExportFormat", []string{"sql", "pgdump"}}
-	enumApplicationType     = apiEnum{"ApplicationType", []string{"confidential", "public"}}
-	enumApplicationProtocol = apiEnum{"ApplicationProtocol", []string{"openid-connect", "saml"}}
-	enumClusterType         = apiEnum{"ClusterType", []string{"keycloak", "tidecloak"}}
-	enumClusterSize         = apiEnum{"ClusterSize", []string{"small", "medium", "large"}}
-	enumClusterLocation     = apiEnum{"ClusterLocation", []string{"us", "ca", "au", "eu"}}
-	enumSMTPEncryption      = apiEnum{"SmtpEncryption", []string{"none", "ssl", "starttls"}}
-	enumWebhookSource       = apiEnum{"WebhookSource", []string{"keycloak", "platform"}}
-	enumSIEMDestinationType = apiEnum{"SIEMDestinationType", []string{"syslog", "s3", "http"}}
-	enumSIEMSourceType      = apiEnum{"SIEMSourceType", []string{"keycloak_events", "application_logs", "security_logs", "skycloak_audit"}}
-	enumSyslogProtocol      = apiEnum{"SyslogProtocol", []string{"udp", "tcp", "tls"}}
-	enumSyslogFormat        = apiEnum{"SyslogFormat", []string{"cef", "leef", "rfc5424", "json"}}
-	enumHTTPAuthType        = apiEnum{"HTTPAuthType", []string{"none", "bearer", "basic"}}
-	enumS3AuthType          = apiEnum{"S3AuthType", []string{"access_key", "iam_role", "assume_role", "irsa"}}
-	enumSecurityMode        = apiEnum{"SecurityMode", []string{"detect", "block"}}
-	enumWAFPreset           = apiEnum{"WAFPreset", []string{"full_crs", "owasp_top_10", "custom"}}
-	enumBotChallengeMode    = apiEnum{"BotChallengeMode", []string{"none", "javascript", "captcha"}}
-	enumGeoBlockingMode     = apiEnum{"GeoBlockingMode", []string{"allowlist", "blocklist"}}
+	enumLogLevel            = apiEnum{schema: "LogLevel", values: []string{"info", "warn", "error", "debug"}}
+	enumEventCategory       = apiEnum{schema: "EventCategory", values: []string{"user", "admin"}}
+	enumExportFormat        = apiEnum{schema: "ExportFormat", values: []string{"sql", "pgdump"}}
+	enumApplicationType     = apiEnum{schema: "ApplicationType", values: []string{"confidential", "public"}}
+	enumApplicationProtocol = apiEnum{schema: "ApplicationProtocol", values: []string{"openid-connect", "saml"}}
+	enumClusterType         = apiEnum{schema: "ClusterType", values: []string{"keycloak", "tidecloak"}}
+	enumClusterSize         = apiEnum{schema: "ClusterSize", values: []string{"small", "medium", "large"}}
+	enumClusterLocation     = apiEnum{schema: "ClusterLocation", values: []string{"us", "ca", "au", "eu"}}
+	enumSMTPEncryption      = apiEnum{schema: "SmtpEncryption", values: []string{"none", "ssl", "starttls"}}
+	enumWebhookSource       = apiEnum{schema: "WebhookSource", values: []string{"keycloak", "platform"}}
+	enumSIEMDestinationType = apiEnum{schema: "SIEMDestinationType", values: []string{"syslog", "s3", "http"}}
+	enumSIEMSourceType      = apiEnum{schema: "SIEMSourceType", values: []string{"keycloak_events", "application_logs", "security_logs", "skycloak_audit"}}
+	enumSyslogProtocol      = apiEnum{schema: "SyslogProtocol", values: []string{"udp", "tcp", "tls"}}
+	enumSyslogFormat        = apiEnum{schema: "SyslogFormat", values: []string{"cef", "leef", "rfc5424", "json"}}
+	enumHTTPAuthType        = apiEnum{schema: "HTTPAuthType", values: []string{"none", "bearer", "basic"}}
+	enumS3AuthType          = apiEnum{schema: "S3AuthType", values: []string{"access_key", "iam_role", "assume_role", "irsa"}}
+	enumSecurityMode        = apiEnum{schema: "SecurityMode", values: []string{"detect", "block"}}
+	enumWAFPreset           = apiEnum{schema: "WAFPreset", values: []string{"full_crs", "owasp_top_10", "custom"}}
+	enumBotChallengeMode    = apiEnum{schema: "BotChallengeMode", values: []string{"none", "javascript", "captcha"}}
+	enumGeoBlockingMode     = apiEnum{schema: "GeoBlockingMode", values: []string{"allowlist", "blocklist"}}
 
-	enumProviderID = apiEnum{"SkycloakProviderId", []string{
+	enumProviderID = apiEnum{schema: "SkycloakProviderId", values: []string{
 		"oidc", "saml", "keycloak-oidc", "google", "github", "microsoft", "facebook",
 		"gitlab", "bitbucket", "linkedin-openid-connect", "twitter", "instagram",
 		"paypal", "stackoverflow", "openshift-v4", "google-workspace", "okta-oidc",
@@ -78,10 +96,10 @@ var (
 	}}
 
 	// The insight kinds are separate endpoints rather than one enum, so the
-	// values come from the /insights/… paths. Getting the case wrong here used
-	// to fall through to the overview document, which answers the wrong
-	// question without erroring.
-	enumInsightType = apiEnum{"", []string{"overview", "authentication", "events", "performance", "security"}}
+	// values come from the /insights/… paths, and the client picks the path.
+	// That makes it closed: an unrecognised kind used to fall through to the
+	// overview document, answering a different question without erroring.
+	enumInsightType = apiEnum{values: []string{"overview", "authentication", "events", "performance", "security"}, closed: true}
 )
 
 // enumParam is one tool input field that maps to an API enum. field is the
@@ -131,13 +149,7 @@ var enumParams = []enumParam{
 	{"skycloak_update_cluster_security", "geo_blocking.mode", enumGeoBlockingMode},
 	{"skycloak_update_cluster_security", "bot_management.mode", enumSecurityMode},
 	{"skycloak_update_cluster_security", "bot_management.challenge_mode", enumBotChallengeMode},
-	// The alias of a provider instance is always the SkycloakProviderId it was
-	// created with, so the same folding is right on the path parameter too.
 	{"skycloak_create_identity_provider", "provider_id", enumProviderID},
-	{"skycloak_get_identity_provider", "provider_id", enumProviderID},
-	{"skycloak_update_identity_provider", "provider_id", enumProviderID},
-	{"skycloak_delete_identity_provider", "provider_id", enumProviderID},
-	{"skycloak_test_identity_provider", "provider_id", enumProviderID},
 }
 
 // normaliseSIEMSource folds the enum field of a SIEM source selector in place.

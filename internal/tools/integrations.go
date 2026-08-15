@@ -78,12 +78,12 @@ func getSIEMDestinationHandler(api API) mcp.ToolHandlerFor[DestinationRef, skycl
 
 func createSIEMDestinationHandler(api API) mcp.ToolHandlerFor[skycloak.CreateSIEMDestinationRequest, skycloak.SIEMDestination] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in skycloak.CreateSIEMDestinationRequest) (*mcp.CallToolResult, skycloak.SIEMDestination, error) {
-		if in.Name == "" || in.Type == "" || in.Source.Type == "" {
-			return errResult("name, type and source.type are required"), skycloak.SIEMDestination{}, nil
-		}
 		in.Type = enumSIEMDestinationType.canonical(in.Type)
 		normaliseSIEMSource(&in.Source)
 		normaliseSIEMTransport(in.Syslog, in.S3, in.HTTP)
+		if in.Name == "" || in.Type == "" || in.Source.Type == "" {
+			return errResult("name, type and source.type are required"), skycloak.SIEMDestination{}, nil
+		}
 		d, err := api.CreateSIEMDestination(ctx, in)
 		if err != nil {
 			return toolError(err), skycloak.SIEMDestination{}, nil
@@ -223,10 +223,10 @@ func getWebhookSubscriptionHandler(api API) mcp.ToolHandlerFor[WebhookRef, skycl
 
 func createWebhookSubscriptionHandler(api API) mcp.ToolHandlerFor[skycloak.CreateWebhookSubscriptionRequest, skycloak.WebhookSubscription] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in skycloak.CreateWebhookSubscriptionRequest) (*mcp.CallToolResult, skycloak.WebhookSubscription, error) {
+		in.Source = enumWebhookSource.canonical(in.Source)
 		if in.Name == "" || in.URL == "" || in.Source == "" || in.SigningSecret == "" || len(in.EventTypes) == 0 {
 			return errResult("name, url, source, signing_secret and event_types are required"), skycloak.WebhookSubscription{}, nil
 		}
-		in.Source = enumWebhookSource.canonical(in.Source)
 		h, err := api.CreateWebhookSubscription(ctx, in)
 		if err != nil {
 			return toolError(err), skycloak.WebhookSubscription{}, nil

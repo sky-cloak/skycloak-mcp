@@ -87,13 +87,14 @@ type CreateExportInput struct {
 
 func createExportHandler(api API) mcp.ToolHandlerFor[CreateExportInput, skycloak.Export] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in CreateExportInput) (*mcp.CallToolResult, skycloak.Export, error) {
-		if in.ClusterID == "" || in.Format == "" {
+		format := enumExportFormat.canonical(in.Format)
+		if in.ClusterID == "" || format == "" {
 			return errResult("cluster_id and format are required"), skycloak.Export{}, nil
 		}
 		if in.IncludeCredentials && in.EncryptionPassword == "" {
 			return errResult("encryption_password is required when include_credentials is true"), skycloak.Export{}, nil
 		}
-		e, err := api.CreateExport(ctx, in.ClusterID, enumExportFormat.canonical(in.Format), in.IncludeCredentials, in.EncryptionPassword)
+		e, err := api.CreateExport(ctx, in.ClusterID, format, in.IncludeCredentials, in.EncryptionPassword)
 		if err != nil {
 			return toolError(err), skycloak.Export{}, nil
 		}

@@ -146,7 +146,7 @@ func updateApplicationHandler(api API) mcp.ToolHandlerFor[UpdateApplicationInput
 type UpdateIdentityProviderInput struct {
 	ClusterID   string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm       string `json:"realm" jsonschema:"the Keycloak realm name"`
-	ProviderID  string `json:"provider_id" jsonschema:"the identity provider alias, which is its Skycloak provider ID (case-insensitive)"`
+	ProviderID  string `json:"provider_id" jsonschema:"the identity provider alias, exactly as skycloak_list_identity_providers reports it (case-sensitive)"`
 	DisplayName string `json:"display_name,omitempty" jsonschema:"new display name"`
 	Enabled     bool   `json:"enabled,omitempty" jsonschema:"whether the provider is enabled"`
 }
@@ -156,7 +156,7 @@ func updateIdentityProviderHandler(api API) mcp.ToolHandlerFor[UpdateIdentityPro
 		if in.ClusterID == "" || in.Realm == "" || in.ProviderID == "" {
 			return errResult("cluster_id, realm and provider_id are required"), skycloak.IdentityProvider{}, nil
 		}
-		p, err := api.UpdateIdentityProvider(ctx, in.ClusterID, in.Realm, enumProviderID.canonical(in.ProviderID), in.DisplayName, in.Enabled)
+		p, err := api.UpdateIdentityProvider(ctx, in.ClusterID, in.Realm, in.ProviderID, in.DisplayName, in.Enabled)
 		if err != nil {
 			return toolError(err), skycloak.IdentityProvider{}, nil
 		}

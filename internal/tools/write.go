@@ -165,7 +165,7 @@ func createIdentityProviderHandler(api API) mcp.ToolHandlerFor[CreateIdentityPro
 type DeleteIdentityProviderInput struct {
 	ClusterID  string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm      string `json:"realm" jsonschema:"the realm name"`
-	ProviderID string `json:"provider_id" jsonschema:"the identity provider alias to delete (case-insensitive)"`
+	ProviderID string `json:"provider_id" jsonschema:"the identity provider alias to delete, exactly as skycloak_list_identity_providers reports it (case-sensitive)"`
 	Confirm    bool   `json:"confirm" jsonschema:"must be true to confirm deletion"`
 }
 
@@ -177,7 +177,7 @@ func deleteIdentityProviderHandler(api API) mcp.ToolHandlerFor[DeleteIdentityPro
 		if !in.Confirm {
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Refusing to delete identity provider %q: set confirm=true.", in.ProviderID)}}}, struct{}{}, nil
 		}
-		if err := api.DeleteIdentityProvider(ctx, in.ClusterID, in.Realm, enumProviderID.canonical(in.ProviderID)); err != nil {
+		if err := api.DeleteIdentityProvider(ctx, in.ClusterID, in.Realm, in.ProviderID); err != nil {
 			return toolError(err), struct{}{}, nil
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Deleted identity provider %q.", in.ProviderID)}}}, struct{}{}, nil
