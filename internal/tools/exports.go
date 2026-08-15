@@ -80,7 +80,7 @@ func getExportHandler(api API) mcp.ToolHandlerFor[ExportRef, skycloak.Export] {
 // CreateExportInput is the input for skycloak_create_export.
 type CreateExportInput struct {
 	ClusterID          string `json:"cluster_id" jsonschema:"the cluster ID"`
-	Format             string `json:"format" jsonschema:"export format: pgdump or sql"`
+	Format             string `json:"format" jsonschema:"export format: sql or pgdump (case-insensitive)"`
 	IncludeCredentials bool   `json:"include_credentials,omitempty" jsonschema:"include the Keycloak credential tables; requires encryption_password"`
 	EncryptionPassword string `json:"encryption_password,omitempty" jsonschema:"password to encrypt the archive (AES-256-CBC); required when include_credentials is true"`
 }
@@ -93,7 +93,7 @@ func createExportHandler(api API) mcp.ToolHandlerFor[CreateExportInput, skycloak
 		if in.IncludeCredentials && in.EncryptionPassword == "" {
 			return errResult("encryption_password is required when include_credentials is true"), skycloak.Export{}, nil
 		}
-		e, err := api.CreateExport(ctx, in.ClusterID, in.Format, in.IncludeCredentials, in.EncryptionPassword)
+		e, err := api.CreateExport(ctx, in.ClusterID, enumExportFormat.canonical(in.Format), in.IncludeCredentials, in.EncryptionPassword)
 		if err != nil {
 			return toolError(err), skycloak.Export{}, nil
 		}

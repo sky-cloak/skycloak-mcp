@@ -81,6 +81,9 @@ func createSIEMDestinationHandler(api API) mcp.ToolHandlerFor[skycloak.CreateSIE
 		if in.Name == "" || in.Type == "" || in.Source.Type == "" {
 			return errResult("name, type and source.type are required"), skycloak.SIEMDestination{}, nil
 		}
+		in.Type = enumSIEMDestinationType.canonical(in.Type)
+		normaliseSIEMSource(&in.Source)
+		normaliseSIEMTransport(in.Syslog, in.S3, in.HTTP)
 		d, err := api.CreateSIEMDestination(ctx, in)
 		if err != nil {
 			return toolError(err), skycloak.SIEMDestination{}, nil
@@ -100,6 +103,8 @@ func updateSIEMDestinationHandler(api API) mcp.ToolHandlerFor[UpdateSIEMDestinat
 		if in.DestinationID == "" {
 			return errResult("destination_id is required"), skycloak.SIEMDestination{}, nil
 		}
+		normaliseSIEMSource(in.Source)
+		normaliseSIEMTransport(in.Syslog, in.S3, in.HTTP)
 		d, err := api.UpdateSIEMDestination(ctx, in.DestinationID, in.UpdateSIEMDestinationRequest)
 		if err != nil {
 			return toolError(err), skycloak.SIEMDestination{}, nil
@@ -148,7 +153,7 @@ func siemText(d *skycloak.SIEMDestination) string {
 
 // WebhookEventTypesInput filters webhook event types.
 type WebhookEventTypesInput struct {
-	Source string `json:"source,omitempty" jsonschema:"optional source filter: platform or keycloak"`
+	Source string `json:"source,omitempty" jsonschema:"optional source filter: keycloak or platform (case-insensitive)"`
 }
 
 // WebhookEventTypesOutput is the structured list result for webhook event types.
@@ -159,7 +164,7 @@ type WebhookEventTypesOutput struct {
 
 func listWebhookEventTypesHandler(api API) mcp.ToolHandlerFor[WebhookEventTypesInput, WebhookEventTypesOutput] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in WebhookEventTypesInput) (*mcp.CallToolResult, WebhookEventTypesOutput, error) {
-		events, err := api.ListWebhookEventTypes(ctx, in.Source)
+		events, err := api.ListWebhookEventTypes(ctx, enumWebhookSource.canonical(in.Source))
 		if err != nil {
 			return toolError(err), WebhookEventTypesOutput{}, nil
 		}
@@ -182,6 +187,7 @@ type WebhookSubscriptionsOutput struct {
 
 func listWebhookSubscriptionsHandler(api API) mcp.ToolHandlerFor[skycloak.ListWebhookSubscriptionsFilter, WebhookSubscriptionsOutput] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in skycloak.ListWebhookSubscriptionsFilter) (*mcp.CallToolResult, WebhookSubscriptionsOutput, error) {
+		in.Source = enumWebhookSource.canonical(in.Source)
 		hooks, err := api.ListWebhookSubscriptions(ctx, in)
 		if err != nil {
 			return toolError(err), WebhookSubscriptionsOutput{}, nil
@@ -220,6 +226,7 @@ func createWebhookSubscriptionHandler(api API) mcp.ToolHandlerFor[skycloak.Creat
 		if in.Name == "" || in.URL == "" || in.Source == "" || in.SigningSecret == "" || len(in.EventTypes) == 0 {
 			return errResult("name, url, source, signing_secret and event_types are required"), skycloak.WebhookSubscription{}, nil
 		}
+		in.Source = enumWebhookSource.canonical(in.Source)
 		h, err := api.CreateWebhookSubscription(ctx, in)
 		if err != nil {
 			return toolError(err), skycloak.WebhookSubscription{}, nil
@@ -239,6 +246,7 @@ func updateWebhookSubscriptionHandler(api API) mcp.ToolHandlerFor[UpdateWebhookS
 		if in.WebhookID == "" {
 			return errResult("webhook_id is required"), skycloak.WebhookSubscription{}, nil
 		}
+		in.Source = enumWebhookSource.canonicalPtr(in.Source)
 		h, err := api.UpdateWebhookSubscription(ctx, in.WebhookID, in.UpdateWebhookSubscriptionRequest)
 		if err != nil {
 			return toolError(err), skycloak.WebhookSubscription{}, nil

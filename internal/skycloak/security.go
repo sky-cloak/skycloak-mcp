@@ -63,8 +63,8 @@ type WAFCategories struct {
 // WAF configures the web application firewall.
 type WAF struct {
 	Enabled       bool           `json:"enabled"`
-	Mode          string         `json:"mode"`
-	Preset        string         `json:"preset"`
+	Mode          string         `json:"mode" jsonschema:"enforcement: detect or block (case-insensitive)"`
+	Preset        string         `json:"preset" jsonschema:"rule set: full_crs, owasp_top_10, or custom (case-insensitive)"`
 	ParanoiaLevel int64          `json:"paranoia_level"`
 	Categories    *WAFCategories `json:"categories,omitempty"`
 }
@@ -72,15 +72,15 @@ type WAF struct {
 // GeoBlocking restricts access by country.
 type GeoBlocking struct {
 	Enabled   bool     `json:"enabled"`
-	Mode      string   `json:"mode"`
+	Mode      string   `json:"mode" jsonschema:"how countries is read: allowlist or blocklist (case-insensitive)"`
 	Countries []string `json:"countries"`
 }
 
 // BotManagement configures bot detection and challenges.
 type BotManagement struct {
 	Enabled       bool   `json:"enabled"`
-	Mode          string `json:"mode"`
-	ChallengeMode string `json:"challenge_mode"`
+	Mode          string `json:"mode" jsonschema:"enforcement: detect or block (case-insensitive)"`
+	ChallengeMode string `json:"challenge_mode" jsonschema:"challenge to serve: none, javascript, or captcha (case-insensitive)"`
 }
 
 func derefIntStar(p *int) int64 {

@@ -77,8 +77,8 @@ type CreateApplicationInput struct {
 	Realm        string   `json:"realm" jsonschema:"the realm name"`
 	ClientID     string   `json:"client_id" jsonschema:"the OAuth client ID (unique within the realm)"`
 	Name         string   `json:"name" jsonschema:"display name"`
-	Type         string   `json:"type,omitempty" jsonschema:"confidential or public; defaults to confidential"`
-	Protocol     string   `json:"protocol,omitempty" jsonschema:"openid-connect or saml; defaults to openid-connect"`
+	Type         string   `json:"type,omitempty" jsonschema:"OAuth client type: confidential or public (case-insensitive); defaults to confidential"`
+	Protocol     string   `json:"protocol,omitempty" jsonschema:"authentication protocol: openid-connect or saml (case-insensitive); defaults to openid-connect"`
 	RedirectURIs []string `json:"redirect_uris,omitempty" jsonschema:"allowed redirect URIs"`
 }
 
@@ -94,7 +94,8 @@ func createApplicationHandler(api API) mcp.ToolHandlerFor[CreateApplicationInput
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "cluster_id, realm and client_id are required"}}}, CreateApplicationOutput{}, nil
 		}
 		clientID, secret, err := api.CreateApplication(ctx, in.ClusterID, in.Realm, skycloak.CreateApplicationRequest{
-			ClientID: in.ClientID, Name: in.Name, Type: in.Type, Protocol: in.Protocol, RedirectURIs: in.RedirectURIs,
+			ClientID: in.ClientID, Name: in.Name, Type: enumApplicationType.canonical(in.Type),
+			Protocol: enumApplicationProtocol.canonical(in.Protocol), RedirectURIs: in.RedirectURIs,
 		})
 		if err != nil {
 			return toolError(err), CreateApplicationOutput{}, nil
@@ -134,7 +135,7 @@ func deleteApplicationHandler(api API) mcp.ToolHandlerFor[DeleteApplicationInput
 type CreateIdentityProviderInput struct {
 	ClusterID        string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm            string `json:"realm" jsonschema:"the realm name"`
-	ProviderID       string `json:"provider_id" jsonschema:"unique provider alias within the realm"`
+	ProviderID       string `json:"provider_id" jsonschema:"Skycloak provider ID (case-insensitive); it becomes this provider's alias in the realm, so it must be unique there. See skycloak_list_identity_provider_templates for the accepted values"`
 	DisplayName      string `json:"display_name" jsonschema:"login button / display name"`
 	ClientID         string `json:"client_id,omitempty" jsonschema:"upstream OAuth client ID"`
 	ClientSecret     string `json:"client_secret,omitempty" jsonschema:"upstream OAuth client secret"`
@@ -149,7 +150,8 @@ func createIdentityProviderHandler(api API) mcp.ToolHandlerFor[CreateIdentityPro
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "cluster_id, realm and provider_id are required"}}}, struct{}{}, nil
 		}
 		err := api.CreateOIDCIdentityProvider(ctx, in.ClusterID, in.Realm, skycloak.CreateOIDCIdentityProviderRequest{
-			ProviderID: in.ProviderID, DisplayName: in.DisplayName, ClientID: in.ClientID, ClientSecret: in.ClientSecret,
+			ProviderID: enumProviderID.canonical(in.ProviderID), DisplayName: in.DisplayName,
+			ClientID: in.ClientID, ClientSecret: in.ClientSecret,
 			Issuer: in.Issuer, AuthorizationURL: in.AuthorizationURL, TokenURL: in.TokenURL,
 		})
 		if err != nil {
@@ -163,7 +165,7 @@ func createIdentityProviderHandler(api API) mcp.ToolHandlerFor[CreateIdentityPro
 type DeleteIdentityProviderInput struct {
 	ClusterID  string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm      string `json:"realm" jsonschema:"the realm name"`
-	ProviderID string `json:"provider_id" jsonschema:"the provider alias to delete"`
+	ProviderID string `json:"provider_id" jsonschema:"the identity provider alias to delete (case-insensitive)"`
 	Confirm    bool   `json:"confirm" jsonschema:"must be true to confirm deletion"`
 }
 
@@ -175,7 +177,7 @@ func deleteIdentityProviderHandler(api API) mcp.ToolHandlerFor[DeleteIdentityPro
 		if !in.Confirm {
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Refusing to delete identity provider %q: set confirm=true.", in.ProviderID)}}}, struct{}{}, nil
 		}
-		if err := api.DeleteIdentityProvider(ctx, in.ClusterID, in.Realm, in.ProviderID); err != nil {
+		if err := api.DeleteIdentityProvider(ctx, in.ClusterID, in.Realm, enumProviderID.canonical(in.ProviderID)); err != nil {
 			return toolError(err), struct{}{}, nil
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Deleted identity provider %q.", in.ProviderID)}}}, struct{}{}, nil
@@ -185,10 +187,10 @@ func deleteIdentityProviderHandler(api API) mcp.ToolHandlerFor[DeleteIdentityPro
 // CreateClusterInput is the input schema for skycloak_create_cluster.
 type CreateClusterInput struct {
 	Name               string  `json:"name" jsonschema:"human-readable cluster name"`
-	Type               string  `json:"type,omitempty" jsonschema:"cluster type (keycloak or tidecloak); defaults to keycloak"`
-	Size               string  `json:"size" jsonschema:"instance size: small, medium, or large"`
+	Type               string  `json:"type,omitempty" jsonschema:"cluster type: keycloak or tidecloak (case-insensitive); defaults to keycloak"`
+	Size               string  `json:"size" jsonschema:"instance size: small, medium, or large (case-insensitive)"`
 	Version            string  `json:"version" jsonschema:"Keycloak version, e.g. 26.1"`
-	Location           string  `json:"location" jsonschema:"region: us, ca, eu, or au"`
+	Location           string  `json:"location" jsonschema:"region: us, ca, au, or eu (case-insensitive)"`
 	AutoUpgradeEnabled *bool   `json:"auto_upgrade_enabled,omitempty" jsonschema:"enable automatic patch upgrades"`
 	MWEnabled          bool    `json:"maintenance_window_enabled,omitempty" jsonschema:"whether the creation maintenance window is active"`
 	MWDaysOfWeek       []int32 `json:"maintenance_window_days_of_week,omitempty" jsonschema:"maintenance-window days, 0=Sunday through 6=Saturday"`
@@ -203,7 +205,8 @@ func createClusterHandler(api API) mcp.ToolHandlerFor[CreateClusterInput, Cluste
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "name, size, version and location are required"}}}, ClusterDetail{}, nil
 		}
 		req := skycloak.CreateClusterRequest{
-			Name: in.Name, Type: in.Type, Size: in.Size, Version: in.Version, Location: in.Location,
+			Name: in.Name, Type: enumClusterType.canonical(in.Type), Size: enumClusterSize.canonical(in.Size),
+			Version: in.Version, Location: enumClusterLocation.canonical(in.Location),
 			AutoUpgradeEnabled: in.AutoUpgradeEnabled,
 		}
 		if len(in.MWDaysOfWeek) > 0 || in.MWStartLocal != "" || in.MWEndLocal != "" || in.MWTimezone != "" {

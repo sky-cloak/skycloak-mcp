@@ -146,7 +146,7 @@ func updateApplicationHandler(api API) mcp.ToolHandlerFor[UpdateApplicationInput
 type UpdateIdentityProviderInput struct {
 	ClusterID   string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm       string `json:"realm" jsonschema:"the Keycloak realm name"`
-	ProviderID  string `json:"provider_id" jsonschema:"the identity provider ID"`
+	ProviderID  string `json:"provider_id" jsonschema:"the identity provider alias, which is its Skycloak provider ID (case-insensitive)"`
 	DisplayName string `json:"display_name,omitempty" jsonschema:"new display name"`
 	Enabled     bool   `json:"enabled,omitempty" jsonschema:"whether the provider is enabled"`
 }
@@ -156,7 +156,7 @@ func updateIdentityProviderHandler(api API) mcp.ToolHandlerFor[UpdateIdentityPro
 		if in.ClusterID == "" || in.Realm == "" || in.ProviderID == "" {
 			return errResult("cluster_id, realm and provider_id are required"), skycloak.IdentityProvider{}, nil
 		}
-		p, err := api.UpdateIdentityProvider(ctx, in.ClusterID, in.Realm, in.ProviderID, in.DisplayName, in.Enabled)
+		p, err := api.UpdateIdentityProvider(ctx, in.ClusterID, in.Realm, enumProviderID.canonical(in.ProviderID), in.DisplayName, in.Enabled)
 		if err != nil {
 			return toolError(err), skycloak.IdentityProvider{}, nil
 		}
@@ -168,7 +168,7 @@ func updateIdentityProviderHandler(api API) mcp.ToolHandlerFor[UpdateIdentityPro
 type UpdateClusterInput struct {
 	ClusterID          string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Version            string `json:"version,omitempty" jsonschema:"target Keycloak version (triggers an upgrade)"`
-	Size               string `json:"size,omitempty" jsonschema:"new cluster size"`
+	Size               string `json:"size,omitempty" jsonschema:"new instance size: small, medium, or large (case-insensitive)"`
 	AutoUpgradeEnabled *bool  `json:"auto_upgrade_enabled,omitempty" jsonschema:"enable or disable automatic patch upgrades"`
 }
 
@@ -177,7 +177,7 @@ func updateClusterHandler(api API) mcp.ToolHandlerFor[UpdateClusterInput, skyclo
 		if in.ClusterID == "" {
 			return errResult("cluster_id is required"), skycloak.Cluster{}, nil
 		}
-		cl, err := api.UpdateCluster(ctx, in.ClusterID, in.Version, in.Size, in.AutoUpgradeEnabled)
+		cl, err := api.UpdateCluster(ctx, in.ClusterID, in.Version, enumClusterSize.canonical(in.Size), in.AutoUpgradeEnabled)
 		if err != nil {
 			return toolError(err), skycloak.Cluster{}, nil
 		}
@@ -283,7 +283,7 @@ type UpsertSMTPInput struct {
 	Port       int64  `json:"port" jsonschema:"SMTP server port (e.g. 587)"`
 	FromEmail  string `json:"from_email" jsonschema:"sender email address"`
 	FromName   string `json:"from_name,omitempty" jsonschema:"sender display name"`
-	Encryption string `json:"encryption,omitempty" jsonschema:"none, ssl, or starttls"`
+	Encryption string `json:"encryption,omitempty" jsonschema:"encryption mode: none, ssl, or starttls (case-insensitive)"`
 	Username   string `json:"username,omitempty" jsonschema:"SMTP username (basic auth)"`
 	Password   string `json:"password,omitempty" jsonschema:"SMTP password (basic auth); omit to retain the stored value"`
 }
@@ -294,7 +294,8 @@ func upsertSMTPHandler(api API) mcp.ToolHandlerFor[UpsertSMTPInput, skycloak.SMT
 			return errResult("cluster_id, realm, host and from_email are required"), skycloak.SMTPConfig{}, nil
 		}
 		cfg, err := api.UpsertSMTP(ctx, in.ClusterID, in.Realm, skycloak.UpsertSMTPRequest{
-			Host: in.Host, Port: in.Port, Encryption: in.Encryption, FromEmail: in.FromEmail, FromName: in.FromName,
+			Host: in.Host, Port: in.Port, Encryption: enumSMTPEncryption.canonical(in.Encryption),
+			FromEmail: in.FromEmail, FromName: in.FromName,
 			AuthType: "basic", Username: in.Username, Password: in.Password,
 		})
 		if err != nil {

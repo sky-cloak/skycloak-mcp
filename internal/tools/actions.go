@@ -82,7 +82,7 @@ func testSMTPHandler(api API) mcp.ToolHandlerFor[TestSMTPInput, skycloak.TestRes
 type TestIDPInput struct {
 	ClusterID    string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm        string `json:"realm" jsonschema:"the Keycloak realm name"`
-	ProviderID   string `json:"provider_id" jsonschema:"the identity provider ID"`
+	ProviderID   string `json:"provider_id" jsonschema:"the identity provider alias, which is its Skycloak provider ID (case-insensitive)"`
 	ClientID     string `json:"client_id,omitempty" jsonschema:"override client ID for this test only"`
 	ClientSecret string `json:"client_secret,omitempty" jsonschema:"override client secret for this test only"`
 }
@@ -92,7 +92,7 @@ func testIdentityProviderHandler(api API) mcp.ToolHandlerFor[TestIDPInput, skycl
 		if in.ClusterID == "" || in.Realm == "" || in.ProviderID == "" {
 			return errResult("cluster_id, realm and provider_id are required"), skycloak.TestResult{}, nil
 		}
-		res, err := api.TestIdentityProviderConnection(ctx, in.ClusterID, in.Realm, in.ProviderID, in.ClientID, in.ClientSecret)
+		res, err := api.TestIdentityProviderConnection(ctx, in.ClusterID, in.Realm, enumProviderID.canonical(in.ProviderID), in.ClientID, in.ClientSecret)
 		if err != nil {
 			return toolError(err), skycloak.TestResult{}, nil
 		}
