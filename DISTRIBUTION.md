@@ -25,7 +25,7 @@ remote servers with no repository and no package at all: of the first 60 entries
 returned by the registry API, 49 are remote-only with `repository: null`. That is
 the shape [`server.json`](./server.json) now uses.
 
-1. **Official MCP Registry** (`registry.modelcontextprotocol.io`) — do this first, it
+1. **Official MCP Registry** (`registry.modelcontextprotocol.io`). Do this first, it
    is what clients actually read.
    ```bash
    mcp-publisher validate server.json
@@ -36,13 +36,13 @@ the shape [`server.json`](./server.json) now uses.
    Prefer it over `io.github.sky-cloak/*`, which is both less branded and awkward
    while the repo is private.
 
-2. **Anthropic / Claude connectors directory** — highest-value channel for reach, and
+2. **Anthropic / Claude connectors directory**. Highest-value channel for reach, and
    a remote URL is exactly what it wants.
 
-3. **Cursor MCP directory**, **VS Code MCP** lists — submit the hosted URL, not a
+3. **Cursor MCP directory**, **VS Code MCP** lists. Submit the hosted URL, not a
    stdio config.
 
-4. **Community catalogs** — `mcp.so`, `glama.ai/mcp/servers`, `smithery.ai`,
+4. **Community catalogs**: `mcp.so`, `glama.ai/mcp/servers`, `smithery.ai`,
    `PulseMCP`, `punkpeye/awesome-mcp-servers`. Open a PR or fill the form with a
    one-line pitch and the hosted URL.
 
