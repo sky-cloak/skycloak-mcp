@@ -19,3 +19,7 @@ vendor/
 .idea/
 .vscode/
 .DS_Store
+
+# DNS-auth signing key for the MCP registry. Never commit this.
+key.pem
+*.pem
