@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.skycloak/skycloak-mcp",
-  "description": "Manage your Skycloak managed-Keycloak environment from your AI assistant: provision clusters, realms, OIDC/SAML applications and SSO identity providers, and inspect events and insights. Hosted at https://mcp.skycloak.io with browser sign-in, nothing to install. Skycloak is managed Keycloak hosting; create a free account at https://app.skycloak.io.",
+  "description": "Manage your Skycloak-hosted Keycloak: clusters, realms, apps, SSO and users, from any MCP client.",
   "version": "0.6.5",
   "websiteUrl": "https://skycloak.io",
   "remotes": [
