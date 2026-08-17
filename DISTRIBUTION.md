@@ -1,38 +1,69 @@
 # Distribution & discovery
 
-How `skycloak-mcp` is shipped and where it's listed. Beyond being installable, the
-public listings are a **marketing surface** — every catalog entry is a place an
+How `skycloak-mcp` reaches users and where it's listed. Beyond being usable, the
+public listings are a **marketing surface**: every catalog entry is a place an
 AI-assistant user discovers Skycloak.
 
-## Artifacts (produced automatically on each `vX.Y.Z` tag)
+## What is public today
 
-| Artifact | Where | How users consume it |
-|---|---|---|
-| Multi-arch binaries + checksums | GitHub Release | `go install`, or download + point the MCP client at the binary |
-| Container image | `ghcr.io/sky-cloak/skycloak-mcp` | `docker run` / reference in client config |
+| Surface | Status |
+|---|---|
+| Hosted server, `https://mcp.skycloak.io` | **Public and live.** Streamable HTTP, browser OAuth, nothing to install |
+| This repository | Private |
+| `ghcr.io/sky-cloak/skycloak-mcp` image | Private |
+| GitHub Release binaries | Not published |
 
-No registry is *required* for the server to work — a user just adds the stdio
-command (or hosted URL) to their MCP client config. The channels below are for
-**discovery**.
+So the hosted endpoint is the whole public product right now. Every listing, doc
+and post should point at the URL, and none should mention Homebrew, the container
+image, a downloadable binary, or a stdio config, because a reader cannot obtain any
+of them.
 
-## Discovery channels (do these once the repo + image are public)
+## Discovery channels
 
-1. **Official MCP Registry** — `registry.modelcontextprotocol.io`
-   - Listing metadata lives in [`server.json`](./server.json) (namespace `io.skycloak/skycloak-mcp`).
-   - Publish with the `mcp-publisher` CLI:
-     ```bash
-     mcp-publisher validate server.json
-     mcp-publisher login dns --domain skycloak.io   # or: login github (namespace io.github.sky-cloak/*)
-     mcp-publisher publish
-     ```
-   - The `io.skycloak/*` namespace requires **DNS ownership verification** of `skycloak.io`. (Alternatively use `io.github.sky-cloak/skycloak-mcp` with GitHub auth — less branded.)
+**None of these are blocked on opening the repo.** The official registry lists
+remote servers with no repository and no package at all: of the first 60 entries
+returned by the registry API, 49 are remote-only with `repository: null`. That is
+the shape [`server.json`](./server.json) now uses.
 
-2. **Anthropic / Claude connectors directory** — submit so Claude Desktop/Code users can add it in-app. (Highest-value channel for reach.)
+1. **Official MCP Registry** (`registry.modelcontextprotocol.io`). Do this first, it
+   is what clients actually read.
+   ```bash
+   mcp-publisher validate server.json
+   mcp-publisher login dns --domain skycloak.io
+   mcp-publisher publish
+   ```
+   The `io.skycloak/*` namespace needs DNS ownership verification of `skycloak.io`.
+   Prefer it over `io.github.sky-cloak/*`, which is both less branded and awkward
+   while the repo is private.
 
-3. **Cursor MCP directory** and **VS Code MCP** lists — submit the stdio config + repo.
+2. **Anthropic / Claude connectors directory**. Highest-value channel for reach, and
+   a remote URL is exactly what it wants.
 
-4. **Community catalogs** — e.g. `modelcontextprotocol/servers`, `punkpeye/awesome-mcp-servers`. Open a PR adding Skycloak with a one-line pitch.
+3. **Cursor MCP directory**, **VS Code MCP** lists. Submit the hosted URL, not a
+   stdio config.
+
+4. **Community catalogs**: `mcp.so`, `glama.ai/mcp/servers`, `smithery.ai`,
+   `PulseMCP`, `punkpeye/awesome-mcp-servers`. Open a PR or fill the form with a
+   one-line pitch and the hosted URL.
+
+Where a form demands a repository or GitHub link, use `https://skycloak.io/docs/mcp/`.
+Do not link this repo until it is public.
+
+## Loose end
+
+The server advertises `resource_documentation: https://github.com/sky-cloak/skycloak-mcp`
+in its OAuth protected-resource metadata, which is a public 404 today. Either open the
+repo or repoint that field at the docs page.
+
+## When the repo and image go public
+
+Re-add to `server.json` the `repository` block and a `packages` entry for the OCI image
+(`registryType: oci`, `transport: stdio`), keeping `remotes` alongside them so clients can
+pick either. Then re-publish. Nothing else in this document changes.
 
 ## Marketing notes
-- Keep the `server.json` `description` and each catalog blurb leading with the value prop ("manage managed-Keycloak from your AI assistant") and a link to `https://app.skycloak.io` for signup.
-- Bump `version` in `server.json` on each release and re-`publish` so the registry tracks the latest.
+
+- Lead every blurb with the value prop ("manage managed-Keycloak from your AI assistant")
+  and link `https://app.skycloak.io` for signup.
+- Bump `version` in `server.json` on each release and re-publish so the registry tracks
+  the latest.
