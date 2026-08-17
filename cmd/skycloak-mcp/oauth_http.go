@@ -92,7 +92,7 @@ func protectedResourceMetadataHandler(cfg httpConfig, resourceSuffix string) htt
 			ScopesSupported:        oauth.OIDCScopes,
 			BearerMethodsSupported: []string{"header"},
 			ResourceName:           "Skycloak MCP",
-			ResourceDocumentation:  "https://github.com/sky-cloak/skycloak-mcp",
+			ResourceDocumentation:  "https://skycloak.io/docs/mcp/",
 		}
 		auth.ProtectedResourceMetadataHandler(md).ServeHTTP(w, r)
 	})
