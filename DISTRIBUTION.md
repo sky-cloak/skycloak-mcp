@@ -25,16 +25,24 @@ remote servers with no repository and no package at all: of the first 60 entries
 returned by the registry API, 49 are remote-only with `repository: null`. That is
 the shape [`server.json`](./server.json) now uses.
 
-1. **Official MCP Registry** (`registry.modelcontextprotocol.io`). Do this first, it
-   is what clients actually read.
+1. **Official MCP Registry** (`registry.modelcontextprotocol.io`). **Automated.** The
+   `publish-registry` job in [`release.yml`](./.github/workflows/release.yml) runs on
+   every `v*` tag, after goreleaser succeeds. It pins `server.json` to the tag, so the
+   published version can never drift from the release, then signs with DNS auth.
+
+   One-time setup, already done:
+   - TXT record on the **apex** of `skycloak.io`: `v=MCPv1; k=ed25519; p=<public key>`
+   - Repo secret `MCP_DNS_PRIVATE_KEY` holding the Ed25519 private key as 64 hex chars
+
+   OIDC is not an option here. It only authenticates the `io.github.*` namespace, and
+   this server is `io.skycloak/*`, which is DNS-verified.
+
+   To publish by hand:
    ```bash
    mcp-publisher validate server.json
-   mcp-publisher login dns --domain skycloak.io
+   mcp-publisher login dns --domain skycloak.io --private-key "$PRIV"
    mcp-publisher publish
    ```
-   The `io.skycloak/*` namespace needs DNS ownership verification of `skycloak.io`.
-   Prefer it over `io.github.sky-cloak/*`, which is both less branded and awkward
-   while the repo is private.
 
 2. **Anthropic / Claude connectors directory**. Highest-value channel for reach, and
    a remote URL is exactly what it wants.
