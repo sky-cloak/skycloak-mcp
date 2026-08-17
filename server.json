@@ -1,32 +1,13 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.skycloak/skycloak-mcp",
-  "description": "Manage your Skycloak managed-Keycloak environment from your AI assistant — provision clusters, realms, OIDC/SAML applications and SSO identity providers, and inspect events and insights, all with your Skycloak API key. Skycloak is managed Keycloak hosting; create a free account and key at https://app.skycloak.io.",
+  "description": "Manage your Skycloak managed-Keycloak environment from your AI assistant: provision clusters, realms, OIDC/SAML applications and SSO identity providers, and inspect events and insights. Hosted at https://mcp.skycloak.io with browser sign-in, nothing to install. Skycloak is managed Keycloak hosting; create a free account at https://app.skycloak.io.",
   "version": "0.6.4",
-  "repository": {
-    "url": "https://github.com/sky-cloak/skycloak-mcp",
-    "source": "github"
-  },
   "websiteUrl": "https://skycloak.io",
-  "packages": [
+  "remotes": [
     {
-      "registryType": "oci",
-      "identifier": "ghcr.io/sky-cloak/skycloak-mcp",
-      "version": "0.6.4",
-      "transport": { "type": "stdio" },
-      "environmentVariables": [
-        {
-          "name": "SKYCLOAK_API_KEY",
-          "description": "Optional. Skycloak API key for headless/CI use (and the container image, which has no OS keychain); takes precedence over the keychain. On a local install, run `skycloak-mcp init` instead to sign in via the browser (OAuth device flow), which mints and stores a workspace-scoped key. Create keys in the Skycloak dashboard (https://app.skycloak.io).",
-          "isRequired": false,
-          "isSecret": true
-        },
-        {
-          "name": "SKYCLOAK_ENDPOINT",
-          "description": "Public API base URL. Defaults to https://api.skycloak.io.",
-          "isRequired": false
-        }
-      ]
+      "type": "streamable-http",
+      "url": "https://mcp.skycloak.io"
     }
   ]
 }
