@@ -1,5 +1,7 @@
 # skycloak-mcp
 
+[![smithery badge](https://smithery.ai/badge/skycloak/keycloak-mcp)](https://smithery.ai/servers/skycloak/keycloak-mcp)
+
 Official [Model Context Protocol](https://modelcontextprotocol.io) server for **Skycloak** (managed Keycloak): manage your clusters, realms, applications, and SSO from any MCP client (Claude Desktop, Claude Code, Cursor).
 
 > **Status:** early release. Tool coverage is growing; see the changelog for what's available.
