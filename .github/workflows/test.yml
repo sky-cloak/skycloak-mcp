@@ -48,3 +48,18 @@ jobs:
         run: |
           go generate ./internal/apiclient/...
           git diff --exit-code internal/apiclient
+
+  server-json:
+    name: server.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The registry rejects an over-long description at publish time, which means
+      # a tag that builds a release and an image and then fails after both. Catch
+      # it on the pull request instead.
+      - name: Validate against the registry
+        run: |
+          curl -sSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/').tar.gz"
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          ./mcp-publisher validate server.json

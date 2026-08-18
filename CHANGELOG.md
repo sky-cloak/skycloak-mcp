@@ -6,6 +6,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-08-18
+
+### Fixed
+- The registry description fits the registry. 0.7.1 shipped a 444-character one and
+  the publish step rejected it with `expected length <= 100`, so the tag produced a
+  GitHub release and a container image but never reached the registry. The longer
+  copy belongs in directory listings that have their own description field, not
+  here.
+
 ## [0.7.1] - 2026-08-18
 
 ### Changed
