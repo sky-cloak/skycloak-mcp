@@ -6,6 +6,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-18
+
+### Changed
+- The registry entry carries a description worth indexing. The previous one was 98
+  characters and said little beyond the product name, which is what every directory
+  mirroring the registry was displaying.
+
+### Added
+- The registry entry points at the source repository, so directories can show the
+  licence and the code rather than only an endpoint. Uses GitHub's numeric
+  repository id, which survives a rename and changes if a repository is deleted and
+  recreated.
+
 ## [0.7.0] - 2026-08-18
 
 ### Changed
