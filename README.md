@@ -155,6 +155,7 @@ Startup logs one line with the wiring it resolved (`oauth=`, `issuer=`, `dashboa
 | `SKYCLOAK_CLIENT_ID` | `skycloak-mcp` (CLI device flow only) |
 | `SKYCLOAK_DASHBOARD_URL` | `https://app.skycloak.io` (mints CLI keys and HTTP session keys) |
 | `SKYCLOAK_PUBLIC_URL` | none (derived from each request; set it when the ingress rewrites `Host`) |
+| `OPENAI_APPS_CHALLENGE_TOKEN` | Serves OpenAI's plugin-directory verification token at `/.well-known/openai-apps-challenge`. Unset, that path 404s. |
 
 Commands: `init` (browser sign-in), `run` (serve), `logout` (remove the stored key). `init` accepts `--workspace <id>`, `--allow-writes`, `--allow-credentials`, and `--ttl-days` (default 90).
 

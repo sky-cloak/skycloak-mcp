@@ -14,7 +14,7 @@ func registerActionReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_discover_oidc",
 		Description: "Resolve an OIDC issuer's discovery document to obtain its authorization, token, and userinfo endpoints. Use the result when creating an identity provider.",
-		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Discover OIDC endpoints"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), ReadOnlyHint: true, Title: "Discover OIDC endpoints"},
 	}, discoverOIDCHandler(api))
 }
 

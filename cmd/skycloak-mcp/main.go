@@ -329,6 +329,9 @@ func newHTTPHandler(cfg httpConfig) http.Handler {
 func handleOpenAIChallenge(token string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		// A rotated token served from a cache fails verification for as long as
+		// the old one lives, and the failure looks like a domain we do not own.
+		w.Header().Set("Cache-Control", "no-store")
 		_, _ = io.WriteString(w, token)
 	}
 }
