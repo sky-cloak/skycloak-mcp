@@ -3,7 +3,7 @@
   "name": "io.skycloak/skycloak-mcp",
   "title": "Skycloak",
   "description": "Managed Keycloak from any MCP client: clusters, realms, apps, SSO, users, domains, audit events.",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "repository": {
     "url": "https://github.com/sky-cloak/skycloak-mcp",
     "source": "github",
