@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-18
+
 ### Added
 - Four MCP skills served over the draft SEP-2640 Skills extension: the server
   declares `io.modelcontextprotocol/skills`, answers `skills/list` and
@@ -23,10 +25,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and tests fail if a served skill names a tool its session does not have,
   if a listing digest stops matching the served bytes, or if an entry's
   frontmatter drifts from the file's.
-
-### Changed
-- MCP Go SDK upgraded from v1.6.1 to v1.7.0, which adds the custom JSON-RPC
-  method registration that `skills/list` and `skills/get` are built on.
 - Eight MCP prompts, one per workflow users actually start with: auditing
   self-registration, reviewing upgrades, triaging failed logins, reviewing
   identity providers, reviewing admin changes, provisioning an environment,
@@ -37,6 +35,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   workflows are withheld from read-only sessions, and a test fails if a
   prompt names a tool its session cannot have, lacks a description, or does
   not require the scopes of every tool it references.
+
+### Changed
+- MCP Go SDK upgraded from v1.6.1 to v1.7.0, which adds the custom JSON-RPC
+  method registration that `skills/list` and `skills/get` are built on.
 
 ## [0.8.0] - 2026-08-18
 
