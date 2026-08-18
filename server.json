@@ -7,10 +7,10 @@
   "websiteUrl": "https://skycloak.io",
   "icons": [
     {
-      "src": "https://skycloak.io/wp-content/uploads/2024/01/favicon-32x32-1.png",
+      "src": "https://skycloak.io/wp-content/themes/skycloak/assets/images/logos/skycloak-mark-512.png",
       "mimeType": "image/png",
       "sizes": [
-        "32x32"
+        "512x512"
       ]
     }
   ],
