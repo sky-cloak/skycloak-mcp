@@ -147,6 +147,16 @@ func TestSkillsGetMirrorsTheListing(t *testing.T) {
 	}
 }
 
+// TestSkillsGetNilParamsErrs: custom methods tolerate absent params, so the
+// SDK hands the handler a nil pointer for them. The SDK client cannot put
+// that on the wire (it always injects _meta), so the handler is exercised
+// directly: it must answer invalid-params, not panic.
+func TestSkillsGetNilParamsErrs(t *testing.T) {
+	if _, err := skillsGetHandler(nil)(t.Context(), nil, nil); err == nil {
+		t.Fatal("skills/get with nil params did not error")
+	}
+}
+
 // TestSkillsNameOnlyToolsTheSessionHas: like prompts, a skill is a workflow
 // over named tools, so every tool a served SKILL.md mentions must exist in
 // that same session.

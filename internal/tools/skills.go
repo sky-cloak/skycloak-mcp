@@ -225,16 +225,23 @@ func registerSkills(s *mcp.Server, allowWrites bool, scopes Scopes) {
 		}); err != nil {
 		panic(err)
 	}
-	if err := mcp.AddReceivingCustomMethod(s, "skills/get",
-		func(_ context.Context, _ *mcp.ServerSession, params *skillsGetParams) (*skillsGetResult, error) {
-			for _, e := range entries {
-				if e.URI == params.URI {
-					return &skillsGetResult{Skill: e}, nil
-				}
-			}
-			// The code resources/read uses for unknown resources, per SEP-2640.
-			return nil, &jsonrpc.Error{Code: jsonrpc.CodeInvalidParams, Message: fmt.Sprintf("no skill at %q", params.URI)}
-		}); err != nil {
+	if err := mcp.AddReceivingCustomMethod(s, "skills/get", skillsGetHandler(entries)); err != nil {
 		panic(err)
+	}
+}
+
+func skillsGetHandler(entries []skillEntry) func(context.Context, *mcp.ServerSession, *skillsGetParams) (*skillsGetResult, error) {
+	return func(_ context.Context, _ *mcp.ServerSession, params *skillsGetParams) (*skillsGetResult, error) {
+		// Custom methods tolerate absent params, so params can be nil here.
+		if params == nil {
+			return nil, &jsonrpc.Error{Code: jsonrpc.CodeInvalidParams, Message: "missing required \"uri\""}
+		}
+		for _, e := range entries {
+			if e.URI == params.URI {
+				return &skillsGetResult{Skill: e}, nil
+			}
+		}
+		// The code resources/read uses for unknown resources, per SEP-2640.
+		return nil, &jsonrpc.Error{Code: jsonrpc.CodeInvalidParams, Message: fmt.Sprintf("no skill at %q", params.URI)}
 	}
 }
