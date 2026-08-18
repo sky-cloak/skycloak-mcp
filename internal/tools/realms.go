@@ -30,7 +30,7 @@ func registerRealmReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_list_realms",
 		Description: "List the Keycloak realms in a Skycloak cluster.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List realms"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List realms"},
 	}, listRealmsHandler(api))
 }
 

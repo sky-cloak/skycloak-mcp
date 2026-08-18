@@ -14,13 +14,13 @@ func registerDomainReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_list_domains",
 		Description: "List the custom domains configured on a cluster.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List domains"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List domains"},
 	}, listDomainsHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_domain",
 		Description: "Get a custom domain by ID, including its DNS records and verification/SSL status.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get domain"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get domain"},
 	}, getDomainHandler(api))
 }
 
@@ -28,19 +28,19 @@ func registerDomainWriteTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_domain",
 		Description: "Add a custom domain to a cluster. Returns the DNS records the customer must create to verify and route the domain.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create domain"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create domain"},
 	}, createDomainHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_verify_domain",
 		Description: "Trigger DNS verification for a custom domain and return its updated status.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Verify domain"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Verify domain"},
 	}, verifyDomainHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_delete_domain",
 		Description: "Remove a custom domain from a cluster. Set confirm=true to proceed.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete domain"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete domain"},
 	}, deleteDomainHandler(api))
 }
 

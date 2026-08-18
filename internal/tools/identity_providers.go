@@ -32,7 +32,7 @@ func registerIdentityProviderReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_list_identity_providers",
 		Description: "List the identity providers (SSO connections) in a realm.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List identity providers"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List identity providers"},
 	}, listIdentityProvidersHandler(api))
 }
 

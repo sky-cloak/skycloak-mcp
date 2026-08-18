@@ -14,12 +14,12 @@ func registerSecurityReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_security",
 		Description: "Get a cluster's edge-security configuration: IP allow-listing, rate limiting, WAF, geo-blocking, and bot management.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get cluster security"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get cluster security"},
 	}, getClusterSecurityHandler(api))
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_list_cluster_captcha_domains",
 		Description: "List hostnames registered for CAPTCHA protection on a cluster.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List CAPTCHA domains"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List CAPTCHA domains"},
 	}, listClusterCAPTCHADomainsHandler(api))
 }
 
@@ -27,17 +27,17 @@ func registerSecurityWriteTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_update_cluster_security",
 		Description: "Update a cluster's edge-security configuration. Only the sections you provide are changed; CAPTCHA settings are preserved. Supports IP allow-listing, rate limiting, WAF, geo-blocking, and bot management.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Update cluster security"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Update cluster security"},
 	}, updateClusterSecurityHandler(api))
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_add_cluster_captcha_domain",
 		Description: "Register a hostname for CAPTCHA protection on a cluster.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Add CAPTCHA domain"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Add CAPTCHA domain"},
 	}, addClusterCAPTCHADomainHandler(api))
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_remove_cluster_captcha_domain",
 		Description: "Remove a hostname from CAPTCHA protection on a cluster. Set confirm=true to proceed.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Remove CAPTCHA domain"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Remove CAPTCHA domain"},
 	}, removeClusterCAPTCHADomainHandler(api))
 }
 

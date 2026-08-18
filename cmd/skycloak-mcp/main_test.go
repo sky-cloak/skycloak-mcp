@@ -93,3 +93,27 @@ func TestHTTPHandlerRejectsInvalidReadonlyQueryParam(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
+
+func TestOpenAIChallenge(t *testing.T) {
+	// The portal compares the body byte for byte, so anything other than the
+	// bare token fails verification. Guard the shape, not just the status.
+	h := newHTTPHandler(httpConfig{openAIChallenge: "tok-abc123"})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/openai-apps-challenge", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := rec.Body.String(); got != "tok-abc123" {
+		t.Errorf("body = %q, want the bare token with no newline or JSON", got)
+	}
+}
+
+func TestOpenAIChallengeAbsentWhenUnset(t *testing.T) {
+	// No token configured means no route, rather than a route serving nothing.
+	h := newHTTPHandler(httpConfig{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/openai-apps-challenge", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 when OPENAI_APPS_CHALLENGE_TOKEN is unset", rec.Code)
+	}
+}
