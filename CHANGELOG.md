@@ -6,6 +6,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Eight MCP prompts, one per workflow users actually start with: auditing
+  self-registration, reviewing upgrades, triaging failed logins, reviewing
+  identity providers, reviewing admin changes, provisioning an environment,
+  setting up a custom domain, and rotating a client secret. Each takes
+  arguments and names the exact tools to use in order, so a client that
+  surfaces prompts offers a starting point instead of a bare 129-tool list.
+  Prompts follow the same gating as the tools they name: the three mutating
+  workflows are withheld from read-only sessions, and a test fails if a
+  prompt names a tool its session cannot have, lacks a description, or does
+  not require the scopes of every tool it references.
+
 ## [0.8.0] - 2026-08-18
 
 ### Added
