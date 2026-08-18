@@ -78,15 +78,16 @@ Prompts are gated the same way as the tools they name: the three that mutate are
 
 ## Skills
 
-Where a prompt is a starting point, a skill is a full operational playbook the model loads on demand. The server ships three, served over the draft [SEP-2640 Skills extension](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2640): it declares `io.modelcontextprotocol/skills` in its capabilities, answers `skills/list` and `skills/get`, and serves each `SKILL.md` as an ordinary resource at `skill://<name>/SKILL.md` with a sha256 digest in its listing entry. OpenAI's plugin directory imports skills in exactly this shape.
+Where a prompt is a starting point, a skill is a full operational playbook the model loads on demand. The server ships four, served over the draft [SEP-2640 Skills extension](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2640): it declares `io.modelcontextprotocol/skills` in its capabilities, answers `skills/list` and `skills/get`, and serves each `SKILL.md` as an ordinary resource at `skill://<name>/SKILL.md` with a sha256 digest in its listing entry. OpenAI's plugin directory imports skills in exactly this shape.
 
 | Skill | What it encodes |
 |---|---|
 | `auth-incident-triage` | Triage "users cannot log in": separate platform outages from attacks and from configuration changes, using events, WAF logs and cluster health. Read-only |
 | `enterprise-sso-rollout` | Wire an enterprise IdP into a realm end to end: issuer validation, the upstream app registration, broker config, connection testing, and verification against real login events |
+| `keycloak-migration-doctor` | Preflight a Keycloak export, import or migration against the blockers support actually sees (script policies, the legacy `/auth` path, partial-export expectations), and diagnose a failed job by reading its real `error_message` instead of the generic dashboard notice |
 | `keycloak-upgrade-readiness` | Assess version drift, work out what the new Keycloak version breaks (extensions, themes), and sequence the rollout across environments with an export as the rollback plan |
 
-Skills follow the same gating as the tools they name: the two workflows built around write tools are withheld from read-only sessions, and a scoped session is only offered a skill whose tools it actually has. The sources live in [`internal/tools/skills/`](internal/tools/skills/), one directory per skill, in the standard [Agent Skills](https://agentskills.io/) format, so they also work copied straight into a local skills directory.
+Skills follow the same gating as the tools they name: the three workflows built around write tools are withheld from read-only sessions, and a scoped session is only offered a skill whose tools it actually has. The sources live in [`internal/tools/skills/`](internal/tools/skills/), one directory per skill, in the standard [Agent Skills](https://agentskills.io/) format, so they also work copied straight into a local skills directory.
 
 ## Connecting
 

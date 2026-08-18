@@ -67,6 +67,16 @@ var skillDefs = []skillDef{
 		},
 	},
 	{
+		name:  "keycloak-migration-doctor",
+		write: true,
+		scopes: []string{
+			"clusters:read", "realms:read", "applications:read", "identity-providers:read",
+			"domains:read", "clusters:logs:read", "clusters:events:read",
+			"clusters:exports:read", "clusters:imports:read", "themes:read",
+			"clusters:exports:write", "clusters:imports:write",
+		},
+	},
+	{
 		name:  "keycloak-upgrade-readiness",
 		write: true,
 		scopes: []string{

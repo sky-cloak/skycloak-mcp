@@ -191,7 +191,7 @@ func TestSkillsNameOnlyToolsTheSessionHas(t *testing.T) {
 // same way the prompt test does: the local read-only default and an OAuth
 // session whose scopes are known to be read-only.
 func TestWriteSkillsAreGatedLikeWriteTools(t *testing.T) {
-	writeSkills := []string{"enterprise-sso-rollout", "keycloak-upgrade-readiness"}
+	writeSkills := []string{"enterprise-sso-rollout", "keycloak-migration-doctor", "keycloak-upgrade-readiness"}
 	readSkills := []string{"auth-incident-triage"}
 
 	names := func(entries []skillEntry) []string {
@@ -248,6 +248,33 @@ func TestEmptyScopeSetServesNoSkills(t *testing.T) {
 		if strings.HasPrefix(r.URI, "skill://") {
 			t.Errorf("an empty scope set registered resource %s", r.URI)
 		}
+	}
+}
+
+// TestSkillScopeSetsAreSelfSufficient runs every skill under the minimal
+// grant: a session holding exactly the skill's declared scopes, through the
+// real Register path. The skill must be offered there, and every tool its
+// served body names must be registered in that same session. This is the
+// wire-level counterpart of TestSkillScopesCoverTheirTools, which reasons
+// from the toolAreas table rather than from what a client receives.
+func TestSkillScopeSetsAreSelfSufficient(t *testing.T) {
+	for _, def := range skillDefs {
+		t.Run(def.name, func(t *testing.T) {
+			scopes := NewScopes(def.scopes)
+			cs := skillSession(t, true, scopes)
+
+			uri := "skill://" + def.name + "/SKILL.md"
+			if !slices.ContainsFunc(listSkills(t, cs), func(e skillEntry) bool { return e.URI == uri }) {
+				t.Fatalf("skills/list under the skill's own scopes omits %s", uri)
+			}
+
+			available := registeredTools(t, true, scopes)
+			for _, m := range toolNameRE.FindAllString(readSkill(t, cs, uri), -1) {
+				if !slices.Contains(available, m) {
+					t.Errorf("%s names %s, which its own scope set does not register", uri, m)
+				}
+			}
+		})
 	}
 }
 
