@@ -138,6 +138,10 @@ It needs no credential of its own: callers supply theirs per request, so nothing
 
 The OAuth path is on whenever `SKYCLOAK_ISSUER` and `SKYCLOAK_DASHBOARD_URL` are set, which they are by default. `GET /.well-known/oauth-protected-resource` is then served unauthenticated, naming the realm as the authorization server. Its `resource` value is taken from `SKYCLOAK_PUBLIC_URL` when set, and otherwise from the request's own `Host` and scheme, so a single-host deployment behind an ingress needs no extra configuration. The scheme comes from `X-Forwarded-Proto` when present, and otherwise defaults to `https` for anything but a loopback host, since TLS terminates upstream and publishing an `http://` identifier would not match the URL the client connected on. Set `SKYCLOAK_PUBLIC_URL` if your ingress rewrites `Host`. The document also lists `openid profile email` as its `scopes_supported`, and the `WWW-Authenticate` challenge repeats them as a `scope` parameter, so a client reading either one asks the realm for them: `openid` is required, because the token exchange makes the dashboard call Keycloak's userinfo endpoint and Keycloak refuses a token granted without it. A token that arrives without it is refused at verification with a `401` and the challenge, rather than carried to an exchange that cannot succeed, so a client still holding a grant from before stops retrying and signs in again. Blanking either of the issuer or dashboard variables turns OAuth off entirely, and the server goes back to challenging for an API key and nothing else.
 
+`OPENAI_APPS_CHALLENGE_TOKEN` serves OpenAI's plugin-directory domain verification
+token at `/.well-known/openai-apps-challenge`, as plain text and nothing else. Unset,
+the route is not registered and the path 404s.
+
 Startup logs one line with the wiring it resolved (`oauth=`, `issuer=`, `dashboard=`, `public_url=`, `endpoint=`, `allow_writes=`), so a misconfigured deployment can be spotted without a redeploy. Every request refused on the OAuth path logs one line naming the stage that failed (`verify`, `exchange` or `scopes`), the status the caller got, and the underlying error. A verification failure adds the check that rejected the token (`expired`, `wrong_issuer`, `bad_signature`, `unknown_key_id`, `wrong_token_type`, `no_openid_scope`, and so on); an exchange failure adds the dashboard's status and the host called. The caller appears as the token's subject once it is verified, and never as a credential: the access token, the `Authorization` header and the minted API key are never logged.
 
 ## Configuration
@@ -151,6 +155,7 @@ Startup logs one line with the wiring it resolved (`oauth=`, `issuer=`, `dashboa
 | `SKYCLOAK_CLIENT_ID` | `skycloak-mcp` (CLI device flow only) |
 | `SKYCLOAK_DASHBOARD_URL` | `https://app.skycloak.io` (mints CLI keys and HTTP session keys) |
 | `SKYCLOAK_PUBLIC_URL` | none (derived from each request; set it when the ingress rewrites `Host`) |
+| `OPENAI_APPS_CHALLENGE_TOKEN` | Serves OpenAI's plugin-directory verification token at `/.well-known/openai-apps-challenge`. Unset, that path 404s. |
 
 Commands: `init` (browser sign-in), `run` (serve), `logout` (remove the stored key). `init` accepts `--workspace <id>`, `--allow-writes`, `--allow-credentials`, and `--ttl-days` (default 90).
 

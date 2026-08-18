@@ -24,6 +24,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -156,6 +157,8 @@ func runServer(ctx context.Context, args []string) {
 			issuer:       authCfg.Issuer,
 			dashboardURL: authCfg.DashboardURL,
 			publicURL:    os.Getenv("SKYCLOAK_PUBLIC_URL"),
+
+			openAIChallenge: os.Getenv("OPENAI_APPS_CHALLENGE_TOKEN"),
 		}
 		srv := newHTTPServer(*httpAddr, newHTTPHandler(cfg))
 		ln, err := net.Listen("tcp", *httpAddr)
@@ -198,6 +201,13 @@ type httpConfig struct {
 	// `resource` identifier in RFC 9728 metadata. Empty means derive it from each
 	// request, which is what a single-host deployment behind a proxy wants.
 	publicURL string
+	// openAIChallenge is the token OpenAI's plugin portal issues to prove we
+	// control this host. It is served verbatim, as plain text and nothing else,
+	// because the portal rejects JSON or more than one token at that path. Empty
+	// means the route is not registered at all, which is the right default: an
+	// endpoint that exists but answers with nothing is harder to reason about
+	// than one that 404s.
+	openAIChallenge string
 
 	// logger receives the diagnostic lines this transport writes. Nil is the
 	// standard logger, which is what the process uses; a test supplies its own to
@@ -304,10 +314,26 @@ func newHTTPHandler(cfg httpConfig) http.Handler {
 		mux.Handle(resourceMetadataPath, protectedResourceMetadataHandler(cfg, ""))
 		mux.Handle(resourceMetadataPath+"/mcp", protectedResourceMetadataHandler(cfg, "/mcp"))
 	}
+	if cfg.openAIChallenge != "" {
+		mux.HandleFunc("GET /.well-known/openai-apps-challenge", handleOpenAIChallenge(cfg.openAIChallenge))
+	}
 	mux.Handle("/{$}", authed) // bare origin: what `claude mcp add --transport http` targets
 	mux.Handle("/mcp", authed)
 	mux.Handle("/mcp/{$}", authed) // trailing slash, which the old catch-all also served
 	return mux
+}
+
+// handleOpenAIChallenge serves the plugin-directory domain verification token.
+// The portal fetches this path and compares the body byte for byte, so it must
+// be the bare token: no JSON, no trailing newline, no second token.
+func handleOpenAIChallenge(token string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		// A rotated token served from a cache fails verification for as long as
+		// the old one lives, and the failure looks like a domain we do not own.
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = io.WriteString(w, token)
+	}
 }
 
 func handleHealth(w http.ResponseWriter, _ *http.Request) {

@@ -14,37 +14,37 @@ func registerParityReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_smtp",
 		Description: "Get a realm's SMTP configuration (secret values are never returned).",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get SMTP config"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get SMTP config"},
 	}, getSMTPHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_theme",
 		Description: "Get a custom theme by ID.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get theme"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get theme"},
 	}, getThemeHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_domain_route",
 		Description: "Get a single realm route on a custom domain.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get domain route"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get domain route"},
 	}, getDomainRouteHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_client_theme_assignment",
 		Description: "Get a client's login-theme override (empty means the realm default).",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "Get client theme"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get client theme"},
 	}, getClientThemeHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_list_user_roles",
 		Description: "List the realm roles assigned to a user.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List user roles"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List user roles"},
 	}, listUserRolesHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_list_user_groups",
 		Description: "List the groups a user belongs to.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List user groups"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List user groups"},
 	}, listUserGroupsHandler(api))
 }
 
@@ -52,55 +52,55 @@ func registerParityWriteTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_rotate_application_secret",
 		Description: "Regenerate an application's client secret and return the new value (shown only once).",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Rotate application secret"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Rotate application secret"},
 	}, rotateApplicationSecretHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_update_realm",
 		Description: "Update a realm's display name and enabled state.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Update realm"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Update realm"},
 	}, updateRealmHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_delete_smtp",
 		Description: "Remove a realm's SMTP configuration. Set confirm=true to proceed.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete SMTP config"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete SMTP config"},
 	}, deleteSMTPHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_create_domain_route",
 		Description: "Add a realm route to a custom domain.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create domain route"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create domain route"},
 	}, createDomainRouteHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_delete_domain_route",
 		Description: "Remove a realm route from a custom domain. Set confirm=true to proceed.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete domain route"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete domain route"},
 	}, deleteDomainRouteHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_set_client_theme_assignment",
 		Description: "Set a client's login-theme override. Pass a theme ID, or an empty string to reset to the realm default.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Set client theme"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Set client theme"},
 	}, setClientThemeHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_delete_theme",
 		Description: "Delete a custom theme. Set confirm=true to proceed.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete theme"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete theme"},
 	}, deleteThemeHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_delete_extension",
 		Description: "Delete a custom extension from the workspace catalog. Set confirm=true to proceed.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete extension"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete extension"},
 	}, deleteExtensionHandler(api))
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_delete_export",
 		Description: "Delete a database export archive. Set confirm=true to proceed.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete export"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete export"},
 	}, deleteExportHandler(api))
 }
 

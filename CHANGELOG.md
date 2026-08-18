@@ -6,6 +6,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Every tool now declares `openWorldHint`, and the thirteen write tools that had
+  no `destructiveHint` now carry one. Both are required by OpenAI's plugin
+  directory, which validates them during its tool scan, and the first is a
+  correctness fix in its own right: the MCP spec defaults `openWorldHint` to
+  true, so all 129 tools were telling clients they might act on the open
+  internet while operating on a single tenant. Six are genuinely open-world:
+  the SMTP, SIEM, webhook and identity-provider test tools, OIDC discovery, and
+  domain verification.
+- `OPENAI_APPS_CHALLENGE_TOKEN` serves that directory's domain verification
+  token at `/.well-known/openai-apps-challenge`. Unset, the route is not
+  registered.
+- A test that fails if any registered tool reaches the wire without a title,
+  `openWorldHint`, or, for write tools, `destructiveHint`.
+
 ## [0.7.2] - 2026-08-18
 
 ### Fixed

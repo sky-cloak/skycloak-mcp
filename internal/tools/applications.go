@@ -33,7 +33,7 @@ func registerApplicationReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_list_applications",
 		Description: "List the OIDC/SAML clients (applications) in a realm.",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, Title: "List applications"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List applications"},
 	}, listApplicationsHandler(api))
 }
 
