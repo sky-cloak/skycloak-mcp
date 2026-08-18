@@ -251,48 +251,30 @@ func TestEmptyScopeSetServesNoSkills(t *testing.T) {
 	}
 }
 
-// TestMigrationDoctorScopesAreSelfSufficient: a session granted exactly the
-// migration doctor's declared scopes must be offered the skill, serve bytes
-// matching the listed digest, and register every tool the body names. The
-// generic tests check these properties against unscoped sessions; this pins
-// them to the minimal grant, where a missed scope in the union would surface
-// as a skill telling the model to call tools its session does not have.
-func TestMigrationDoctorScopesAreSelfSufficient(t *testing.T) {
-	const name = "keycloak-migration-doctor"
-	var def skillDef
-	for _, d := range skillDefs {
-		if d.name == name {
-			def = d
-		}
-	}
-	if def.name == "" {
-		t.Fatalf("skill %s is not defined", name)
-	}
-	scopes := NewScopes(def.scopes)
-	cs := skillSession(t, true, scopes)
+// TestSkillScopeSetsAreSelfSufficient runs every skill under the minimal
+// grant: a session holding exactly the skill's declared scopes, through the
+// real Register path. The skill must be offered there, and every tool its
+// served body names must be registered in that same session. This is the
+// wire-level counterpart of TestSkillScopesCoverTheirTools, which reasons
+// from the toolAreas table rather than from what a client receives.
+func TestSkillScopeSetsAreSelfSufficient(t *testing.T) {
+	for _, def := range skillDefs {
+		t.Run(def.name, func(t *testing.T) {
+			scopes := NewScopes(def.scopes)
+			cs := skillSession(t, true, scopes)
 
-	uri := "skill://" + name + "/SKILL.md"
-	var entry skillEntry
-	for _, e := range listSkills(t, cs) {
-		if e.URI == uri {
-			entry = e
-		}
-	}
-	if entry.URI == "" {
-		t.Fatalf("skills/list under the skill's own scopes omits %s", uri)
-	}
+			uri := "skill://" + def.name + "/SKILL.md"
+			if !slices.ContainsFunc(listSkills(t, cs), func(e skillEntry) bool { return e.URI == uri }) {
+				t.Fatalf("skills/list under the skill's own scopes omits %s", uri)
+			}
 
-	body := readSkill(t, cs, uri)
-	sum := sha256.Sum256([]byte(body))
-	if got := "sha256:" + hex.EncodeToString(sum[:]); got != entry.Resources[0].Digest {
-		t.Errorf("digest %s, but served content hashes to %s", entry.Resources[0].Digest, got)
-	}
-
-	available := registeredTools(t, true, scopes)
-	for _, m := range toolNameRE.FindAllString(body, -1) {
-		if !slices.Contains(available, m) {
-			t.Errorf("%s names %s, which its own scope set does not register", uri, m)
-		}
+			available := registeredTools(t, true, scopes)
+			for _, m := range toolNameRE.FindAllString(readSkill(t, cs, uri), -1) {
+				if !slices.Contains(available, m) {
+					t.Errorf("%s names %s, which its own scope set does not register", uri, m)
+				}
+			}
+		})
 	}
 }
 

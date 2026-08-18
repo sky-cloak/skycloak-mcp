@@ -18,8 +18,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   exports, imports and migrations, built from the failure modes support
   tickets actually show and centered on reading a failed job's
   `error_message`, which the API records but the dashboard notice does not
-  surface. They follow the same gating as the tools
-  they name: the three write workflows are withheld from read-only sessions,
+  surface. They follow the same gating as the tools they name: the three
+  write workflows are withheld from read-only sessions,
   and tests fail if a served skill names a tool its session does not have,
   if a listing digest stops matching the served bytes, or if an entry's
   frontmatter drifts from the file's.

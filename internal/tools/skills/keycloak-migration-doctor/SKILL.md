@@ -27,10 +27,12 @@ Diagnose; if the move has not run yet, start with Preflight.
    refuses a realm-name collision with a 409 rather than overwriting, so a
    taken name is better discovered now than on migration day.
 3. Check the known blockers, all taken from support history:
-   - **Script-based authorization policies.** Current Keycloak refuses
-     realms whose clients carry JavaScript policies; the classic offender
-     is a policy named "Default Policy" that old versions auto-created on
-     authorization-enabled clients. No tool lists client policies, so use
+   - **Script-based authorization policies.** Current Keycloak only loads
+     JavaScript policies packaged in a deployed scripts JAR, so realms
+     whose clients still carry admin-console script policies fail; the
+     classic offender is a policy named "Default Policy" that old versions
+     auto-created on authorization-enabled clients. No tool lists client
+     policies, so use
      skycloak_list_applications to enumerate the clients and have the user
      clear script policies under each client's Authorization > Policies in
      the admin console. The dry run below catches any they miss.
@@ -56,7 +58,9 @@ Diagnose; if the move has not run yet, start with Preflight.
 1. Fetch the job itself, not the notification about it:
    skycloak_list_exports then skycloak_get_export for database exports,
    skycloak_get_realm_export or skycloak_get_realm_import by job ID for
-   realm transfers. Read status, progress and above all error_message.
+   realm transfers. Realm transfer jobs have no list tool, so if the ID is
+   lost, re-run the job: the failure reproduces with a fresh record. Read
+   status, progress and above all error_message.
 2. Translate error_message into an instruction the user can execute:
    - **Errors naming a policy or script on specific clients:** for each
      client the error names, delete or replace that policy under the
@@ -72,10 +76,9 @@ Diagnose; if the move has not run yet, start with Preflight.
      keycloak-upgrade-readiness skill), then the import re-runs.
    - **No error_message, or a job parked without progress:** not a
      realm-config problem. Go to the escalation list below.
-3. Correlate: skycloak_get_logs around the job window for errors the job
-   record does not carry, and skycloak_query_events with category=admin to
-   see whether realm config changed between the last working run and the
-   failing one.
+3. Correlate: skycloak_get_logs for recent errors the job record does not
+   carry, and skycloak_query_events with category=admin to see whether
+   realm config changed between the last working run and the failing one.
 4. **Download and upload URLs are signed.** The signature is in the query
    string, and corporate mail scanners rewrite links and strip it, turning
    a working URL into a 403. Have the user copy URLs from the dashboard or
