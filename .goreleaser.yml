@@ -1,0 +1,43 @@
+version: 2
+project_name: skycloak-mcp
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: skycloak-mcp
+    main: ./cmd/skycloak-mcp
+    binary: skycloak-mcp
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+dockers:
+  - image_templates:
+      - "ghcr.io/sky-cloak/skycloak-mcp:{{ .Version }}"
+      - "ghcr.io/sky-cloak/skycloak-mcp:latest"
+    dockerfile: Dockerfile.goreleaser
+    goos: linux
+    goarch: amd64
+    ids: [skycloak-mcp]
+
+changelog:
+  use: github
+  sort: asc
+
+release:
+  prerelease: auto

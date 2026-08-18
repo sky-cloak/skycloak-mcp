@@ -1,0 +1,25 @@
+# Binaries (anchored to repo root so cmd/skycloak-mcp/ is not ignored)
+/skycloak-mcp
+bin/
+dist/
+bin/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Go
+vendor/
+
+# Local env / secrets
+.env
+.env.*
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+
+# DNS-auth signing key for the MCP registry. Never commit this.
+key.pem
+*.pem

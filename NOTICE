@@ -1,0 +1,15 @@
+Skycloak MCP Server
+Copyright 2026 Skycloak
+
+This product includes software developed at Skycloak (https://skycloak.io).
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+--------------------------------------------------------------------------------
+
+internal/apiclient/openapi.yaml is the OpenAPI description of the Skycloak
+platform API. It is (c) Skycloak and is not covered by the Apache-2.0 grant
+above; it is included in this repository so that the generated client in
+internal/apiclient can be produced and verified against the API it targets.
+The `license: Proprietary` field inside that file refers to the API description
+itself, not to this repository.

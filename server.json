@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.skycloak/skycloak-mcp",
+  "title": "Skycloak",
+  "description": "Manage your Skycloak-hosted Keycloak: clusters, realms, apps, SSO and users, from any MCP client.",
+  "version": "0.7.0",
+  "websiteUrl": "https://skycloak.io",
+  "icons": [
+    {
+      "src": "https://skycloak.io/wp-content/themes/skycloak/assets/images/logos/skycloak-mark-512.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.skycloak.io"
+    }
+  ]
+}
