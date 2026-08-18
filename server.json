@@ -3,7 +3,7 @@
   "name": "io.skycloak/skycloak-mcp",
   "title": "Skycloak",
   "description": "Operate managed Keycloak from your AI client. Provision and scale clusters, create realms and applications, wire up SSO and identity providers (Google, GitHub, SAML, LDAP), manage users, roles and groups, set custom domains and branding, configure WAF and geo-blocking, and stream audit events to your SIEM. Signs you in through the browser with OAuth, so there is no API key to paste, and what you can change is bounded by your workspace role.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "repository": {
     "url": "https://github.com/sky-cloak/skycloak-mcp",
     "source": "github",
