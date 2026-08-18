@@ -191,7 +191,7 @@ func TestSkillsNameOnlyToolsTheSessionHas(t *testing.T) {
 // same way the prompt test does: the local read-only default and an OAuth
 // session whose scopes are known to be read-only.
 func TestWriteSkillsAreGatedLikeWriteTools(t *testing.T) {
-	writeSkills := []string{"enterprise-sso-rollout", "keycloak-upgrade-readiness"}
+	writeSkills := []string{"enterprise-sso-rollout", "keycloak-migration-doctor", "keycloak-upgrade-readiness"}
 	readSkills := []string{"auth-incident-triage"}
 
 	names := func(entries []skillEntry) []string {
@@ -247,6 +247,51 @@ func TestEmptyScopeSetServesNoSkills(t *testing.T) {
 		}
 		if strings.HasPrefix(r.URI, "skill://") {
 			t.Errorf("an empty scope set registered resource %s", r.URI)
+		}
+	}
+}
+
+// TestMigrationDoctorScopesAreSelfSufficient: a session granted exactly the
+// migration doctor's declared scopes must be offered the skill, serve bytes
+// matching the listed digest, and register every tool the body names. The
+// generic tests check these properties against unscoped sessions; this pins
+// them to the minimal grant, where a missed scope in the union would surface
+// as a skill telling the model to call tools its session does not have.
+func TestMigrationDoctorScopesAreSelfSufficient(t *testing.T) {
+	const name = "keycloak-migration-doctor"
+	var def skillDef
+	for _, d := range skillDefs {
+		if d.name == name {
+			def = d
+		}
+	}
+	if def.name == "" {
+		t.Fatalf("skill %s is not defined", name)
+	}
+	scopes := NewScopes(def.scopes)
+	cs := skillSession(t, true, scopes)
+
+	uri := "skill://" + name + "/SKILL.md"
+	var entry skillEntry
+	for _, e := range listSkills(t, cs) {
+		if e.URI == uri {
+			entry = e
+		}
+	}
+	if entry.URI == "" {
+		t.Fatalf("skills/list under the skill's own scopes omits %s", uri)
+	}
+
+	body := readSkill(t, cs, uri)
+	sum := sha256.Sum256([]byte(body))
+	if got := "sha256:" + hex.EncodeToString(sum[:]); got != entry.Resources[0].Digest {
+		t.Errorf("digest %s, but served content hashes to %s", entry.Resources[0].Digest, got)
+	}
+
+	available := registeredTools(t, true, scopes)
+	for _, m := range toolNameRE.FindAllString(body, -1) {
+		if !slices.Contains(available, m) {
+			t.Errorf("%s names %s, which its own scope set does not register", uri, m)
 		}
 	}
 }
