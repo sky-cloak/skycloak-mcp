@@ -59,6 +59,23 @@ Tool names carry a `skycloak_` prefix that the table below omits, so `list_clust
 
 **Conventions:** destructive tools (`delete_*`, `uninstall_extension`, `cancel_cluster_upgrade`) require `confirm=true`. `create_cluster` is asynchronous: poll `get_cluster` until the cluster is `available`. `create_domain` returns the DNS records the customer must create; `verify_domain` triggers a DNS check. `set_theme_assignment` activates a custom theme per Keycloak theme type (empty string resets to the built-in default). `update_cluster_security` leaves CAPTCHA settings untouched. Realm import/export moves one realm's configuration and is separate from `create_export`, which dumps a whole cluster's database: both are asynchronous, and the realm archive is always encrypted, so the password used to export it is needed to import it again. A realm can be imported straight from an existing export (`source_export_id`) or from an uploaded archive (`create_realm_import_upload_url`, PUT, then `upload_s3_key`); importing creates a realm and refuses a name collision rather than overwriting, and needs `confirm=true` because it brings users and credentials with it.
 
+## Prompts
+
+Eight prompts give you a starting point into that tool surface. Clients surface them as slash commands or suggested actions; each one takes arguments (realm, cluster, time window) and walks the model through the right tools in the right order.
+
+| Prompt | What it does |
+|---|---|
+| `audit_self_registration` | Find every realm that still allows self-registration, across one cluster or all of them |
+| `review_upgrades` | Spot clusters behind on their Keycloak version and lay out the upgrade path |
+| `triage_failed_logins` | Pull recent failed logins for a realm and group them by source IP |
+| `review_identity_providers` | List a realm's SSO connections and check whether a specific one is enabled |
+| `review_admin_changes` | Show who changed what in a realm recently, focused on login and security settings |
+| `provision_environment` | Create a cluster, add a realm, and wire up an identity provider, confirming each step |
+| `set_up_custom_domain` | Add a custom domain, hand back the exact DNS records, verify, and route it to a realm |
+| `rotate_client_secret` | Regenerate an application's client secret with the blast radius spelled out first |
+
+Prompts are gated the same way as the tools they name: the three that mutate are only offered to sessions that could call the write tools they reference, and their instructions tell the model to confirm with you before changing anything. The `confirm=true` requirement on destructive tools still applies on top.
+
 ## Connecting
 
 For hosted HTTP the simplest route is OAuth, which needs no credential at all:

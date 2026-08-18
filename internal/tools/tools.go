@@ -1,4 +1,4 @@
-// Package tools registers Skycloak MCP tools on a server.
+// Package tools registers Skycloak MCP tools and prompts on a server.
 package tools
 
 import (
@@ -250,12 +250,13 @@ var toolAreas = []toolArea{
 	{name: "realm writes", write: true, scopes: []string{"realms:write"}, register: registerRealmWriteTools},
 }
 
-// Register adds tools to the server.
+// Register adds tools and prompts to the server.
 //
 // Read-only tools are registered when the caller's scopes cover them. Mutating
 // tools additionally need allowWrites, so a server started read-only stays
 // read-only whatever the credential could do. Pass nil scopes when the
-// credential's grant is not knowable.
+// credential's grant is not knowable. Prompts follow the same gating as the
+// tools they name.
 func Register(s *mcp.Server, api API, allowWrites bool, scopes Scopes) {
 	for _, area := range toolAreas {
 		if area.write && !allowWrites {
@@ -266,6 +267,7 @@ func Register(s *mcp.Server, api API, allowWrites bool, scopes Scopes) {
 		}
 		area.register(s, api)
 	}
+	registerPrompts(s, allowWrites, scopes)
 }
 
 // ptr returns a pointer to v. Used for optional *bool tool annotations.
