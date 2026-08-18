@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-18
+
 ### Added
 - Every tool now declares `openWorldHint`, and the thirteen write tools that had
   no `destructiveHint` now carry one. Both are required by OpenAI's plugin
