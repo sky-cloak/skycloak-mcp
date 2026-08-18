@@ -7,6 +7,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- Three MCP skills served over the draft SEP-2640 Skills extension: the server
+  declares `io.modelcontextprotocol/skills`, answers `skills/list` and
+  `skills/get` with per-file sha256 digests, and serves each `SKILL.md` as a
+  resource at `skill://<name>/SKILL.md`, which is the shape OpenAI's plugin
+  directory imports. The skills are operational playbooks rather than tool
+  summaries: triaging an authentication incident (read-only), rolling out an
+  enterprise SSO integration end to end, and assessing Keycloak upgrade
+  readiness with rollout sequencing. They follow the same gating as the tools
+  they name: the two write workflows are withheld from read-only sessions,
+  and tests fail if a served skill names a tool its session does not have,
+  if a listing digest stops matching the served bytes, or if an entry's
+  frontmatter drifts from the file's.
+
+### Changed
+- MCP Go SDK upgraded from v1.6.1 to v1.7.0, which adds the custom JSON-RPC
+  method registration that `skills/list` and `skills/get` are built on.
 - Eight MCP prompts, one per workflow users actually start with: auditing
   self-registration, reviewing upgrades, triaging failed logins, reviewing
   identity providers, reviewing admin changes, provisioning an environment,

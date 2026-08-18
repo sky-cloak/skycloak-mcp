@@ -180,7 +180,11 @@ func runServer(ctx context.Context, args []string) {
 // newMCPServer builds a server for one credential. scopes may be nil, meaning
 // the credential's grant is not knowable and every tool is registered.
 func newMCPServer(api tools.API, allowWrites bool, scopes tools.Scopes) *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{Name: "skycloak-mcp", Version: version}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "skycloak-mcp", Version: version}, &mcp.ServerOptions{
+		// Declares the SEP-2640 skills extension; the skills themselves are
+		// registered by tools.Register under the session's gating.
+		Capabilities: tools.Capabilities(),
+	})
 	tools.Register(server, api, allowWrites, scopes)
 	return server
 }
