@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "skycloak": {
+      "type": "http",
+      "url": "https://mcp.skycloak.io",
+      "note": "Hosted MCP for managed Keycloak. No API key: the client runs OAuth against Skycloak login. Optional Authorization: Bearer <key> from app.skycloak.io. Add ?readonly=true for a read-only tool surface."
+    }
+  }
+}
