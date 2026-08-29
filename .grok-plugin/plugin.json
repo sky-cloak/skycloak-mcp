@@ -1,0 +1,18 @@
+{
+  "name": "skycloak",
+  "version": "0.9.0",
+  "description": "Official MCP server for Skycloak managed Keycloak. Manage clusters, realms, applications, SSO, and users from Grok via https://mcp.skycloak.io.",
+  "author": {
+    "name": "Skycloak",
+    "url": "https://github.com/sky-cloak"
+  },
+  "repository": "https://github.com/sky-cloak/skycloak-mcp",
+  "homepage": "https://skycloak.io",
+  "license": "Apache-2.0",
+  "keywords": [
+    "skycloak",
+    "keycloak",
+    "managed keycloak",
+    "keycloak mcp"
+  ]
+}
