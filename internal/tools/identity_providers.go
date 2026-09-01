@@ -45,7 +45,7 @@ func listIdentityProvidersHandler(api API) mcp.ToolHandlerFor[ListIdentityProvid
 		if err != nil {
 			return toolError(err), ListIdentityProvidersOutput{}, nil
 		}
-		out := ListIdentityProvidersOutput{Count: len(idps)}
+		out := ListIdentityProvidersOutput{Count: len(idps), IdentityProviders: []IdentityProviderSummary{}}
 		var b strings.Builder
 		for _, p := range idps {
 			out.IdentityProviders = append(out.IdentityProviders, IdentityProviderSummary{ProviderID: p.ProviderID, Type: p.Type, DisplayName: p.DisplayName, Enabled: p.Enabled})

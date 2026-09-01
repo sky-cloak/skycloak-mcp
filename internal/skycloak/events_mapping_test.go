@@ -1,0 +1,219 @@
+package skycloak
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+)
+
+// These exercise the API-to-EventEntry mapping itself. The tool-level tests use
+// a stub that hands back an already-populated EventEntry, so they keep passing
+// even if this mapping drops every field the API sends — which is precisely the
+// bug being fixed here, admin events arriving without their resource.
+
+func TestQueryEventsMapsAdminResourceFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, `[{
+			"id":"11111111-1111-1111-1111-111111111111",
+			"timestamp":"2026-08-31T18:45:00Z",
+			"category":"admin",
+			"realm_id":"r1","realm_name":"alfred",
+			"operation_type":"UPDATE",
+			"resource_type":"REALM",
+			"resource_path":"realms/alfred",
+			"ip_address":"203.0.113.7"
+		}]`)
+	}))
+	defer srv.Close()
+
+	events, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid, EventQuery{})
+	if err != nil {
+		t.Fatalf("QueryEvents: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("got %d events", len(events))
+	}
+	e := events[0]
+	if e.ResourceType != "REALM" {
+		t.Errorf("resource_type dropped: %+v", e)
+	}
+	if e.ResourcePath != "realms/alfred" {
+		t.Errorf("resource_path dropped: %+v", e)
+	}
+	if e.OperationType != "UPDATE" {
+		t.Errorf("operation_type dropped: %+v", e)
+	}
+}
+
+func TestQueryEventsMapsUserEventFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, `[{
+			"id":"22222222-2222-2222-2222-222222222222",
+			"timestamp":"2026-08-31T18:45:00Z",
+			"category":"user",
+			"realm_id":"r1","realm_name":"alfred",
+			"type":"LOGIN_ERROR",
+			"user_id":"33333333-3333-3333-3333-333333333333",
+			"username":"someone",
+			"session_id":"sess-1",
+			"auth_method":"openid-connect",
+			"identity_provider":"google",
+			"grant_type":"authorization_code",
+			"is_m2m":true,
+			"error":"invalid_user_credentials"
+		}]`)
+	}))
+	defer srv.Close()
+
+	events, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid, EventQuery{})
+	if err != nil {
+		t.Fatalf("QueryEvents: %v", err)
+	}
+	e := events[0]
+	for name, got := range map[string]string{
+		"user_id":           e.UserID,
+		"session_id":        e.SessionID,
+		"auth_method":       e.AuthMethod,
+		"identity_provider": e.IdentityProvider,
+		"grant_type":        e.GrantType,
+	} {
+		if got == "" {
+			t.Errorf("%s dropped from mapping: %+v", name, e)
+		}
+	}
+	if !e.IsM2M {
+		t.Errorf("is_m2m dropped: %+v", e)
+	}
+}
+
+// The filters have to reach the wire, not just the struct. Asserting on the
+// query string is what proves the request the API actually receives.
+func TestQueryEventsSendsFiltersOnTheWire(t *testing.T) {
+	var got url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		writeJSON(w, 200, `[]`)
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid, EventQuery{
+		Limit: 100, Offset: 200, Category: "user",
+		StartTime: "2026-08-31T00:00:00Z", EndTime: "2026-09-01T00:00:00Z",
+		Types: []string{"LOGIN_ERROR"}, Error: "invalid_user_credentials", Order: "asc",
+	})
+	if err != nil {
+		t.Fatalf("QueryEvents: %v", err)
+	}
+	for k, want := range map[string]string{
+		"offset":     "200",
+		"start_time": "2026-08-31T00:00:00Z",
+		"types":      "LOGIN_ERROR",
+		"error":      "invalid_user_credentials",
+		"order":      "asc",
+	} {
+		if got.Get(k) == "" {
+			t.Errorf("%s never reached the query string: %v", k, got)
+			continue
+		}
+		if k == "offset" || k == "types" || k == "error" || k == "order" {
+			if got.Get(k) != want {
+				t.Errorf("%s = %q, want %q", k, got.Get(k), want)
+			}
+		}
+	}
+	if got.Get("end_time") == "" {
+		t.Errorf("end_time never reached the query string: %v", got)
+	}
+}
+
+// types and operation_types are mutually exclusive upstream and each is rejected
+// for the other category, so sending the wrong one 422s the whole query rather
+// than being ignored.
+func TestQueryEventsOmitsFiltersThatDoNotApplyToTheCategory(t *testing.T) {
+	var got url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		writeJSON(w, 200, `[]`)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	if _, err := c.QueryEvents(context.Background(), cuid, EventQuery{
+		Category: "admin", Types: []string{"LOGIN_ERROR"}, OperationTypes: []string{"UPDATE"},
+	}); err != nil {
+		t.Fatalf("QueryEvents: %v", err)
+	}
+	if got.Get("types") != "" {
+		t.Errorf("user event types sent on an admin query: %v", got)
+	}
+	if got.Get("operation_types") != "UPDATE" {
+		t.Errorf("operation_types missing on an admin query: %v", got)
+	}
+
+	if _, err := c.QueryEvents(context.Background(), cuid, EventQuery{
+		Category: "user", Types: []string{"LOGIN_ERROR"}, OperationTypes: []string{"UPDATE"},
+	}); err != nil {
+		t.Fatalf("QueryEvents: %v", err)
+	}
+	if got.Get("operation_types") != "" {
+		t.Errorf("admin operation types sent on a user query: %v", got)
+	}
+	if got.Get("types") != "LOGIN_ERROR" {
+		t.Errorf("types missing on a user query: %v", got)
+	}
+}
+
+// An unparseable timestamp must not be sent as garbage; the API would 422 the
+// whole query rather than fall back to its default window.
+func TestQueryEventsDropsUnparseableTime(t *testing.T) {
+	var got url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		writeJSON(w, 200, `[]`)
+	}))
+	defer srv.Close()
+
+	if _, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid,
+		EventQuery{StartTime: "last tuesday"}); err != nil {
+		t.Fatalf("QueryEvents: %v", err)
+	}
+	if got.Get("start_time") != "" {
+		t.Errorf("unparseable time forwarded: %v", got)
+	}
+}
+
+// get_realm and list_realms go through one converter, so the same entity cannot
+// serialise two ways depending on which call produced it.
+func TestGetRealmMapsSecuritySettings(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, `{
+			"id":"44444444-4444-4444-4444-444444444444",
+			"name":"alfred","display_name":"Alfred","enabled":true,
+			"ssl_required":"external",
+			"registration_allowed":true,
+			"registration_email_as_username":false,
+			"login_with_email_allowed":true,
+			"duplicate_emails_allowed":false
+		}`)
+	}))
+	defer srv.Close()
+
+	r, err := newTestClient(srv.URL).GetRealm(context.Background(), cuid, "alfred")
+	if err != nil {
+		t.Fatalf("GetRealm: %v", err)
+	}
+	if !r.RegistrationAllowed {
+		t.Errorf("registration_allowed dropped: %+v", r)
+	}
+	if !r.LoginWithEmailAllowed {
+		t.Errorf("login_with_email_allowed dropped: %+v", r)
+	}
+	if r.SSLRequired != "external" {
+		t.Errorf("ssl_required dropped: %+v", r)
+	}
+	if r.ID == "" {
+		t.Errorf("id dropped: %+v", r)
+	}
+}

@@ -276,10 +276,24 @@ func (c *Client) DeleteCluster(ctx context.Context, id string) error {
 }
 
 // Realm mirrors the public API Realm resource (subset used by the tools).
+// Realm is a Keycloak realm.
+//
+// The security settings are plain bools, not pointers: the API marks every one
+// of them required, so there is no "the API did not say" case to represent. If
+// that ever becomes optional upstream they must become pointers, or an omitted
+// value would silently read as "registration is off" — a wrong answer to a
+// security question rather than a missing one.
 type Realm struct {
-	Name        string
-	DisplayName string
-	Enabled     bool
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Enabled     bool   `json:"enabled"`
+
+	ID                          string `json:"id,omitempty"`
+	SSLRequired                 string `json:"ssl_required,omitempty"`
+	RegistrationAllowed         bool   `json:"registration_allowed"`
+	RegistrationEmailAsUsername bool   `json:"registration_email_as_username"`
+	LoginWithEmailAllowed       bool   `json:"login_with_email_allowed"`
+	DuplicateEmailsAllowed      bool   `json:"duplicate_emails_allowed"`
 }
 
 // ListRealms returns the realms in a cluster.
@@ -292,8 +306,8 @@ func (c *Client) ListRealms(ctx context.Context, clusterID string) ([]Realm, err
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
 	out := make([]Realm, 0, len(*resp.JSON200))
-	for _, r := range *resp.JSON200 {
-		out = append(out, Realm{Name: string(r.Name), DisplayName: string(r.DisplayName), Enabled: r.Enabled})
+	for i := range *resp.JSON200 {
+		out = append(out, realmFromAPI(&(*resp.JSON200)[i]))
 	}
 	return out, nil
 }
@@ -616,13 +630,35 @@ func (c *Client) GetSecurityLogs(ctx context.Context, clusterID string, q Securi
 // EventQuery filters an events query.
 type EventQuery struct {
 	Limit    int
+	Offset   int
 	Category string
 	Realm    string
 	Username string
 	Search   string
+
+	// StartTime and EndTime are RFC3339. The API defaults to the last 24 hours
+	// when both are empty, so a caller asking about last week gets silence
+	// rather than an error unless it sets these.
+	StartTime string
+	EndTime   string
+
+	// Types filters user events, OperationTypes admin events. The API rejects
+	// them together, and each is ignored for the other category.
+	Types          []string
+	OperationTypes []string
+
+	// Error filters user events by Keycloak error code.
+	Error string
+
+	// Order is asc or desc over timestamp; the API defaults to desc.
+	Order string
 }
 
 // EventEntry is one Keycloak user/admin event.
+//
+// The admin fields matter more than their size suggests: an admin event whose
+// operation is UPDATE says nothing on its own, since a realm-settings change, a
+// user edit and a client edit all look identical without the resource.
 type EventEntry struct {
 	Timestamp string `json:"timestamp"`
 	Category  string `json:"category"`
@@ -632,6 +668,50 @@ type EventEntry struct {
 	Username  string `json:"username,omitempty"`
 	IPAddress string `json:"ip_address,omitempty"`
 	Error     string `json:"error,omitempty"`
+
+	// Admin events.
+	OperationType string `json:"operation_type,omitempty"`
+	ResourceType  string `json:"resource_type,omitempty"`
+	ResourcePath  string `json:"resource_path,omitempty"`
+
+	// User events.
+	UserID           string `json:"user_id,omitempty"`
+	SessionID        string `json:"session_id,omitempty"`
+	AuthMethod       string `json:"auth_method,omitempty"`
+	IdentityProvider string `json:"identity_provider,omitempty"`
+	GrantType        string `json:"grant_type,omitempty"`
+	IsM2M            bool   `json:"is_m2m,omitempty"`
+}
+
+// parseEventTime accepts RFC3339. An unparseable value is dropped rather than
+// erroring: the API then applies its own default window, which is the same
+// result as not having passed the field at all.
+func parseEventTime(v string) (time.Time, bool) {
+	if v == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+// realmFromAPI is shared by GetRealm and ListRealms so the same entity cannot
+// serialise two different ways depending on which call produced it.
+func realmFromAPI(r *apiclient.Realm) Realm {
+	return Realm{
+		Name:        string(r.Name),
+		DisplayName: string(r.DisplayName),
+		Enabled:     r.Enabled,
+		ID:          r.Id.String(),
+		SSLRequired: string(r.SslRequired),
+
+		RegistrationAllowed:         r.RegistrationAllowed,
+		RegistrationEmailAsUsername: r.RegistrationEmailAsUsername,
+		LoginWithEmailAllowed:       r.LoginWithEmailAllowed,
+		DuplicateEmailsAllowed:      r.DuplicateEmailsAllowed,
+	}
 }
 
 func strDeref(p *string) string {
@@ -662,6 +742,40 @@ func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery
 	if q.Search != "" {
 		params.Search = &q.Search
 	}
+	if q.Offset > 0 {
+		o := apiclient.PageOffset(q.Offset)
+		params.Offset = &o
+	}
+	if t, ok := parseEventTime(q.StartTime); ok {
+		params.StartTime = &t
+	}
+	if t, ok := parseEventTime(q.EndTime); ok {
+		params.EndTime = &t
+	}
+	// types and operation_types are mutually exclusive upstream, and each is
+	// rejected for the other category, so only the one matching the requested
+	// category is sent. Sending both would 422 the whole query.
+	if len(q.Types) > 0 && q.Category != "admin" {
+		ts := make([]apiclient.UserEventType, 0, len(q.Types))
+		for _, t := range q.Types {
+			ts = append(ts, apiclient.UserEventType(t))
+		}
+		params.Types = &ts
+	}
+	if len(q.OperationTypes) > 0 && q.Category != "user" {
+		os := make([]apiclient.AdminOperationType, 0, len(q.OperationTypes))
+		for _, t := range q.OperationTypes {
+			os = append(os, apiclient.AdminOperationType(t))
+		}
+		params.OperationTypes = &os
+	}
+	if q.Error != "" {
+		params.Error = &q.Error
+	}
+	if q.Order != "" {
+		o := apiclient.SortOrder(q.Order)
+		params.Order = &o
+	}
 	resp, err := c.gen.ListClusterEventsWithResponse(ctx, cid(clusterID), params)
 	if err != nil {
 		return nil, err
@@ -675,11 +789,24 @@ func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery
 		if typ == "" && e.OperationType != nil {
 			typ = string(*e.OperationType)
 		}
-		out = append(out, EventEntry{
+		entry := EventEntry{
 			Timestamp: e.Timestamp.Format(time.RFC3339), Category: string(e.Category), Type: typ,
 			RealmName: e.RealmName, ClientID: strDeref(e.ClientId), Username: strDeref(e.Username),
 			IPAddress: strDeref(e.IpAddress), Error: strDeref(e.Error),
-		})
+			ResourceType: strDeref(e.ResourceType), ResourcePath: strDeref(e.ResourcePath),
+			SessionID: strDeref(e.SessionId), AuthMethod: strDeref(e.AuthMethod),
+			IdentityProvider: strDeref(e.IdentityProvider), GrantType: strDeref(e.GrantType),
+		}
+		if e.OperationType != nil {
+			entry.OperationType = string(*e.OperationType)
+		}
+		if e.UserId != nil {
+			entry.UserID = e.UserId.String()
+		}
+		if e.IsM2m != nil {
+			entry.IsM2M = *e.IsM2m
+		}
+		out = append(out, entry)
 	}
 	return out, nil
 }
@@ -1515,8 +1642,8 @@ func (c *Client) GetRealm(ctx context.Context, clusterID, realm string) (*Realm,
 	if resp.JSON200 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	r := resp.JSON200
-	return &Realm{Name: string(r.Name), DisplayName: string(r.DisplayName), Enabled: r.Enabled}, nil
+	r := realmFromAPI(resp.JSON200)
+	return &r, nil
 }
 
 // GetApplication returns a single application by client ID.

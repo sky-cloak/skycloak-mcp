@@ -39,6 +39,24 @@ func (e apiEnum) canonical(v string) string {
 	return t
 }
 
+// canonicalEach folds every value of a repeated enum parameter, dropping blanks
+// so a stray empty string cannot turn into an empty filter the API rejects.
+func canonicalEach(e apiEnum, vs []string) []string {
+	if len(vs) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(vs))
+	for _, v := range vs {
+		if c := e.canonical(v); c != "" {
+			out = append(out, c)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // has reports whether v is one of the values, in any case.
 func (e apiEnum) has(v string) bool {
 	t := strings.TrimSpace(v)
@@ -63,8 +81,35 @@ func (e apiEnum) canonicalPtr(v *string) *string {
 }
 
 var (
-	enumLogLevel            = apiEnum{schema: "LogLevel", values: []string{"info", "warn", "error", "debug"}}
-	enumEventCategory       = apiEnum{schema: "EventCategory", values: []string{"user", "admin"}}
+	enumLogLevel           = apiEnum{schema: "LogLevel", values: []string{"info", "warn", "error", "debug"}}
+	enumEventCategory      = apiEnum{schema: "EventCategory", values: []string{"user", "admin"}}
+	enumSortOrder          = apiEnum{schema: "SortOrder", values: []string{"asc", "desc"}}
+	enumAdminOperationType = apiEnum{schema: "AdminOperationType", values: []string{"CREATE", "UPDATE", "DELETE", "ACTION"}}
+	enumUserEventType      = apiEnum{schema: "UserEventType", values: []string{
+		"LOGIN",
+		"LOGIN_ERROR",
+		"LOGOUT",
+		"REGISTER",
+		"REGISTER_ERROR",
+		"CODE_TO_TOKEN",
+		"CODE_TO_TOKEN_ERROR",
+		"REFRESH_TOKEN",
+		"INTROSPECT_TOKEN",
+		"CLIENT_LOGIN",
+		"CLIENT_LOGIN_ERROR",
+		"UPDATE_PROFILE",
+		"UPDATE_EMAIL",
+		"UPDATE_PASSWORD",
+		"UPDATE_TOTP",
+		"REMOVE_TOTP",
+		"VERIFY_EMAIL",
+		"SEND_RESET_PASSWORD",
+		"RESET_PASSWORD",
+		"FEDERATED_IDENTITY_LINK",
+		"REMOVE_FEDERATED_IDENTITY",
+		"IDENTITY_PROVIDER_LOGIN",
+		"IDENTITY_PROVIDER_FIRST_LOGIN",
+	}}
 	enumExportFormat        = apiEnum{schema: "ExportFormat", values: []string{"sql", "pgdump"}}
 	enumApplicationType     = apiEnum{schema: "ApplicationType", values: []string{"confidential", "public"}}
 	enumApplicationProtocol = apiEnum{schema: "ApplicationProtocol", values: []string{"openid-connect", "saml"}}
@@ -119,6 +164,9 @@ func (p enumParam) key() string { return p.tool + "." + p.field }
 var enumParams = []enumParam{
 	{"skycloak_get_logs", "level", enumLogLevel},
 	{"skycloak_query_events", "category", enumEventCategory},
+	{"skycloak_query_events", "types", enumUserEventType},
+	{"skycloak_query_events", "operation_types", enumAdminOperationType},
+	{"skycloak_query_events", "order", enumSortOrder},
 	{"skycloak_create_export", "format", enumExportFormat},
 	{"skycloak_create_application", "type", enumApplicationType},
 	{"skycloak_create_application", "protocol", enumApplicationProtocol},

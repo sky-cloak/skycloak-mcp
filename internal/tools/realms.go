@@ -18,6 +18,13 @@ type RealmSummary struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name,omitempty"`
 	Enabled     bool   `json:"enabled"`
+
+	// Carried on the list rows as well as the single-realm read: a fleet
+	// question ("which realms allow self-registration") otherwise costs one
+	// extra call per realm to answer.
+	RegistrationAllowed   bool   `json:"registration_allowed"`
+	LoginWithEmailAllowed bool   `json:"login_with_email_allowed"`
+	SSLRequired           string `json:"ssl_required,omitempty"`
 }
 
 // ListRealmsOutput is the structured result of skycloak_list_realms.
@@ -44,10 +51,15 @@ func listRealmsHandler(api API) mcp.ToolHandlerFor[ListRealmsInput, ListRealmsOu
 			return toolError(err), ListRealmsOutput{}, nil
 		}
 
-		out := ListRealmsOutput{Count: len(realms)}
+		out := ListRealmsOutput{Count: len(realms), Realms: []RealmSummary{}}
 		var b strings.Builder
 		for _, r := range realms {
-			out.Realms = append(out.Realms, RealmSummary{Name: r.Name, DisplayName: r.DisplayName, Enabled: r.Enabled})
+			out.Realms = append(out.Realms, RealmSummary{
+				Name: r.Name, DisplayName: r.DisplayName, Enabled: r.Enabled,
+				RegistrationAllowed:   r.RegistrationAllowed,
+				LoginWithEmailAllowed: r.LoginWithEmailAllowed,
+				SSLRequired:           r.SSLRequired,
+			})
 			fmt.Fprintf(&b, "- %s (%s) — enabled=%t\n", r.Name, r.DisplayName, r.Enabled)
 		}
 		if len(realms) == 0 {
