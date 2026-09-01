@@ -159,13 +159,26 @@ func queryEventsHandler(api API) mcp.ToolHandlerFor[QueryEventsInput, EventsOutp
 		if limit > maxEventLimit {
 			return errResult(fmt.Sprintf("limit is capped at %d; page with offset for more", maxEventLimit)), EventsOutput{}, nil
 		}
+		// A list whose entries are all blank folds to no filter at all, so the
+		// query would return the category unfiltered while the caller believes
+		// it narrowed. Same silent-drop class as the rest of this handler's
+		// refusals, caught here because the client never sees the raw values.
+		types := canonicalEach(enumUserEventType, in.Types)
+		operationTypes := canonicalEach(enumAdminOperationType, in.OperationTypes)
+		if len(in.Types) > 0 && len(types) == 0 {
+			return errResult("types contained no usable values"), EventsOutput{}, nil
+		}
+		if len(in.OperationTypes) > 0 && len(operationTypes) == 0 {
+			return errResult("operation_types contained no usable values"), EventsOutput{}, nil
+		}
+
 		category := enumEventCategory.canonical(in.Category)
 		events, err := api.QueryEvents(ctx, in.ClusterID, skycloak.EventQuery{
 			Limit: limit, Offset: in.Offset, Category: category,
 			Realm: in.Realm, Username: in.Username, Search: in.Search,
 			StartTime: in.StartTime, EndTime: in.EndTime,
-			Types:          canonicalEach(enumUserEventType, in.Types),
-			OperationTypes: canonicalEach(enumAdminOperationType, in.OperationTypes),
+			Types:          types,
+			OperationTypes: operationTypes,
 			Error:          in.Error, Order: enumSortOrder.canonical(in.Order),
 		})
 		if err != nil {

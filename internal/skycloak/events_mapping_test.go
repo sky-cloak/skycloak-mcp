@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -163,6 +164,37 @@ func TestQueryEventsRejectsFilterThatCannotApplyToCategory(t *testing.T) {
 	}
 }
 
+// The happy path for admin filtering. Replacing the old mismatch test with
+// error-only cases removed the sole wire assertion for operation_types, so
+// deleting the forwarding block entirely passed the suite — the exact symptom
+// (admin events silently unfiltered) that this change exists to prevent.
+func TestQueryEventsSendsOperationTypesOnTheWire(t *testing.T) {
+	var got url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		writeJSON(w, 200, `[]`)
+	}))
+	defer srv.Close()
+
+	if _, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid, EventQuery{
+		Category: "admin", OperationTypes: []string{"UPDATE", "DELETE"},
+	}); err != nil {
+		t.Fatalf("QueryEvents: %v", err)
+	}
+	if vs := got["operation_types"]; len(vs) == 0 {
+		t.Fatalf("operation_types never reached the query string: %v", got)
+	}
+	joined := strings.Join(got["operation_types"], ",")
+	for _, want := range []string{"UPDATE", "DELETE"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("operation_types missing %q: %v", want, got)
+		}
+	}
+	if got.Get("category") != "admin" {
+		t.Errorf("category = %q, want admin", got.Get("category"))
+	}
+}
+
 // A negative offset is a caller mistake. Clamping it to zero hands back page one
 // while the caller believes they paged past it.
 func TestQueryEventsRejectsNegativeOffset(t *testing.T) {
@@ -299,5 +331,59 @@ func TestGetRealmMapsSecuritySettings(t *testing.T) {
 	}
 	if r.ID == "" {
 		t.Errorf("id dropped: %+v", r)
+	}
+}
+
+// Every path that builds a Realm must go through realmFromAPI. The security
+// fields are plain bools, so a path that builds one inline reports registration
+// and email login as off regardless of what the API said — fabricating a
+// security posture rather than merely omitting one. Keycloak enables
+// login_with_email by default, so an inline build is wrong on most realms.
+func TestRealmWritesReturnTheServersSettings(t *testing.T) {
+	body := `{
+		"id":"44444444-4444-4444-4444-444444444444",
+		"name":"alfred","display_name":"Alfred","enabled":true,
+		"ssl_required":"external",
+		"registration_allowed":true,
+		"registration_email_as_username":true,
+		"login_with_email_allowed":true,
+		"duplicate_emails_allowed":true
+	}`
+
+	for _, tc := range []struct {
+		name   string
+		status int
+		call   func(c *Client) (*Realm, error)
+	}{
+		{"create", 201, func(c *Client) (*Realm, error) {
+			return c.CreateRealm(context.Background(), cuid, Realm{Name: "alfred"})
+		}},
+		{"update", 200, func(c *Client) (*Realm, error) {
+			return c.UpdateRealm(context.Background(), cuid, "alfred", "Alfred", true)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(w, tc.status, body)
+			}))
+			defer srv.Close()
+
+			r, err := tc.call(newTestClient(srv.URL))
+			if err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if !r.RegistrationAllowed {
+				t.Errorf("%s reported registration_allowed=false while the API said true: %+v", tc.name, r)
+			}
+			if !r.LoginWithEmailAllowed {
+				t.Errorf("%s reported login_with_email_allowed=false while the API said true: %+v", tc.name, r)
+			}
+			if r.SSLRequired != "external" {
+				t.Errorf("%s dropped ssl_required: %+v", tc.name, r)
+			}
+			if r.ID == "" {
+				t.Errorf("%s dropped id: %+v", tc.name, r)
+			}
+		})
 	}
 }

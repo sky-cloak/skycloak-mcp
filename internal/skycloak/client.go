@@ -326,8 +326,8 @@ func (c *Client) CreateRealm(ctx context.Context, clusterID string, r Realm) (*R
 	if resp.JSON201 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	out := resp.JSON201
-	return &Realm{Name: string(out.Name), DisplayName: string(out.DisplayName), Enabled: out.Enabled}, nil
+	out := realmFromAPI(resp.JSON201)
+	return &out, nil
 }
 
 // DeleteRealm deletes a realm and all of its data.
@@ -702,8 +702,14 @@ func parseEventTime(field, v string) (time.Time, bool, error) {
 	return t, true, nil
 }
 
-// realmFromAPI is shared by GetRealm and ListRealms so the same entity cannot
-// serialise two different ways depending on which call produced it.
+// realmFromAPI is the only way a Realm may be built from an API response, so the
+// same entity cannot serialise two ways depending on which call produced it.
+//
+// Building one inline is not merely inconsistent, it fabricates: the security
+// fields are plain bools, so anything this converter does not fill reports
+// registration and email login as off, asserting a posture the API never sent.
+// Keycloak enables login_with_email by default, so an inline build is wrong on
+// most realms.
 func realmFromAPI(r *apiclient.Realm) Realm {
 	return Realm{
 		Name:        string(r.Name),
@@ -2070,8 +2076,8 @@ func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName 
 	if resp.JSON200 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	r := resp.JSON200
-	return &Realm{Name: string(r.Name), DisplayName: string(r.DisplayName), Enabled: r.Enabled}, nil
+	r := realmFromAPI(resp.JSON200)
+	return &r, nil
 }
 
 // ---- Actions: discover, test, cancel upgrade ----

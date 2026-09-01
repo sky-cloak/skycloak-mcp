@@ -197,13 +197,27 @@ func TestQueryEventsDropsBlankTypeEntries(t *testing.T) {
 		t.Fatalf("blank entries survived: %v", got.Types)
 	}
 
-	got = skycloak.EventQuery{}
-	if _, _, err := queryEventsHandler(stubAPI{gotEventQuery: &got})(context.Background(), nil,
-		QueryEventsInput{ClusterID: "c1", Types: []string{"", " "}}); err != nil {
-		t.Fatalf("err: %v", err)
-	}
-	if got.Types != nil {
-		t.Fatalf("an all-blank list must become no filter, got %v", got.Types)
+}
+
+// An all-blank list is refused rather than folded into no filter, which would
+// return the category unfiltered while the caller believes it narrowed.
+func TestQueryEventsRefusesAllBlankTypeList(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   QueryEventsInput
+	}{
+		{"types", QueryEventsInput{ClusterID: "c1", Types: []string{"", "  "}}},
+		{"operation_types", QueryEventsInput{ClusterID: "c1", OperationTypes: []string{" "}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, _, err := queryEventsHandler(stubAPI{})(context.Background(), nil, tc.in)
+			if err != nil {
+				t.Fatalf("err: %v", err)
+			}
+			if !res.IsError {
+				t.Fatal("an all-blank filter list was accepted and silently became no filter")
+			}
+		})
 	}
 }
 
