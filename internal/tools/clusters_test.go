@@ -40,7 +40,7 @@ type stubAPI struct {
 	locations    []skycloak.ClusterLocationInfo
 	ctypes       []skycloak.ClusterTypeInfo
 	features     []skycloak.ClusterFeatureInfo
-	versions     []string
+	versionInfo  []skycloak.ClusterTypeVersion
 	upgrades     []skycloak.ClusterUpgrade
 	templates    []skycloak.ProviderTemplate
 	routes       []skycloak.DomainRoute
@@ -399,8 +399,8 @@ func (s stubAPI) ListClusterFeatures(context.Context) ([]skycloak.ClusterFeature
 	return s.features, s.err
 }
 
-func (s stubAPI) ClusterTypeVersions(context.Context, string) ([]string, error) {
-	return s.versions, s.err
+func (s stubAPI) ClusterTypeVersions(context.Context, string) ([]skycloak.ClusterTypeVersion, error) {
+	return s.versionInfo, s.err
 }
 
 func (s stubAPI) ListClusterUpgrades(context.Context, string) ([]skycloak.ClusterUpgrade, error) {

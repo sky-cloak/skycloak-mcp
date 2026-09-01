@@ -70,7 +70,7 @@ type API interface {
 	ListClusterLocations(ctx context.Context) ([]skycloak.ClusterLocationInfo, error)
 	ListClusterTypes(ctx context.Context) ([]skycloak.ClusterTypeInfo, error)
 	ListClusterFeatures(ctx context.Context) ([]skycloak.ClusterFeatureInfo, error)
-	ClusterTypeVersions(ctx context.Context, clusterType string) ([]string, error)
+	ClusterTypeVersions(ctx context.Context, clusterType string) ([]skycloak.ClusterTypeVersion, error)
 	ListClusterUpgrades(ctx context.Context, clusterID string) ([]skycloak.ClusterUpgrade, error)
 	ListIdentityProviderTemplates(ctx context.Context) ([]skycloak.ProviderTemplate, error)
 	ListDomainRoutes(ctx context.Context, clusterID, domainID string) ([]skycloak.DomainRoute, error)
