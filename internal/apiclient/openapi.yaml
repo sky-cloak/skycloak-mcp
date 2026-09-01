@@ -316,6 +316,136 @@ paths:
         - Cluster Types
       security:
         - ApiKeyAuth: []
+  /cluster-types/{cluster_type}/upgrade-preview:
+    get:
+      operationId: getClusterTypeUpgradePreview
+      summary: Preview the breaking changes between two versions
+      description: Returns the breaking changes recorded between `from` (exclusive) and `to` (inclusive) for the given cluster type. Both query parameters are required and must be version numbers such as `26.4.0`; a missing or malformed one returns `400`.
+      parameters:
+        - name: cluster_type
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ClusterType'
+        - name: from
+          in: query
+          required: false
+          description: Version the upgrade starts from, exclusive. Required.
+          schema:
+            type: string
+          explode: false
+        - name: to
+          in: query
+          required: false
+          description: Version the upgrade ends at, inclusive. Required.
+          schema:
+            type: string
+          explode: false
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClusterVersionBreakingChange'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '422':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Cluster Types
+      security:
+        - ApiKeyAuth: []
   /cluster-types/{cluster_type}/versions:
     get:
       operationId: getClusterTypeVersions
@@ -336,9 +466,7 @@ paths:
               schema:
                 type: array
                 items:
-                  type: string
-                  x-oapi-codegen-extra-tags:
-                    validate: omitnil,max=500
+                  $ref: '#/components/schemas/ClusterTypeVersionInfo'
         '401':
           description: Access is unauthorized.
           content:
@@ -14152,20 +14280,20 @@ paths:
                   format: binary
                   description: Keycloak-compatible theme archive. Content type must be `application/zip` (ZIP) or `application/java-archive` (Keycloakify JAR).
                 theme_types:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/ThemeType'
-                  description: Subset of theme types to deploy from the package. Omit to deploy all detected types.
+                  type: string
                   x-oapi-codegen-extra-tags:
-                    validate: omitnil,min=1,unique,dive,oneof=account admin email login
+                    validate: omitnil,max=200
+                  description: |-
+                    Comma-separated subset of theme types to deploy from the package (e.g. `login,account`).
+                    Omit to deploy all detected types. Sent as a single plain-text multipart field, not JSON -
+                    oapi-codegen would otherwise infer `application/json` encoding for an array-typed part,
+                    which does not match how this field is actually written and read.
               required:
                 - name
                 - theme_file
             encoding:
               theme_file:
                 contentType: application/zip, application/java-archive
-              theme_types:
-                contentType: application/json
       security:
         - ApiKeyAuth: []
       x-scopes:
@@ -18850,6 +18978,29 @@ components:
           type: boolean
           description: Whether the workspace has access to provision clusters of this type.
       description: Metadata about a supported cluster type.
+    ClusterTypeVersionInfo:
+      type: object
+      required:
+        - version
+        - active
+        - is_major_change
+        - breaking_change_count
+      properties:
+        version:
+          allOf:
+            - $ref: '#/components/schemas/KeycloakVersion'
+          description: The version number.
+        active:
+          type: boolean
+          description: Whether the version is currently offered for new clusters and upgrades. `false` means it is still recognised, for example by a cluster already running it, but is no longer offered.
+        is_major_change:
+          type: boolean
+          description: Whether moving onto this version from the previous supported version crosses a major version boundary.
+        breaking_change_count:
+          type: integer
+          format: int32
+          description: Number of breaking changes recorded for this version.
+      description: A supported version of a cluster type, with the detail needed to judge the upgrade step onto it.
     ClusterUpgrade:
       type: object
       required:
@@ -18899,6 +19050,8 @@ components:
       required:
         - version
         - required
+        - is_major_change
+        - breaking_change_count
       properties:
         version:
           allOf:
@@ -18907,7 +19060,36 @@ components:
         required:
           type: boolean
           description: Whether this version must be visited as an intermediate step. `false` only for the cluster's current version.
+        is_major_change:
+          type: boolean
+          description: Whether this step crosses a major version boundary from the cluster's current version. Auto-upgrade never applies a major step on its own.
+        breaking_change_count:
+          type: integer
+          format: int32
+          description: Number of breaking changes recorded for this version. Auto-upgrade never applies a version with a recorded breaking change on its own.
       description: A single step in the recommended upgrade path to a target version.
+    ClusterVersionBreakingChange:
+      type: object
+      required:
+        - title
+        - summary
+        - severity
+        - action_required
+      properties:
+        title:
+          type: string
+          description: Title of the change, as published in the migration guide.
+        summary:
+          type: string
+          description: Plain-language summary of what changes.
+        severity:
+          type: string
+          description: 'How disruptive the change is: `breaking`, `config-change` or `deprecation`.'
+        action_required:
+          type: string
+          nullable: true
+          description: Concrete steps to take before upgrading, or `null` when none are recorded.
+      description: A breaking change recorded for a version of a cluster type, taken from the product's own migration guide.
     CreateApplicationRequest:
       type: object
       required:
@@ -20250,6 +20432,7 @@ components:
         - none
         - bearer
         - basic
+        - shared_key
     HexColor:
       type: string
       description: CSS hex color code.
@@ -21658,6 +21841,18 @@ components:
             validate: omitnil,max=500
           format: password
           description: Required when `auth_type` is `basic`. Write-only.
+        workspace_id:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: omitnil,max=500
+          maxLength: 255
+          description: Azure Log Analytics workspace ID. Required when `auth_type` is `shared_key`.
+        shared_key:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: omitnil,max=500
+          format: password
+          description: Base64-encoded Azure Log Analytics primary or secondary key. Required when `auth_type` is `shared_key`. Write-only.
     SIEMHTTPDestinationConfig:
       type: object
       required:
@@ -21680,6 +21875,11 @@ components:
               validate: omitnil,max=500
         has_auth_credentials:
           type: boolean
+        workspace_id:
+          type: string
+          x-oapi-codegen-extra-tags:
+            validate: omitnil,max=500
+          description: Azure Log Analytics workspace ID. Present when `auth_type` is `shared_key`.
     SIEMHealthStatus:
       type: string
       enum:
