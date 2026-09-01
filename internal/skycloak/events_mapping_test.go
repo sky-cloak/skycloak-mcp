@@ -88,8 +88,93 @@ func TestQueryEventsMapsUserEventFields(t *testing.T) {
 			t.Errorf("%s = %q, want %q (mapping dropped or cross-wired): %+v", name, pair[0], pair[1], e)
 		}
 	}
-	if !e.IsM2M {
+	if e.IsM2M == nil || !*e.IsM2M {
 		t.Errorf("is_m2m dropped: %+v", e)
+	}
+}
+
+// is_m2m is three-valued on the wire and has to stay that way: admin events have
+// no machine-to-machine notion, so a bare false would assert one. Hardcoding it
+// either way passed before, because only the true case had a fixture.
+func TestQueryEventsPreservesIsM2MAbsenceAndFalse(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want *bool
+	}{
+		{"absent", `{"id":"22222222-2222-2222-2222-222222222222","timestamp":"2026-08-31T18:45:00Z","category":"admin","realm_id":"r1","realm_name":"alfred"}`, nil},
+		{"false", `{"id":"22222222-2222-2222-2222-222222222222","timestamp":"2026-08-31T18:45:00Z","category":"user","realm_id":"r1","realm_name":"alfred","is_m2m":false}`, boolPtr(false)},
+		{"true", `{"id":"22222222-2222-2222-2222-222222222222","timestamp":"2026-08-31T18:45:00Z","category":"user","realm_id":"r1","realm_name":"alfred","is_m2m":true}`, boolPtr(true)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(w, 200, "["+tc.body+"]")
+			}))
+			defer srv.Close()
+
+			events, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid, EventQuery{})
+			if err != nil {
+				t.Fatalf("QueryEvents: %v", err)
+			}
+			got := events[0].IsM2M
+			switch {
+			case tc.want == nil && got != nil:
+				t.Errorf("absent is_m2m became %v, asserting something the event never said", *got)
+			case tc.want != nil && got == nil:
+				t.Errorf("is_m2m %v was dropped", *tc.want)
+			case tc.want != nil && got != nil && *tc.want != *got:
+				t.Errorf("is_m2m = %v, want %v", *got, *tc.want)
+			}
+		})
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+// A filter that cannot apply to the requested category is refused, not dropped.
+// Dropping it returns the whole category unfiltered while the caller believes it
+// narrowed the query, which is the failure this change exists to remove.
+func TestQueryEventsRejectsFilterThatCannotApplyToCategory(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		writeJSON(w, 200, `[]`)
+	}))
+	defer srv.Close()
+
+	for _, tc := range []struct {
+		name string
+		q    EventQuery
+	}{
+		{"user types on an admin query", EventQuery{Category: "admin", Types: []string{"LOGIN_ERROR"}}},
+		{"admin operations on a user query", EventQuery{Category: "user", OperationTypes: []string{"UPDATE"}}},
+		{"both with a category", EventQuery{Category: "user", Types: []string{"LOGIN_ERROR"}, OperationTypes: []string{"UPDATE"}}},
+		{"both with an unrecognised category", EventQuery{Category: "login", Types: []string{"LOGIN_ERROR"}, OperationTypes: []string{"UPDATE"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			called = false
+			if _, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid, tc.q); err == nil {
+				t.Fatal("an inapplicable filter was accepted; the query would return the category unfiltered")
+			}
+			if called {
+				t.Error("request was sent despite a filter that cannot apply")
+			}
+		})
+	}
+}
+
+// A negative offset is a caller mistake. Clamping it to zero hands back page one
+// while the caller believes they paged past it.
+func TestQueryEventsRejectsNegativeOffset(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("request sent with a negative offset")
+		writeJSON(w, 200, `[]`)
+	}))
+	defer srv.Close()
+
+	if _, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid,
+		EventQuery{Offset: -1}); err == nil {
+		t.Fatal("negative offset accepted")
 	}
 }
 
@@ -125,43 +210,6 @@ func TestQueryEventsSendsFiltersOnTheWire(t *testing.T) {
 		if g := got.Get(k); g != want {
 			t.Errorf("%s = %q, want %q (full query: %v)", k, g, want, got)
 		}
-	}
-}
-
-// types and operation_types are mutually exclusive upstream and each is rejected
-// for the other category, so sending the wrong one 422s the whole query rather
-// than being ignored.
-func TestQueryEventsOmitsFiltersThatDoNotApplyToTheCategory(t *testing.T) {
-	var got url.Values
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.URL.Query()
-		writeJSON(w, 200, `[]`)
-	}))
-	defer srv.Close()
-
-	c := newTestClient(srv.URL)
-	if _, err := c.QueryEvents(context.Background(), cuid, EventQuery{
-		Category: "admin", Types: []string{"LOGIN_ERROR"}, OperationTypes: []string{"UPDATE"},
-	}); err != nil {
-		t.Fatalf("QueryEvents: %v", err)
-	}
-	if got.Get("types") != "" {
-		t.Errorf("user event types sent on an admin query: %v", got)
-	}
-	if got.Get("operation_types") != "UPDATE" {
-		t.Errorf("operation_types missing on an admin query: %v", got)
-	}
-
-	if _, err := c.QueryEvents(context.Background(), cuid, EventQuery{
-		Category: "user", Types: []string{"LOGIN_ERROR"}, OperationTypes: []string{"UPDATE"},
-	}); err != nil {
-		t.Fatalf("QueryEvents: %v", err)
-	}
-	if got.Get("operation_types") != "" {
-		t.Errorf("admin operation types sent on a user query: %v", got)
-	}
-	if got.Get("types") != "LOGIN_ERROR" {
-		t.Errorf("types missing on a user query: %v", got)
 	}
 }
 

@@ -142,6 +142,71 @@ func TestQueryEventsSurfacesAdminResource(t *testing.T) {
 	}
 }
 
+// resourceSuffix has three shapes and only the both-present one was covered, so
+// dropping either partial branch rendered an admin event bare and passed.
+func TestResourceSuffixRendersPartialResources(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		entry skycloak.EventEntry
+		want  []string
+	}{
+		{"type and path", skycloak.EventEntry{ResourceType: "REALM", ResourcePath: "realms/alfred"}, []string{"REALM", "realms/alfred"}},
+		{"type only", skycloak.EventEntry{ResourceType: "REALM"}, []string{"REALM"}},
+		{"path only", skycloak.EventEntry{ResourcePath: "realms/alfred"}, []string{"realms/alfred"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resourceSuffix(tc.entry)
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("suffix %q missing %q", got, w)
+				}
+			}
+		})
+	}
+	if got := resourceSuffix(skycloak.EventEntry{}); got != "" {
+		t.Errorf("no resource should render nothing, got %q", got)
+	}
+}
+
+// The cap is inclusive: 100 is what the API accepts, so refusing it would reject
+// a legitimate request. Only the boundary catches an off-by-one here.
+func TestQueryEventsAcceptsExactlyTheCap(t *testing.T) {
+	var got skycloak.EventQuery
+	res, _, err := queryEventsHandler(stubAPI{gotEventQuery: &got})(context.Background(), nil,
+		QueryEventsInput{ClusterID: "c1", Limit: maxEventLimit})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("limit=%d is the documented maximum and must be accepted: %q", maxEventLimit, renderedText(res))
+	}
+	if got.Limit != maxEventLimit {
+		t.Errorf("limit = %d, want %d", got.Limit, maxEventLimit)
+	}
+}
+
+// canonicalEach drops blanks so a stray empty entry cannot become an empty
+// filter value the API rejects; nothing pinned that before.
+func TestQueryEventsDropsBlankTypeEntries(t *testing.T) {
+	var got skycloak.EventQuery
+	if _, _, err := queryEventsHandler(stubAPI{gotEventQuery: &got})(context.Background(), nil,
+		QueryEventsInput{ClusterID: "c1", Types: []string{"", "  ", "LOGIN_ERROR"}}); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if len(got.Types) != 1 || got.Types[0] != "LOGIN_ERROR" {
+		t.Fatalf("blank entries survived: %v", got.Types)
+	}
+
+	got = skycloak.EventQuery{}
+	if _, _, err := queryEventsHandler(stubAPI{gotEventQuery: &got})(context.Background(), nil,
+		QueryEventsInput{ClusterID: "c1", Types: []string{"", " "}}); err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got.Types != nil {
+		t.Fatalf("an all-blank list must become no filter, got %v", got.Types)
+	}
+}
+
 // The tool description is the only place a caller learns what search covers.
 // Describing it as "free-text search" invites the assumption that it matches
 // the event type, which it never has.
@@ -241,6 +306,20 @@ func TestGetRealmRendersSecuritySettings(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("rendered realm text missing %q: %q", want, text)
 		}
+	}
+}
+
+// The false case matters as much as the true one: hardcoding the rendered value
+// passed every test while reporting registration as on for every realm.
+func TestGetRealmRendersRegistrationDisabled(t *testing.T) {
+	api := stubAPI{realm: &skycloak.Realm{Name: "locked", Enabled: true}}
+	res, _, err := getRealmHandler(api)(context.Background(), nil,
+		RealmScopeInput{ClusterID: "c1", Realm: "locked"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if text := renderedText(res); !strings.Contains(text, "registration_allowed=false") {
+		t.Errorf("a realm with registration off must say so: %q", text)
 	}
 }
 

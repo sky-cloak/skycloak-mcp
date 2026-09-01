@@ -680,7 +680,7 @@ type EventEntry struct {
 	AuthMethod       string `json:"auth_method,omitempty"`
 	IdentityProvider string `json:"identity_provider,omitempty"`
 	GrantType        string `json:"grant_type,omitempty"`
-	IsM2M            bool   `json:"is_m2m"`
+	IsM2M            *bool  `json:"is_m2m,omitempty"`
 }
 
 // parseEventTime accepts RFC3339.
@@ -747,6 +747,9 @@ func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery
 	if q.Search != "" {
 		params.Search = &q.Search
 	}
+	if q.Offset < 0 {
+		return nil, fmt.Errorf("offset must not be negative, got %d", q.Offset)
+	}
 	if q.Offset > 0 {
 		o := apiclient.PageOffset(q.Offset)
 		params.Offset = &o
@@ -761,26 +764,32 @@ func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery
 	} else if ok {
 		params.EndTime = &t
 	}
-	// types and operation_types are mutually exclusive upstream, and each is
-	// rejected for the other category, so only the one matching the requested
-	// category is sent.
+	// types applies to user events, operation_types to admin events, and the
+	// spec rejects each for the other category.
 	//
-	// With no category there is no matching one: both would go out together, and
-	// the spec calls them mutually exclusive without encoding it in a validate
-	// tag, so the result is whatever the server happens to do — a 422, or an
-	// incoherent filter that quietly returns the wrong rows. Refused here
-	// instead, naming the fix.
-	if len(q.Types) > 0 && len(q.OperationTypes) > 0 && q.Category == "" {
-		return nil, fmt.Errorf("types and operation_types are mutually exclusive: set category to user or admin, or pass only the one that applies")
+	// Every mismatch here is refused rather than quietly resolved. Dropping a
+	// filter that does not apply would return the whole category unfiltered
+	// while the caller believes it narrowed the query — the same "filter that
+	// silently did not apply" this change exists to remove, and the one that
+	// reads as a confident answer rather than an error.
+	switch {
+	case len(q.Types) > 0 && len(q.OperationTypes) > 0:
+		// Even with a category naming one of them, asking for both says the
+		// caller expects both to apply, and only one ever can.
+		return nil, fmt.Errorf("types and operation_types are mutually exclusive: pass only the one matching the category you want")
+	case len(q.Types) > 0 && q.Category == "admin":
+		return nil, fmt.Errorf("types filters user events but category is admin: use operation_types, or set category to user")
+	case len(q.OperationTypes) > 0 && q.Category == "user":
+		return nil, fmt.Errorf("operation_types filters admin events but category is user: use types, or set category to admin")
 	}
-	if len(q.Types) > 0 && q.Category != "admin" {
+	if len(q.Types) > 0 {
 		ts := make([]apiclient.UserEventType, 0, len(q.Types))
 		for _, t := range q.Types {
 			ts = append(ts, apiclient.UserEventType(t))
 		}
 		params.Types = &ts
 	}
-	if len(q.OperationTypes) > 0 && q.Category != "user" {
+	if len(q.OperationTypes) > 0 {
 		os := make([]apiclient.AdminOperationType, 0, len(q.OperationTypes))
 		for _, t := range q.OperationTypes {
 			os = append(os, apiclient.AdminOperationType(t))
@@ -821,9 +830,9 @@ func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery
 		if e.UserId != nil {
 			entry.UserID = e.UserId.String()
 		}
-		if e.IsM2m != nil {
-			entry.IsM2M = *e.IsM2m
-		}
+		// Carried as a pointer: admin events have no machine-to-machine notion,
+		// and a bare false would assert one rather than leave it unstated.
+		entry.IsM2M = e.IsM2m
 		out = append(out, entry)
 	}
 	return out, nil
