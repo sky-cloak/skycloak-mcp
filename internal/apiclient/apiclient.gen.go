@@ -192,9 +192,10 @@ const (
 
 // Defines values for HTTPAuthType.
 const (
-	HTTPAuthTypeBasic  HTTPAuthType = "basic"
-	HTTPAuthTypeBearer HTTPAuthType = "bearer"
-	HTTPAuthTypeNone   HTTPAuthType = "none"
+	HTTPAuthTypeBasic     HTTPAuthType = "basic"
+	HTTPAuthTypeBearer    HTTPAuthType = "bearer"
+	HTTPAuthTypeNone      HTTPAuthType = "none"
+	HTTPAuthTypeSharedKey HTTPAuthType = "shared_key"
 )
 
 // Defines values for LanguageSelectionMode.
@@ -953,6 +954,21 @@ type ClusterTypeInfo struct {
 	Type ClusterType `json:"type"`
 }
 
+// ClusterTypeVersionInfo A supported version of a cluster type, with the detail needed to judge the upgrade step onto it.
+type ClusterTypeVersionInfo struct {
+	// Active Whether the version is currently offered for new clusters and upgrades. `false` means it is still recognised, for example by a cluster already running it, but is no longer offered.
+	Active bool `json:"active"`
+
+	// BreakingChangeCount Number of breaking changes recorded for this version.
+	BreakingChangeCount int32 `json:"breaking_change_count"`
+
+	// IsMajorChange Whether moving onto this version from the previous supported version crosses a major version boundary.
+	IsMajorChange bool `json:"is_major_change"`
+
+	// Version The version number.
+	Version KeycloakVersion `json:"version"`
+}
+
 // ClusterUpgrade A historical or in-progress cluster upgrade event.
 type ClusterUpgrade struct {
 	// CompletedAt When the upgrade completed or was cancelled. Absent if the upgrade is still in progress.
@@ -982,11 +998,32 @@ type ClusterUpgradeCancellation struct {
 
 // ClusterUpgradePathItem A single step in the recommended upgrade path to a target version.
 type ClusterUpgradePathItem struct {
+	// BreakingChangeCount Number of breaking changes recorded for this version. Auto-upgrade never applies a version with a recorded breaking change on its own.
+	BreakingChangeCount int32 `json:"breaking_change_count"`
+
+	// IsMajorChange Whether this step crosses a major version boundary from the cluster's current version. Auto-upgrade never applies a major step on its own.
+	IsMajorChange bool `json:"is_major_change"`
+
 	// Required Whether this version must be visited as an intermediate step. `false` only for the cluster's current version.
 	Required bool `json:"required"`
 
 	// Version Version at this step in the upgrade path.
 	Version KeycloakVersion `json:"version"`
+}
+
+// ClusterVersionBreakingChange A breaking change recorded for a version of a cluster type, taken from the product's own migration guide.
+type ClusterVersionBreakingChange struct {
+	// ActionRequired Concrete steps to take before upgrading, or `null` when none are recorded.
+	ActionRequired nullable.Nullable[string] `json:"action_required"`
+
+	// Severity How disruptive the change is: `breaking`, `config-change` or `deprecation`.
+	Severity string `json:"severity"`
+
+	// Summary Plain-language summary of what changes.
+	Summary string `json:"summary"`
+
+	// Title Title of the change, as published in the migration guide.
+	Title string `json:"title"`
 }
 
 // CreateApplicationRequest Request body for creating a new application.
@@ -2316,10 +2353,16 @@ type SIEMHTTPConfig struct {
 
 	// Password Required when `auth_type` is `basic`. Write-only.
 	Password *string `json:"password,omitempty" validate:"omitnil,max=500"`
-	Url      string  `json:"url" validate:"url"`
+
+	// SharedKey Base64-encoded Azure Log Analytics primary or secondary key. Required when `auth_type` is `shared_key`. Write-only.
+	SharedKey *string `json:"shared_key,omitempty" validate:"omitnil,max=500"`
+	Url       string  `json:"url" validate:"url"`
 
 	// Username Required when `auth_type` is `basic`. Write-only.
 	Username *string `json:"username,omitempty" validate:"omitnil,max=500"`
+
+	// WorkspaceId Azure Log Analytics workspace ID. Required when `auth_type` is `shared_key`.
+	WorkspaceId *string `json:"workspace_id,omitempty" validate:"omitnil,max=500"`
 }
 
 // SIEMHTTPDestinationConfig defines model for SIEMHTTPDestinationConfig.
@@ -2328,6 +2371,9 @@ type SIEMHTTPDestinationConfig struct {
 	HasAuthCredentials bool         `json:"has_auth_credentials"`
 	HeaderNames        []string     `json:"header_names"`
 	Url                string       `json:"url" validate:"omitnil,max=500"`
+
+	// WorkspaceId Azure Log Analytics workspace ID. Present when `auth_type` is `shared_key`.
+	WorkspaceId *string `json:"workspace_id,omitempty" validate:"omitnil,max=500"`
 }
 
 // SIEMHealthStatus defines model for SIEMHealthStatus.
@@ -3090,6 +3136,16 @@ type ListClusterTypesParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
 }
 
+// GetClusterTypeUpgradePreviewParams defines parameters for GetClusterTypeUpgradePreview.
+type GetClusterTypeUpgradePreviewParams struct {
+	// From Version the upgrade starts from, exclusive. Required.
+	From *string `form:"from,omitempty" json:"from,omitempty"`
+
+	// To Version the upgrade ends at, inclusive. Required.
+	To         *string          `form:"to,omitempty" json:"to,omitempty"`
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
 // GetClusterTypeVersionsParams defines parameters for GetClusterTypeVersions.
 type GetClusterTypeVersionsParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
@@ -3810,8 +3866,11 @@ type UploadThemeMultipartBody struct {
 	// ThemeFile Keycloak-compatible theme archive. Content type must be `application/zip` (ZIP) or `application/java-archive` (Keycloakify JAR).
 	ThemeFile openapi_types.File `json:"theme_file"`
 
-	// ThemeTypes Subset of theme types to deploy from the package. Omit to deploy all detected types.
-	ThemeTypes *[]ThemeType `json:"theme_types,omitempty" validate:"omitnil,min=1,unique,dive,oneof=account admin email login"`
+	// ThemeTypes Comma-separated subset of theme types to deploy from the package (e.g. `login,account`).
+	// Omit to deploy all detected types. Sent as a single plain-text multipart field, not JSON -
+	// oapi-codegen would otherwise infer `application/json` encoding for an array-typed part,
+	// which does not match how this field is actually written and read.
+	ThemeTypes *string `json:"theme_types,omitempty" validate:"omitnil,max=200"`
 
 	// Version Version label for the theme, e.g. `v2.4` or `2026-08-12`. Free text, up to 50 characters; it is shown in the library and never interpreted.
 	Version *string `json:"version,omitempty" validate:"omitnil,max=50"`
@@ -4197,6 +4256,9 @@ type ClientInterface interface {
 
 	// ListClusterTypes request
 	ListClusterTypes(ctx context.Context, params *ListClusterTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetClusterTypeUpgradePreview request
+	GetClusterTypeUpgradePreview(ctx context.Context, clusterType ClusterType, params *GetClusterTypeUpgradePreviewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterTypeVersions request
 	GetClusterTypeVersions(ctx context.Context, clusterType ClusterType, params *GetClusterTypeVersionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4712,6 +4774,18 @@ func (c *Client) ListClusterLocations(ctx context.Context, params *ListClusterLo
 
 func (c *Client) ListClusterTypes(ctx context.Context, params *ListClusterTypesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListClusterTypesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetClusterTypeUpgradePreview(ctx context.Context, clusterType ClusterType, params *GetClusterTypeUpgradePreviewParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterTypeUpgradePreviewRequest(c.Server, clusterType, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6931,6 +7005,91 @@ func NewListClusterTypesRequest(server string, params *ListClusterTypesParams) (
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewGetClusterTypeUpgradePreviewRequest generates requests for GetClusterTypeUpgradePreview
+func NewGetClusterTypeUpgradePreviewRequest(server string, clusterType ClusterType, params *GetClusterTypeUpgradePreviewParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_type", runtime.ParamLocationPath, clusterType)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/cluster-types/%s/upgrade-preview", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.From != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", false, "from", runtime.ParamLocationQuery, *params.From); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.To != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", false, "to", runtime.ParamLocationQuery, *params.To); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -15879,6 +16038,9 @@ type ClientWithResponsesInterface interface {
 	// ListClusterTypesWithResponse request
 	ListClusterTypesWithResponse(ctx context.Context, params *ListClusterTypesParams, reqEditors ...RequestEditorFn) (*ListClusterTypesResponse, error)
 
+	// GetClusterTypeUpgradePreviewWithResponse request
+	GetClusterTypeUpgradePreviewWithResponse(ctx context.Context, clusterType ClusterType, params *GetClusterTypeUpgradePreviewParams, reqEditors ...RequestEditorFn) (*GetClusterTypeUpgradePreviewResponse, error)
+
 	// GetClusterTypeVersionsWithResponse request
 	GetClusterTypeVersionsWithResponse(ctx context.Context, clusterType ClusterType, params *GetClusterTypeVersionsParams, reqEditors ...RequestEditorFn) (*GetClusterTypeVersionsResponse, error)
 
@@ -16445,10 +16607,39 @@ func (r ListClusterTypesResponse) StatusCode() int {
 	return 0
 }
 
+type GetClusterTypeUpgradePreviewResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *[]ClusterVersionBreakingChange
+	ApplicationproblemJSON400 *ErrorBody
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON422 *ValidationErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r GetClusterTypeUpgradePreviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetClusterTypeUpgradePreviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetClusterTypeVersionsResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
-	JSON200                   *[]string
+	JSON200                   *[]ClusterTypeVersionInfo
 	ApplicationproblemJSON401 *ErrorBody
 	ApplicationproblemJSON404 *ErrorBody
 	ApplicationproblemJSON422 *ValidationErrorBody
@@ -20371,6 +20562,15 @@ func (c *ClientWithResponses) ListClusterTypesWithResponse(ctx context.Context, 
 	return ParseListClusterTypesResponse(rsp)
 }
 
+// GetClusterTypeUpgradePreviewWithResponse request returning *GetClusterTypeUpgradePreviewResponse
+func (c *ClientWithResponses) GetClusterTypeUpgradePreviewWithResponse(ctx context.Context, clusterType ClusterType, params *GetClusterTypeUpgradePreviewParams, reqEditors ...RequestEditorFn) (*GetClusterTypeUpgradePreviewResponse, error) {
+	rsp, err := c.GetClusterTypeUpgradePreview(ctx, clusterType, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetClusterTypeUpgradePreviewResponse(rsp)
+}
+
 // GetClusterTypeVersionsWithResponse request returning *GetClusterTypeVersionsResponse
 func (c *ClientWithResponses) GetClusterTypeVersionsWithResponse(ctx context.Context, clusterType ClusterType, params *GetClusterTypeVersionsParams, reqEditors ...RequestEditorFn) (*GetClusterTypeVersionsResponse, error) {
 	rsp, err := c.GetClusterTypeVersions(ctx, clusterType, params, reqEditors...)
@@ -22076,6 +22276,81 @@ func ParseListClusterTypesResponse(rsp *http.Response) (*ListClusterTypesRespons
 	return response, nil
 }
 
+// ParseGetClusterTypeUpgradePreviewResponse parses an HTTP response from a GetClusterTypeUpgradePreviewWithResponse call
+func ParseGetClusterTypeUpgradePreviewResponse(rsp *http.Response) (*GetClusterTypeUpgradePreviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetClusterTypeUpgradePreviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []ClusterVersionBreakingChange
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ValidationErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetClusterTypeVersionsResponse parses an HTTP response from a GetClusterTypeVersionsWithResponse call
 func ParseGetClusterTypeVersionsResponse(rsp *http.Response) (*GetClusterTypeVersionsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -22091,7 +22366,7 @@ func ParseGetClusterTypeVersionsResponse(rsp *http.Response) (*GetClusterTypeVer
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []string
+		var dest []ClusterTypeVersionInfo
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
