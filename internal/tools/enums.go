@@ -122,7 +122,7 @@ var (
 	enumSIEMSourceType      = apiEnum{schema: "SIEMSourceType", values: []string{"keycloak_events", "application_logs", "security_logs", "skycloak_audit"}}
 	enumSyslogProtocol      = apiEnum{schema: "SyslogProtocol", values: []string{"udp", "tcp", "tls"}}
 	enumSyslogFormat        = apiEnum{schema: "SyslogFormat", values: []string{"cef", "leef", "rfc5424", "json"}}
-	enumHTTPAuthType        = apiEnum{schema: "HTTPAuthType", values: []string{"none", "bearer", "basic"}}
+	enumHTTPAuthType        = apiEnum{schema: "HTTPAuthType", values: []string{"none", "bearer", "basic", "shared_key"}}
 	enumS3AuthType          = apiEnum{schema: "S3AuthType", values: []string{"access_key", "iam_role", "assume_role", "irsa"}}
 	enumSecurityMode        = apiEnum{schema: "SecurityMode", values: []string{"detect", "block"}}
 	enumWAFPreset           = apiEnum{schema: "WAFPreset", values: []string{"full_crs", "owasp_top_10", "custom"}}

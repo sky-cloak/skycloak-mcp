@@ -1784,7 +1784,16 @@ func (c *Client) ClusterTypeVersions(ctx context.Context, clusterType string) ([
 	if resp.JSON200 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	return *resp.JSON200, nil
+	// The endpoint used to return bare version strings and now returns records
+	// carrying active, is_major_change and breaking_change_count. Only the
+	// version is taken here, which keeps this function's contract unchanged;
+	// surfacing the rest is worth doing, but as its own change rather than
+	// inside a build fix.
+	out := make([]string, 0, len(*resp.JSON200))
+	for _, v := range *resp.JSON200 {
+		out = append(out, string(v.Version))
+	}
+	return out, nil
 }
 
 // ClusterUpgrade is a cluster version-upgrade record.
