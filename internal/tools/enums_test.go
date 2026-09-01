@@ -25,6 +25,13 @@ func (r recAPI) GetLogs(_ context.Context, _ string, q skycloak.LogQuery) ([]sky
 
 func (r recAPI) QueryEvents(_ context.Context, _ string, q skycloak.EventQuery) ([]skycloak.EventEntry, error) {
 	r.seen["skycloak_query_events.category"] = q.Category
+	r.seen["skycloak_query_events.order"] = q.Order
+	if len(q.Types) > 0 {
+		r.seen["skycloak_query_events.types"] = q.Types[0]
+	}
+	if len(q.OperationTypes) > 0 {
+		r.seen["skycloak_query_events.operation_types"] = q.OperationTypes[0]
+	}
 	return nil, nil
 }
 
@@ -177,6 +184,16 @@ var enumProbes = map[string]func(v string) map[string]any{
 	},
 	"skycloak_query_events.category": func(v string) map[string]any {
 		return map[string]any{"cluster_id": "c1", "category": v}
+	},
+	"skycloak_query_events.types": func(v string) map[string]any {
+		return map[string]any{"cluster_id": "c1", "types": []any{v}}
+	},
+	"skycloak_query_events.operation_types": func(v string) map[string]any {
+		// category=admin, or the client drops operation_types as inapplicable.
+		return map[string]any{"cluster_id": "c1", "category": "admin", "operation_types": []any{v}}
+	},
+	"skycloak_query_events.order": func(v string) map[string]any {
+		return map[string]any{"cluster_id": "c1", "order": v}
 	},
 	"skycloak_create_export.format": func(v string) map[string]any {
 		return map[string]any{"cluster_id": "c1", "format": v}

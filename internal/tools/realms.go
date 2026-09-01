@@ -18,6 +18,13 @@ type RealmSummary struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name,omitempty"`
 	Enabled     bool   `json:"enabled"`
+
+	// Carried on the list rows as well as the single-realm read: a fleet
+	// question ("which realms allow self-registration") otherwise costs one
+	// extra call per realm to answer.
+	RegistrationAllowed   bool   `json:"registration_allowed"`
+	LoginWithEmailAllowed bool   `json:"login_with_email_allowed"`
+	SSLRequired           string `json:"ssl_required,omitempty"`
 }
 
 // ListRealmsOutput is the structured result of skycloak_list_realms.
@@ -44,11 +51,19 @@ func listRealmsHandler(api API) mcp.ToolHandlerFor[ListRealmsInput, ListRealmsOu
 			return toolError(err), ListRealmsOutput{}, nil
 		}
 
-		out := ListRealmsOutput{Count: len(realms)}
+		out := ListRealmsOutput{Count: len(realms), Realms: []RealmSummary{}}
 		var b strings.Builder
 		for _, r := range realms {
-			out.Realms = append(out.Realms, RealmSummary{Name: r.Name, DisplayName: r.DisplayName, Enabled: r.Enabled})
-			fmt.Fprintf(&b, "- %s (%s) — enabled=%t\n", r.Name, r.DisplayName, r.Enabled)
+			out.Realms = append(out.Realms, RealmSummary{
+				Name: r.Name, DisplayName: r.DisplayName, Enabled: r.Enabled,
+				RegistrationAllowed:   r.RegistrationAllowed,
+				LoginWithEmailAllowed: r.LoginWithEmailAllowed,
+				SSLRequired:           r.SSLRequired,
+			})
+			// registration_allowed is rendered, not just carried: "which realms
+			// still allow self-registration" is a fleet question, and the text is
+			// what a model reads before the structured payload.
+			fmt.Fprintf(&b, "- %s (%s) — enabled=%t registration_allowed=%t\n", r.Name, r.DisplayName, r.Enabled, r.RegistrationAllowed)
 		}
 		if len(realms) == 0 {
 			b.WriteString("No realms found in this cluster.")

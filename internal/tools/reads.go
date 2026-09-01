@@ -81,7 +81,13 @@ func getRealmHandler(api API) mcp.ToolHandlerFor[RealmScopeInput, skycloak.Realm
 		if err != nil {
 			return toolError(err), skycloak.Realm{}, nil
 		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s (%s) enabled=%t", r.Name, r.DisplayName, r.Enabled)}}}, *r, nil
+		// The security settings are spelled out here, not just carried in the
+		// structured payload: "which realms still allow self-registration" is
+		// the question this tool exists to answer, and the rendered line is what
+		// a model reads first.
+		text := fmt.Sprintf("%s (%s) enabled=%t registration_allowed=%t login_with_email=%t ssl_required=%s",
+			r.Name, r.DisplayName, r.Enabled, r.RegistrationAllowed, r.LoginWithEmailAllowed, r.SSLRequired)
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, *r, nil
 	}
 }
 

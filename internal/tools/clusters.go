@@ -95,7 +95,7 @@ func listClustersHandler(api API) mcp.ToolHandlerFor[ListClustersInput, ListClus
 			return toolError(err), ListClustersOutput{}, nil
 		}
 
-		out := ListClustersOutput{Count: len(clusters)}
+		out := ListClustersOutput{Count: len(clusters), Clusters: []ClusterSummary{}}
 		var b strings.Builder
 		for _, c := range clusters {
 			out.Clusters = append(out.Clusters, ClusterSummary{

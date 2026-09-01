@@ -365,7 +365,12 @@ func TestEnumParamDescriptionsStateTheAcceptedValues(t *testing.T) {
 			continue
 		}
 		for _, v := range p.enum.values {
-			if !words[v] {
+			// Compared lowercased on both sides. desc was folded above, so an
+			// uppercase enum (UserEventType, AdminOperationType) could never
+			// match its own value and no description could satisfy this check.
+			// Nothing caught it before because every registered enum happened
+			// to be lowercase.
+			if !words[strings.ToLower(v)] {
 				t.Errorf("%s: description %q does not list the accepted value %q", p.key(), desc, v)
 			}
 		}

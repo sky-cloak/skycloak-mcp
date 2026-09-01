@@ -46,7 +46,7 @@ func listApplicationsHandler(api API) mcp.ToolHandlerFor[ListApplicationsInput, 
 		if err != nil {
 			return toolError(err), ListApplicationsOutput{}, nil
 		}
-		out := ListApplicationsOutput{Count: len(apps)}
+		out := ListApplicationsOutput{Count: len(apps), Applications: []ApplicationSummary{}}
 		var b strings.Builder
 		for _, a := range apps {
 			out.Applications = append(out.Applications, ApplicationSummary{ClientID: a.ClientID, Name: a.Name, Type: a.Type, Protocol: a.Protocol, Status: a.Status})
