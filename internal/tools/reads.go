@@ -198,7 +198,7 @@ type ClusterTypeInput struct {
 
 // VersionsOutput is the structured version list.
 type VersionsOutput struct {
-	Versions []string `json:"versions"`
+	Versions []skycloak.ClusterTypeVersion `json:"versions"`
 }
 
 func listClusterVersionsHandler(api API) mcp.ToolHandlerFor[ClusterTypeInput, VersionsOutput] {
@@ -211,8 +211,42 @@ func listClusterVersionsHandler(api API) mcp.ToolHandlerFor[ClusterTypeInput, Ve
 		if err != nil {
 			return toolError(err), VersionsOutput{}, nil
 		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: strings.Join(versions, ", ")}}}, VersionsOutput{Versions: versions}, nil
+		if versions == nil {
+			versions = []skycloak.ClusterTypeVersion{}
+		}
+		var b strings.Builder
+		for i, v := range versions {
+			if i > 0 {
+				b.WriteString("\n")
+			}
+			// Annotations only where there is something to say, so their
+			// presence carries meaning.
+			fmt.Fprintf(&b, "- %s%s", v.Version, versionNotes(v))
+		}
+		if len(versions) == 0 {
+			b.WriteString("No versions available for this cluster type.")
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: b.String()}}}, VersionsOutput{Versions: versions}, nil
 	}
+}
+
+// versionNotes annotates a version with what a caller needs before choosing it:
+// whether it can still be chosen at all, and what an upgrade onto it costs.
+func versionNotes(v skycloak.ClusterTypeVersion) string {
+	var notes []string
+	if !v.Active {
+		notes = append(notes, "no longer offered for new clusters or upgrades")
+	}
+	if v.IsMajorChange {
+		notes = append(notes, "major version change")
+	}
+	if v.BreakingChangeCount > 0 {
+		notes = append(notes, fmt.Sprintf("%d breaking change(s)", v.BreakingChangeCount))
+	}
+	if len(notes) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(notes, "; ") + ")"
 }
 
 // UpgradesOutput is the structured upgrade list.

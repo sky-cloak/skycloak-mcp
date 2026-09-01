@@ -102,7 +102,7 @@ type SIEMS3Config struct {
 // SIEMHTTPConfig configures an HTTP SIEM destination request.
 type SIEMHTTPConfig struct {
 	URL         string            `json:"url"`
-	AuthType    string            `json:"auth_type" jsonschema:"authentication: none, bearer, or basic (case-insensitive)"`
+	AuthType    string            `json:"auth_type" jsonschema:"authentication: none, bearer, basic, or shared_key (case-insensitive)"`
 	Username    string            `json:"username,omitempty"`
 	Password    string            `json:"password,omitempty"`
 	BearerToken string            `json:"bearer_token,omitempty"`

@@ -1775,8 +1775,22 @@ func (c *Client) ListClusterFeatures(ctx context.Context) ([]ClusterFeatureInfo,
 	return out, nil
 }
 
-// ClusterTypeVersions returns the Keycloak versions available for a cluster type.
-func (c *Client) ClusterTypeVersions(ctx context.Context, clusterType string) ([]string, error) {
+// ClusterTypeVersion is one offerable version of a cluster type.
+//
+// Active is the field that matters most: false means the version is still
+// recognised, for a cluster already running it, but is no longer offered for new
+// clusters or upgrades. Returning it as a bare string made it indistinguishable
+// from a version that can actually be chosen.
+type ClusterTypeVersion struct {
+	Version             string `json:"version"`
+	Active              bool   `json:"active"`
+	IsMajorChange       bool   `json:"is_major_change"`
+	BreakingChangeCount int32  `json:"breaking_change_count"`
+}
+
+// ClusterTypeVersions returns the versions known for a cluster type, offered or
+// not. Filtering here would hide a version a cluster is already running.
+func (c *Client) ClusterTypeVersions(ctx context.Context, clusterType string) ([]ClusterTypeVersion, error) {
 	resp, err := c.gen.GetClusterTypeVersionsWithResponse(ctx, apiclient.ClusterType(clusterType), nil)
 	if err != nil {
 		return nil, err
@@ -1784,7 +1798,16 @@ func (c *Client) ClusterTypeVersions(ctx context.Context, clusterType string) ([
 	if resp.JSON200 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	return *resp.JSON200, nil
+	out := make([]ClusterTypeVersion, 0, len(*resp.JSON200))
+	for _, v := range *resp.JSON200 {
+		out = append(out, ClusterTypeVersion{
+			Version:             string(v.Version),
+			Active:              v.Active,
+			IsMajorChange:       v.IsMajorChange,
+			BreakingChangeCount: v.BreakingChangeCount,
+		})
+	}
+	return out, nil
 }
 
 // ClusterUpgrade is a cluster version-upgrade record.

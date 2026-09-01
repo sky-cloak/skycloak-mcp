@@ -63,7 +63,7 @@ func (r recAPI) UpsertSMTP(_ context.Context, _, _ string, req skycloak.UpsertSM
 	return &skycloak.SMTPConfig{Host: req.Host}, nil
 }
 
-func (r recAPI) ClusterTypeVersions(_ context.Context, clusterType string) ([]string, error) {
+func (r recAPI) ClusterTypeVersions(_ context.Context, clusterType string) ([]skycloak.ClusterTypeVersion, error) {
 	r.seen["skycloak_list_cluster_versions.type"] = clusterType
 	return nil, nil
 }

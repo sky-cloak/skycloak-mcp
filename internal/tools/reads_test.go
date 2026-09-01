@@ -22,10 +22,10 @@ func TestGetEntityHandlers(t *testing.T) {
 
 func TestClusterMetadataHandlers(t *testing.T) {
 	api := stubAPI{
-		locations: []skycloak.ClusterLocationInfo{{Location: "eu", Name: "Europe", Available: true}},
-		ctypes:    []skycloak.ClusterTypeInfo{{Type: "keycloak", Name: "Keycloak", Available: true}},
-		features:  []skycloak.ClusterFeatureInfo{{Name: "token-exchange", DisplayName: "Token Exchange"}},
-		versions:  []string{"26.1", "26.0"},
+		locations:   []skycloak.ClusterLocationInfo{{Location: "eu", Name: "Europe", Available: true}},
+		ctypes:      []skycloak.ClusterTypeInfo{{Type: "keycloak", Name: "Keycloak", Available: true}},
+		features:    []skycloak.ClusterFeatureInfo{{Name: "token-exchange", DisplayName: "Token Exchange"}},
+		versionInfo: []skycloak.ClusterTypeVersion{{Version: "26.1", Active: true}, {Version: "26.0"}},
 	}
 	if _, out, err := listClusterLocationsHandler(api)(context.Background(), nil, NoInput{}); err != nil || len(out.Locations) != 1 {
 		t.Fatalf("locations: %+v %v", out, err)

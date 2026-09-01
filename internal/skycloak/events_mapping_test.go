@@ -387,3 +387,30 @@ func TestRealmWritesReturnTheServersSettings(t *testing.T) {
 		})
 	}
 }
+
+// The tool tests drive a stub, so they pass even if this mapping hardcodes
+// every field — the third time that gap has appeared in this change. Asserted
+// here against a real response instead.
+func TestClusterTypeVersionsMapsEveryField(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, `[
+			{"version":"27.0.0","active":true,"is_major_change":true,"breaking_change_count":3},
+			{"version":"26.6.3","active":false,"is_major_change":false,"breaking_change_count":0}
+		]`)
+	}))
+	defer srv.Close()
+
+	vs, err := newTestClient(srv.URL).ClusterTypeVersions(context.Background(), "keycloak")
+	if err != nil {
+		t.Fatalf("ClusterTypeVersions: %v", err)
+	}
+	if len(vs) != 2 {
+		t.Fatalf("got %d versions, want 2 (a recognised version must not be filtered out)", len(vs))
+	}
+	if vs[0].Version != "27.0.0" || !vs[0].Active || !vs[0].IsMajorChange || vs[0].BreakingChangeCount != 3 {
+		t.Errorf("offered version mismapped: %+v", vs[0])
+	}
+	if vs[1].Version != "26.6.3" || vs[1].Active || vs[1].IsMajorChange || vs[1].BreakingChangeCount != 0 {
+		t.Errorf("retired version mismapped, active=false must survive: %+v", vs[1])
+	}
+}
