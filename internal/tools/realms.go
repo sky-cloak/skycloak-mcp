@@ -60,7 +60,10 @@ func listRealmsHandler(api API) mcp.ToolHandlerFor[ListRealmsInput, ListRealmsOu
 				LoginWithEmailAllowed: r.LoginWithEmailAllowed,
 				SSLRequired:           r.SSLRequired,
 			})
-			fmt.Fprintf(&b, "- %s (%s) — enabled=%t\n", r.Name, r.DisplayName, r.Enabled)
+			// registration_allowed is rendered, not just carried: "which realms
+			// still allow self-registration" is a fleet question, and the text is
+			// what a model reads before the structured payload.
+			fmt.Fprintf(&b, "- %s (%s) — enabled=%t registration_allowed=%t\n", r.Name, r.DisplayName, r.Enabled, r.RegistrationAllowed)
 		}
 		if len(realms) == 0 {
 			b.WriteString("No realms found in this cluster.")

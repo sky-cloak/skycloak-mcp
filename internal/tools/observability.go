@@ -12,6 +12,9 @@ import (
 
 const defaultLogLimit = 50
 
+// maxEventLimit mirrors PageLimit's maximum in openapi.yaml.
+const maxEventLimit = 100
+
 func registerObservabilityReadTools(s *mcp.Server, api API) {
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "skycloak_get_logs",
@@ -149,6 +152,12 @@ func queryEventsHandler(api API) mcp.ToolHandlerFor[QueryEventsInput, EventsOutp
 		limit := in.Limit
 		if limit <= 0 {
 			limit = defaultLogLimit
+		}
+		// Refused here rather than forwarded: the API answers an over-limit
+		// request with "Invalid parameter: limit" and no bound, which is what
+		// made callers bisect to discover the maximum.
+		if limit > maxEventLimit {
+			return errResult(fmt.Sprintf("limit is capped at %d; page with offset for more", maxEventLimit)), EventsOutput{}, nil
 		}
 		category := enumEventCategory.canonical(in.Category)
 		events, err := api.QueryEvents(ctx, in.ClusterID, skycloak.EventQuery{

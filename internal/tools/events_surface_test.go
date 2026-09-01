@@ -223,6 +223,64 @@ func TestRealmSecuritySettingsAreRequiredBySpec(t *testing.T) {
 	}
 }
 
+// The rendered line is what a model reads before the structured payload, so the
+// security settings have to appear in it. Gutting this rendering passed every
+// test before, while making the fleet question unanswerable from what is read.
+func TestGetRealmRendersSecuritySettings(t *testing.T) {
+	api := stubAPI{realm: &skycloak.Realm{
+		Name: "alfred", DisplayName: "Alfred", Enabled: true,
+		RegistrationAllowed: true, LoginWithEmailAllowed: true, SSLRequired: "external",
+	}}
+	res, _, err := getRealmHandler(api)(context.Background(), nil,
+		RealmScopeInput{ClusterID: "c1", Realm: "alfred"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	text := renderedText(res)
+	for _, want := range []string{"registration_allowed=true", "login_with_email=true", "ssl_required=external"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("rendered realm text missing %q: %q", want, text)
+		}
+	}
+}
+
+// Same for the list rows: answering "which realms allow self-registration"
+// across a fleet is the point, and it is read from this line.
+func TestListRealmsRendersRegistrationState(t *testing.T) {
+	api := stubAPI{realms: []skycloak.Realm{
+		{Name: "alfred", Enabled: true, RegistrationAllowed: true},
+		{Name: "locked", Enabled: true},
+	}}
+	res, out, err := listRealmsHandler(api)(context.Background(), nil, ListRealmsInput{ClusterID: "c1"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	text := renderedText(res)
+	if !strings.Contains(text, "registration_allowed=true") || !strings.Contains(text, "registration_allowed=false") {
+		t.Errorf("list rows must state registration state: %q", text)
+	}
+	if !out.Realms[0].RegistrationAllowed || out.Realms[1].RegistrationAllowed {
+		t.Errorf("registration state dropped from list payload: %+v", out.Realms)
+	}
+}
+
+// A limit the API cannot serve is refused here with the bound named. Forwarding
+// it returns "Invalid parameter: limit" with no maximum, which is what made
+// callers bisect to find it.
+func TestQueryEventsRefusesOverLimitAndNamesTheCap(t *testing.T) {
+	res, _, err := queryEventsHandler(stubAPI{})(context.Background(), nil,
+		QueryEventsInput{ClusterID: "c1", Limit: 200})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("an over-limit request must be refused, not forwarded")
+	}
+	if !strings.Contains(renderedText(res), "100") {
+		t.Errorf("refusal must name the cap: %q", renderedText(res))
+	}
+}
+
 // A nil slice marshals to null, which naive clients iterate straight into a
 // crash. Every list output should be [] when empty.
 func TestEmptyListsMarshalAsArrays(t *testing.T) {
@@ -243,5 +301,30 @@ func TestEmptyListsMarshalAsArrays(t *testing.T) {
 	}
 	if b, _ := json.Marshal(evs); strings.Contains(string(b), "null") {
 		t.Errorf("events is null, want []: %s", b)
+	}
+
+	_, realms, err := listRealmsHandler(api)(context.Background(), nil, ListRealmsInput{ClusterID: "c1"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if b, _ := json.Marshal(realms); strings.Contains(string(b), "null") {
+		t.Errorf("realms is null, want []: %s", b)
+	}
+
+	_, clusters, err := listClustersHandler(api)(context.Background(), nil, ListClustersInput{})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if b, _ := json.Marshal(clusters); strings.Contains(string(b), "null") {
+		t.Errorf("clusters is null, want []: %s", b)
+	}
+
+	_, apps, err := listApplicationsHandler(api)(context.Background(), nil,
+		ListApplicationsInput{ClusterID: "c1", Realm: "alfred"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if b, _ := json.Marshal(apps); strings.Contains(string(b), "null") {
+		t.Errorf("applications is null, want []: %s", b)
 	}
 }

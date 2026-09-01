@@ -680,21 +680,26 @@ type EventEntry struct {
 	AuthMethod       string `json:"auth_method,omitempty"`
 	IdentityProvider string `json:"identity_provider,omitempty"`
 	GrantType        string `json:"grant_type,omitempty"`
-	IsM2M            bool   `json:"is_m2m,omitempty"`
+	IsM2M            bool   `json:"is_m2m"`
 }
 
-// parseEventTime accepts RFC3339. An unparseable value is dropped rather than
-// erroring: the API then applies its own default window, which is the same
-// result as not having passed the field at all.
-func parseEventTime(v string) (time.Time, bool) {
+// parseEventTime accepts RFC3339.
+//
+// An unparseable value is an error, not a silent drop. Dropping it would leave
+// the API to apply its default 24-hour window while the caller believes its own
+// range applied, so a question about last week answers from yesterday and reads
+// as "nothing happened". That is the failure this whole change exists to remove,
+// and it would be worse here than a rejected call: "2026-08-25" and a zone-less
+// timestamp are both plausible inputs.
+func parseEventTime(field, v string) (time.Time, bool, error) {
 	if v == "" {
-		return time.Time{}, false
+		return time.Time{}, false, nil
 	}
 	t, err := time.Parse(time.RFC3339, v)
 	if err != nil {
-		return time.Time{}, false
+		return time.Time{}, false, fmt.Errorf("%s must be RFC3339 (e.g. 2026-08-31T00:00:00Z), got %q", field, v)
 	}
-	return t, true
+	return t, true, nil
 }
 
 // realmFromAPI is shared by GetRealm and ListRealms so the same entity cannot
@@ -746,15 +751,28 @@ func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery
 		o := apiclient.PageOffset(q.Offset)
 		params.Offset = &o
 	}
-	if t, ok := parseEventTime(q.StartTime); ok {
+	if t, ok, err := parseEventTime("start_time", q.StartTime); err != nil {
+		return nil, err
+	} else if ok {
 		params.StartTime = &t
 	}
-	if t, ok := parseEventTime(q.EndTime); ok {
+	if t, ok, err := parseEventTime("end_time", q.EndTime); err != nil {
+		return nil, err
+	} else if ok {
 		params.EndTime = &t
 	}
 	// types and operation_types are mutually exclusive upstream, and each is
 	// rejected for the other category, so only the one matching the requested
-	// category is sent. Sending both would 422 the whole query.
+	// category is sent.
+	//
+	// With no category there is no matching one: both would go out together, and
+	// the spec calls them mutually exclusive without encoding it in a validate
+	// tag, so the result is whatever the server happens to do — a 422, or an
+	// incoherent filter that quietly returns the wrong rows. Refused here
+	// instead, naming the fix.
+	if len(q.Types) > 0 && len(q.OperationTypes) > 0 && q.Category == "" {
+		return nil, fmt.Errorf("types and operation_types are mutually exclusive: set category to user or admin, or pass only the one that applies")
+	}
 	if len(q.Types) > 0 && q.Category != "admin" {
 		ts := make([]apiclient.UserEventType, 0, len(q.Types))
 		for _, t := range q.Types {

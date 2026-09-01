@@ -71,16 +71,21 @@ func TestQueryEventsMapsUserEventFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryEvents: %v", err)
 	}
+	// Exact values, not merely non-empty: the fixture gives every field a
+	// distinct value so a cross-wired mapping (auth_method into grant_type, say)
+	// fails here instead of passing because both happen to be populated.
 	e := events[0]
-	for name, got := range map[string]string{
-		"user_id":           e.UserID,
-		"session_id":        e.SessionID,
-		"auth_method":       e.AuthMethod,
-		"identity_provider": e.IdentityProvider,
-		"grant_type":        e.GrantType,
+	for name, pair := range map[string][2]string{
+		"user_id":           {e.UserID, "33333333-3333-3333-3333-333333333333"},
+		"session_id":        {e.SessionID, "sess-1"},
+		"auth_method":       {e.AuthMethod, "openid-connect"},
+		"identity_provider": {e.IdentityProvider, "google"},
+		"grant_type":        {e.GrantType, "authorization_code"},
+		"username":          {e.Username, "someone"},
+		"error":             {e.Error, "invalid_user_credentials"},
 	} {
-		if got == "" {
-			t.Errorf("%s dropped from mapping: %+v", name, e)
+		if pair[0] != pair[1] {
+			t.Errorf("%s = %q, want %q (mapping dropped or cross-wired): %+v", name, pair[0], pair[1], e)
 		}
 	}
 	if !e.IsM2M {
@@ -106,25 +111,20 @@ func TestQueryEventsSendsFiltersOnTheWire(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryEvents: %v", err)
 	}
+	// Every value asserted exactly. Checking start_time and end_time for mere
+	// presence let a swap of the two pass, which would silently invert the
+	// window a caller asked for.
 	for k, want := range map[string]string{
 		"offset":     "200",
-		"start_time": "2026-08-31T00:00:00Z",
 		"types":      "LOGIN_ERROR",
 		"error":      "invalid_user_credentials",
 		"order":      "asc",
+		"start_time": "2026-08-31T00:00:00Z",
+		"end_time":   "2026-09-01T00:00:00Z",
 	} {
-		if got.Get(k) == "" {
-			t.Errorf("%s never reached the query string: %v", k, got)
-			continue
+		if g := got.Get(k); g != want {
+			t.Errorf("%s = %q, want %q (full query: %v)", k, g, want, got)
 		}
-		if k == "offset" || k == "types" || k == "error" || k == "order" {
-			if got.Get(k) != want {
-				t.Errorf("%s = %q, want %q", k, got.Get(k), want)
-			}
-		}
-	}
-	if got.Get("end_time") == "" {
-		t.Errorf("end_time never reached the query string: %v", got)
 	}
 }
 
@@ -165,22 +165,58 @@ func TestQueryEventsOmitsFiltersThatDoNotApplyToTheCategory(t *testing.T) {
 	}
 }
 
-// An unparseable timestamp must not be sent as garbage; the API would 422 the
-// whole query rather than fall back to its default window.
-func TestQueryEventsDropsUnparseableTime(t *testing.T) {
-	var got url.Values
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = r.URL.Query()
+// An unparseable timestamp must fail the call, not vanish. Silently dropping it
+// leaves the API to apply its default 24-hour window while the caller believes
+// its own range applied, so a question about last week is answered from
+// yesterday and reads as "nothing happened" — the exact failure this change
+// exists to remove.
+func TestQueryEventsRejectsUnparseableTime(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
 		writeJSON(w, 200, `[]`)
 	}))
 	defer srv.Close()
 
-	if _, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid,
-		EventQuery{StartTime: "last tuesday"}); err != nil {
-		t.Fatalf("QueryEvents: %v", err)
+	for _, tc := range []struct{ name, start, end string }{
+		{"date only", "2026-08-25", ""},
+		{"no timezone", "2026-08-25T00:00:00", ""},
+		{"prose", "last tuesday", ""},
+		{"bad end only", "2026-08-25T00:00:00Z", "not a time"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			called = false
+			_, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid,
+				EventQuery{StartTime: tc.start, EndTime: tc.end})
+			if err == nil {
+				t.Fatalf("unparseable time accepted, the range would be silently ignored")
+			}
+			if called {
+				t.Errorf("request was sent despite an unusable time filter")
+			}
+		})
 	}
-	if got.Get("start_time") != "" {
-		t.Errorf("unparseable time forwarded: %v", got)
+}
+
+// With no category there is no way to pick between the two filter lists, and the
+// spec calls them mutually exclusive without encoding it, so the server's
+// behaviour is undefined. Refuse rather than send both and hope.
+func TestQueryEventsRejectsBothFilterListsWithoutCategory(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		writeJSON(w, 200, `[]`)
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid, EventQuery{
+		Types: []string{"LOGIN_ERROR"}, OperationTypes: []string{"UPDATE"},
+	})
+	if err == nil {
+		t.Fatal("both filter lists accepted with no category to disambiguate them")
+	}
+	if called {
+		t.Error("request was sent with two mutually exclusive filters")
 	}
 }
 
