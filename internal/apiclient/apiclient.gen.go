@@ -842,7 +842,7 @@ type ClusterLocation string
 
 // ClusterLocationInfo Metadata about a supported deployment region.
 type ClusterLocationInfo struct {
-	// Available Whether this region is globally available and accessible to the workspace.
+	// Available Whether the workspace can create a cluster in this region. Regions the workspace cannot use are still listed, with this field set to false.
 	Available bool `json:"available"`
 
 	// Location Region where the cluster is hosted.
