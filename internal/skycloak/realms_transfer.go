@@ -64,7 +64,7 @@ type CreateRealmImportRequest struct {
 
 func realmExportFromAPI(e *apiclient.RealmExport) RealmExport {
 	return RealmExport{
-		ID: e.Id.String(), ClusterID: e.ClusterId.String(), Realm: e.Realm,
+		ID: uuidString(e.Id), ClusterID: uuidString(e.ClusterId), Realm: e.Realm,
 		Scope: string(e.Scope), Status: string(e.Status), Progress: int64(e.Progress),
 		SourceVersion: nstrN(e.SourceVersion), SHA256Checksum: nstrN(e.Sha256Checksum),
 		DownloadURL: nstrN(e.DownloadUrl), ErrorMessage: nstrN(e.ErrorMessage),
@@ -74,7 +74,7 @@ func realmExportFromAPI(e *apiclient.RealmExport) RealmExport {
 
 func realmImportFromAPI(i *apiclient.RealmImport) RealmImport {
 	return RealmImport{
-		ID: i.Id.String(), ClusterID: i.ClusterId.String(), Realm: i.Realm,
+		ID: uuidString(i.Id), ClusterID: uuidString(i.ClusterId), Realm: i.Realm,
 		SourceKind: string(i.SourceKind), Status: string(i.Status), Progress: int64(i.Progress),
 		SourceVersion: nstrN(i.SourceVersion), TargetVersion: nstrN(i.TargetVersion),
 		ErrorMessage: nstrN(i.ErrorMessage),

@@ -32,8 +32,11 @@ when" is the single most valuable fact you can get.
 
 ## Step 3: read the failures themselves
 
-Call skycloak_query_events with category=user for the affected realm and a
-generous limit, then group failures by error, ip_address, username and
+Call skycloak_query_events with category=user for the affected realm, with
+types=["LOGIN_ERROR"] to cut the health-check noise and start_time set to
+before the onset: without it the query only reaches back 24 hours, and a quiet
+result then means nothing. limit is capped at 100 per call, so page with offset
+rather than asking for more. Group failures by error, ip_address, username and
 client_id. The shape of the grouping is the diagnosis:
 
 - **One IP, many usernames:** password spraying. Check
@@ -51,12 +54,17 @@ client_id. The shape of the grouping is the diagnosis:
 
 ## Step 4: correlate with change
 
-Call skycloak_query_events with category=admin around the onset time. Most
-incidents that are not attacks are changes: an authentication flow edited, a
-provider disabled, a client secret rotated, required actions added. If an
-admin event lands minutes before the first failure, you have the story;
-report who, what and when, and recommend reverting through a human decision,
-not automatically.
+Call skycloak_query_events with category=admin, with start_time and end_time
+bracketing the onset. Most incidents that are not attacks are changes: an
+authentication flow edited, a provider disabled, a client secret rotated,
+required actions added. resource_type and resource_path say what was touched,
+so an UPDATE on a REALM is a settings change and one on a USER is not.
+
+If an admin event lands minutes before the first failure, you have the story.
+Report what and when, and say plainly that who is not recorded: admin events
+carry no acting user, only the calling client_id. Do not infer an actor from
+the IP or from a nearby user event. Recommend reverting through a human
+decision, not automatically.
 
 ## Step 5: SSO-specific checks
 
@@ -64,7 +72,7 @@ When failures involve brokered logins:
 
 1. skycloak_list_identity_providers, then skycloak_get_identity_provider for
    the affected alias: is it enabled, and did its config change (Step 4 shows
-   by whom)?
+   what and when, not by whom)?
 2. If the provider config is untouched and errors are timeouts or upstream
    rejections, the upstream IdP is the suspect; check its status page before
    touching Keycloak.

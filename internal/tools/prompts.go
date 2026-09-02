@@ -61,7 +61,7 @@ var promptDefs = []promptDef{
 			Arguments: []*mcp.PromptArgument{
 				{Name: "realm", Description: "The realm to investigate.", Required: true},
 				{Name: "cluster_id", Description: "Cluster ID the realm lives in. Leave empty to locate it by realm name."},
-				{Name: "limit", Description: "How many recent events to pull. Defaults to 200."},
+				{Name: "limit", Description: "How many recent events to pull per call. Defaults to 100, which is the maximum; page with offset for more."},
 			},
 		},
 		text: triageFailedLoginsText,
@@ -85,7 +85,7 @@ var promptDefs = []promptDef{
 		prompt: &mcp.Prompt{
 			Name:        "review_admin_changes",
 			Title:       "Review admin changes",
-			Description: "Show who changed what in a realm recently, with a focus on login and security settings.",
+			Description: "Show what changed in a realm recently, with a focus on login and security settings. Admin events record no acting user, so the answer is what and when, not who.",
 			Arguments: []*mcp.PromptArgument{
 				{Name: "realm", Description: "The realm whose admin events to review.", Required: true},
 				{Name: "cluster_id", Description: "Cluster ID the realm lives in. Leave empty to locate it by realm name."},
@@ -238,11 +238,11 @@ func reviewUpgradesText(args map[string]string) string {
 
 func triageFailedLoginsText(args map[string]string) string {
 	realm := args["realm"]
-	limit := arg(args, "limit", "200")
+	limit := arg(args, "limit", "100")
 	return fmt.Sprintf(`Investigate failed logins in realm %q.
 
 %s
-2. Call skycloak_query_events with category=user, realm=%q, search=LOGIN_ERROR and limit=%s. If the search matches nothing, pull without it and keep only events whose type is LOGIN_ERROR or whose error field is set. The tool has no time filter, so read the timestamp field yourself and state what window the returned events actually cover.
+2. Call skycloak_query_events with category=user, realm=%q, types=["LOGIN_ERROR"] and limit=%s. Set start_time to the beginning of the window you care about, in RFC3339: without it the query only covers the last 24 hours and a quiet result means nothing. Do not filter with search, which matches username, client_id, realm_name and ip_address but never the event type. limit is capped at 100, so page with offset when a window holds more, and say so if you stopped before exhausting it.
 3. Group the failures by ip_address. For each IP report the attempt count, the usernames tried, the error codes, and the first and last timestamp.
 4. Call out the patterns that matter: one IP trying many usernames (password spraying), many IPs trying one username (credential stuffing), and a single user failing repeatedly against one client_id (usually a misconfigured client, not an attack).
 5. Cross-check suspicious IPs against skycloak_get_security_logs to see whether the WAF already saw or blocked them.
@@ -271,10 +271,11 @@ func reviewAdminChangesText(args map[string]string) string {
 	return fmt.Sprintf(`Review recent admin activity in realm %q. Window: %s.
 
 %s
-2. Call skycloak_query_events with category=admin and realm=%q. The tool has no time filter: pull a generous limit (start at 200), filter by timestamp to the window yourself, and say so if the events returned do not reach back far enough to cover it.
-3. Summarise the changes grouped by what was touched: realm settings, clients, users, identity providers, and so on. For each, show when it happened, the operation, and who did it where the event carries a username.
+2. Call skycloak_query_events with category=admin, realm=%q and start_time set to the beginning of the window in RFC3339. Narrow with operation_types (CREATE, UPDATE, DELETE, ACTION) when you only care about some. limit is capped at 100 per call, so page with offset until the window is covered, and say so if you stopped early.
+3. Summarise the changes grouped by resource_type, and use resource_path to say exactly what was touched: an UPDATE on a REALM is a settings change, on a USER it is an account edit. For each, show when it happened and the operation.
 4. Look specifically for changes to login and security settings: realm updates, identity provider changes, authentication configuration, client secret rotations.
-5. If nothing in the window touched login settings, say that explicitly rather than leaving it implied.`, realm, window, findRealmStep(args, realm), realm)
+5. On attribution, be straight: admin events name no acting user. client_id identifies the calling client as an opaque UUID, and there is no user behind it in the payload. Report what changed and when, say plainly that who did it is not recorded, and do not guess an actor from the IP or from nearby user events.
+6. If nothing in the window touched login settings, say that explicitly rather than leaving it implied.`, realm, window, findRealmStep(args, realm), realm)
 }
 
 func provisionEnvironmentText(args map[string]string) string {

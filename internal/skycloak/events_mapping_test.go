@@ -2,6 +2,7 @@ package skycloak
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -412,5 +413,54 @@ func TestClusterTypeVersionsMapsEveryField(t *testing.T) {
 	}
 	if vs[1].Version != "26.6.3" || vs[1].Active || vs[1].IsMajorChange || vs[1].BreakingChangeCount != 0 {
 		t.Errorf("retired version mismapped, active=false must survive: %+v", vs[1])
+	}
+}
+
+// An absent realm id must be omitted, not rendered as the zero UUID. RealmId is
+// a value type, so a missing id stringifies to a well-formed
+// 00000000-0000-0000-0000-000000000000 that omitempty cannot catch — a caller
+// could paste it into a lookup believing it identifies the realm. Observed live
+// against prod, where get_realm returned exactly that.
+func TestRealmOmitsAbsentID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, `{"name":"alfred","display_name":"Alfred","enabled":true,
+			"ssl_required":"external","registration_allowed":true,
+			"registration_email_as_username":false,"login_with_email_allowed":true,
+			"duplicate_emails_allowed":false}`)
+	}))
+	defer srv.Close()
+
+	r, err := newTestClient(srv.URL).GetRealm(context.Background(), cuid, "alfred")
+	if err != nil {
+		t.Fatalf("GetRealm: %v", err)
+	}
+	if r.ID != "" {
+		t.Errorf("absent id became %q, a fabricated identifier", r.ID)
+	}
+	b, _ := json.Marshal(r)
+	if strings.Contains(string(b), "00000000-0000-0000-0000-000000000000") {
+		t.Errorf("zero UUID reached the payload: %s", b)
+	}
+	if strings.Contains(string(b), `"id"`) {
+		t.Errorf("id must be omitted entirely when absent: %s", b)
+	}
+}
+
+// A real id still comes through.
+func TestRealmKeepsPresentID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, `{"id":"44444444-4444-4444-4444-444444444444","name":"alfred",
+			"display_name":"Alfred","enabled":true,"ssl_required":"external",
+			"registration_allowed":true,"registration_email_as_username":false,
+			"login_with_email_allowed":true,"duplicate_emails_allowed":false}`)
+	}))
+	defer srv.Close()
+
+	r, err := newTestClient(srv.URL).GetRealm(context.Background(), cuid, "alfred")
+	if err != nil {
+		t.Fatalf("GetRealm: %v", err)
+	}
+	if r.ID != "44444444-4444-4444-4444-444444444444" {
+		t.Errorf("id dropped or mangled: %q", r.ID)
 	}
 }

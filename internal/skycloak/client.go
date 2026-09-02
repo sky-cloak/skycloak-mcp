@@ -193,7 +193,7 @@ func clusterSummaryFromAPI(cl *apiclient.ClusterSummary) Cluster {
 		autoUpgradeEnabled = *cl.AutoUpgradeEnabled
 	}
 	return Cluster{
-		ID: cl.Id.String(), Name: string(cl.Name), Type: string(cl.Type), Size: string(cl.Size),
+		ID: uuidString(cl.Id), Name: string(cl.Name), Type: string(cl.Type), Size: string(cl.Size),
 		Version: string(cl.Version), Location: string(cl.Location), Status: string(cl.Status),
 		URL: cl.Url, CreatedAt: fmtTime(cl.CreatedAt), UpdatedAt: fmtTime(cl.UpdatedAt),
 		AutoUpgradeEnabled: autoUpgradeEnabled,
@@ -206,7 +206,7 @@ func clusterFromAPI(cl *apiclient.Cluster) *Cluster {
 		autoUpgradeEnabled = *cl.AutoUpgradeEnabled
 	}
 	return &Cluster{
-		ID: cl.Id.String(), Name: string(cl.Name), Type: string(cl.Type), Size: string(cl.Size),
+		ID: uuidString(cl.Id), Name: string(cl.Name), Type: string(cl.Type), Size: string(cl.Size),
 		Version: string(cl.Version), Location: string(cl.Location), Status: string(cl.Status),
 		URL: cl.Url, CreatedAt: fmtTime(cl.CreatedAt), UpdatedAt: fmtTime(cl.UpdatedAt),
 		AutoUpgradeEnabled: autoUpgradeEnabled,
@@ -715,7 +715,7 @@ func realmFromAPI(r *apiclient.Realm) Realm {
 		Name:        string(r.Name),
 		DisplayName: string(r.DisplayName),
 		Enabled:     r.Enabled,
-		ID:          r.Id.String(),
+		ID:          uuidString(r.Id),
 		SSLRequired: string(r.SslRequired),
 
 		RegistrationAllowed:         r.RegistrationAllowed,
@@ -723,6 +723,21 @@ func realmFromAPI(r *apiclient.Realm) Realm {
 		LoginWithEmailAllowed:       r.LoginWithEmailAllowed,
 		DuplicateEmailsAllowed:      r.DuplicateEmailsAllowed,
 	}
+}
+
+// uuidString renders a UUID, or "" when it is the zero value.
+//
+// These IDs are value types, so an absent one arrives as the zero UUID and
+// stringifies to 00000000-0000-0000-0000-000000000000: a well-formed, entirely
+// fabricated identifier that omitempty cannot catch, because the string is not
+// empty. A caller can paste it into a lookup believing it identifies something.
+// Seen live on get_realm, whose id the spec marks required, so "required" is no
+// defence — every ID that reaches a caller goes through here.
+func uuidString(u uuid.UUID) string {
+	if u == (uuid.UUID{}) {
+		return ""
+	}
+	return u.String()
 }
 
 func strDeref(p *string) string {
@@ -869,7 +884,7 @@ type Domain struct {
 
 func domainFromAPI(d *apiclient.Domain) Domain {
 	out := Domain{
-		ID: d.Id.String(), Domain: string(d.Domain), CnameTarget: d.CnameTarget,
+		ID: uuidString(d.Id), Domain: string(d.Domain), CnameTarget: d.CnameTarget,
 		SSLStatus: string(d.SslStatus), VerificationStatus: string(d.VerificationStatus), IsActive: d.IsActive,
 	}
 	if d.Subdomain != nil {
@@ -965,7 +980,7 @@ type Theme struct {
 }
 
 func themeFromAPI(t *apiclient.Theme) Theme {
-	out := Theme{ID: t.Id.String(), Name: t.Name, Status: string(t.Status), FileSize: t.FileSize}
+	out := Theme{ID: uuidString(t.Id), Name: t.Name, Status: string(t.Status), FileSize: t.FileSize}
 	out.Version = strDeref(t.Version)
 	for _, tt := range t.ThemeTypes {
 		out.ThemeTypes = append(out.ThemeTypes, string(tt))
@@ -1124,7 +1139,7 @@ type ExtensionInfo struct {
 
 func extensionInfoFromAPI(e *apiclient.Extension) ExtensionInfo {
 	return ExtensionInfo{
-		ID: e.Id.String(), Name: e.Name, Description: nstrN(e.Description), Source: string(e.Source),
+		ID: uuidString(e.Id), Name: e.Name, Description: nstrN(e.Description), Source: string(e.Source),
 		KeycloakVersions: e.KeycloakVersions, DocumentationURL: nstrN(e.DocumentationUrl),
 	}
 }
@@ -1171,7 +1186,7 @@ type ClusterExtension struct {
 
 func clusterExtensionFromAPI(e *apiclient.ClusterExtension) ClusterExtension {
 	return ClusterExtension{
-		ExtensionID: e.ExtensionId.String(), ExtensionName: e.ExtensionName, Source: string(e.ExtensionSource),
+		ExtensionID: uuidString(e.ExtensionId), ExtensionName: e.ExtensionName, Source: string(e.ExtensionSource),
 		InstalledVersion: e.InstalledVersion, AvailableVersion: nstrN(e.AvailableVersion),
 		Status: string(e.Status), UpgradeAvailable: e.UpgradeAvailable,
 	}
@@ -1275,7 +1290,7 @@ type Export struct {
 
 func exportFromAPI(e *apiclient.Export) Export {
 	return Export{
-		ID: e.Id.String(), Format: string(e.Format), Status: string(e.Status), Progress: int64(e.Progress),
+		ID: uuidString(e.Id), Format: string(e.Format), Status: string(e.Status), Progress: int64(e.Progress),
 		IsEncrypted: e.IsEncrypted, FileSizeBytes: nintN(e.FileSizeBytes), DownloadURL: nstrN(e.DownloadUrl),
 		ErrorMessage: nstrN(e.ErrorMessage), CompletedAt: ntimeN(e.CompletedAt), ExpiresAt: ntimeN(e.ExpiresAt),
 	}
@@ -1292,7 +1307,7 @@ func (c *Client) ListExports(ctx context.Context, clusterID string) ([]Export, e
 	}
 	out := make([]Export, 0, len(*resp.JSON200))
 	for _, s := range *resp.JSON200 {
-		out = append(out, Export{ID: s.Id.String(), Format: string(s.Format), Status: string(s.Status), CompletedAt: ntimeN(s.CompletedAt), ExpiresAt: ntimeN(s.ExpiresAt)})
+		out = append(out, Export{ID: uuidString(s.Id), Format: string(s.Format), Status: string(s.Status), CompletedAt: ntimeN(s.CompletedAt), ExpiresAt: ntimeN(s.ExpiresAt)})
 	}
 	return out, nil
 }
@@ -1401,7 +1416,7 @@ type RealmGroup struct {
 }
 
 func realmGroupFromAPI(g *apiclient.RealmGroup) RealmGroup {
-	return RealmGroup{ID: g.Id.String(), Name: g.Name, Path: g.Path}
+	return RealmGroup{ID: uuidString(g.Id), Name: g.Name, Path: g.Path}
 }
 
 // ListRealmGroups returns the top-level groups of a realm.
@@ -1877,7 +1892,7 @@ func (c *Client) ListDomainRoutes(ctx context.Context, clusterID, domainID strin
 	}
 	out := make([]DomainRoute, 0, len(*resp.JSON200))
 	for _, r := range *resp.JSON200 {
-		out = append(out, DomainRoute{ID: r.Id.String(), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath})
+		out = append(out, DomainRoute{ID: uuidString(r.Id), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath})
 	}
 	return out, nil
 }
@@ -1997,7 +2012,7 @@ func (c *Client) GetDomainRoute(ctx context.Context, clusterID, domainID, routeI
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
 	r := resp.JSON200
-	return &DomainRoute{ID: r.Id.String(), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath}, nil
+	return &DomainRoute{ID: uuidString(r.Id), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath}, nil
 }
 
 // CreateDomainRoute adds a realm route to a domain.
@@ -2012,7 +2027,7 @@ func (c *Client) CreateDomainRoute(ctx context.Context, clusterID, domainID, rea
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
 	r := resp.JSON201
-	return &DomainRoute{ID: r.Id.String(), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath}, nil
+	return &DomainRoute{ID: uuidString(r.Id), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath}, nil
 }
 
 // DeleteDomainRoute removes a route from a domain.
@@ -2459,7 +2474,7 @@ func (c *Client) UpdateDomainRoute(ctx context.Context, clusterID, domainID, rou
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
 	r := resp.JSON200
-	return &DomainRoute{ID: r.Id.String(), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath}, nil
+	return &DomainRoute{ID: uuidString(r.Id), Realm: string(r.Realm), AllowAdminAccess: r.AllowAdminAccess, HideRealmPath: r.HideRealmPath}, nil
 }
 
 // UpdateApplication updates an application's mutable fields.

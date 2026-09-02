@@ -277,7 +277,7 @@ func httpFromAPI(h *apiclient.SIEMHTTPDestinationConfig) *SIEMHTTPDestinationCon
 
 func siemDestinationFromAPI(d *apiclient.SIEMDestination) *SIEMDestination {
 	out := &SIEMDestination{
-		ID: d.Id.String(), Name: string(d.Name), Type: string(d.Type), Enabled: d.Enabled,
+		ID: uuidString(d.Id), Name: string(d.Name), Type: string(d.Type), Enabled: d.Enabled,
 		Source: sourceFromAPI(d.Source), Batch: batchFromAPI(d.Batch), Syslog: syslogFromAPI(d.Syslog), S3: s3FromAPI(d.S3), HTTP: httpFromAPI(d.Http),
 		HealthStatus: string(d.HealthStatus), LastError: strDeref(d.LastError), FailureCount: d.FailureCount,
 		TotalEventsSent: d.TotalEventsSent, TotalLogsSent: d.TotalLogsSent, TotalBytesSent: d.TotalBytesSent,
@@ -506,11 +506,11 @@ func (c *Client) ListWebhookSubscriptions(ctx context.Context, filter ListWebhoo
 
 func webhookSubscriptionFromAPI(w *apiclient.WebhookSubscription) *WebhookSubscription {
 	out := &WebhookSubscription{
-		ID: w.Id.String(), Name: string(w.Name), URL: w.Url, Source: string(w.Source), Enabled: w.Enabled, EventTypes: w.EventTypes,
+		ID: uuidString(w.Id), Name: string(w.Name), URL: w.Url, Source: string(w.Source), Enabled: w.Enabled, EventTypes: w.EventTypes,
 		HasSigningSecret: w.HasSigningSecret, HasAuthorizationHeader: w.HasAuthorizationHeader, CreatedAt: fmtTime(w.CreatedAt), UpdatedAt: fmtTime(w.UpdatedAt),
 	}
 	if w.ClusterId != nil {
-		out.ClusterID = w.ClusterId.String()
+		out.ClusterID = uuidString(*w.ClusterId)
 	}
 	out.RealmID = strDeref(w.RealmId)
 	return out
