@@ -14,7 +14,7 @@ import (
 // because it is the only tool gated on clusters:credentials:read, a scope no
 // OAuth session ever carries.
 func registerClusterCredentialsTool(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_credentials",
 		Description: "Get a cluster's Keycloak automation client credentials for OAuth2 client_credentials. Needs a key with the clusters:credentials:read scope, which is not granted by default.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get cluster credentials"},
@@ -22,37 +22,37 @@ func registerClusterCredentialsTool(s *mcp.Server, api API) {
 }
 
 func registerReads2Tools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_maintenance_window",
 		Description: "Get a cluster-specific maintenance window. A 404 means the cluster follows the workspace default.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get maintenance window"},
 	}, getClusterMaintenanceWindowHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_upgrade_path",
 		Description: "Get the recommended version-upgrade path for a cluster.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get upgrade path"},
 	}, getClusterUpgradePathHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_insights",
 		Description: "Get cluster analytics as a JSON document. type is one of: overview, authentication, events, performance, security.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get cluster insights"},
 	}, getClusterInsightsHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_realm_role",
 		Description: "Get a realm role by name.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get realm role"},
 	}, getRealmRoleHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_realm_group",
 		Description: "Get a realm group by ID.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get realm group"},
 	}, getRealmGroupHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_realm_group_members",
 		Description: "List the users that belong to a realm group.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List group members"},

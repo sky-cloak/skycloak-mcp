@@ -17,19 +17,19 @@ import (
 const maxInlineThemeArchive = 1 << 20
 
 func registerRealmTransferReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_realm_export",
 		Description: "Get a realm export job by ID. Poll this after skycloak_create_realm_export until status is 'completed'; the download URL only appears then and expires 24 hours later.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get realm export"},
 	}, getRealmExportHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_realm_import",
 		Description: "Get a realm import job by ID. Poll this after skycloak_create_realm_import until status is 'completed' or 'failed'.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get realm import"},
 	}, getRealmImportHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_download_theme_content",
 		Description: "Download a custom theme's content archive. Returns size and SHA-256 always, and the archive itself only when it is small enough to inline.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Download theme content"},
@@ -37,7 +37,7 @@ func registerRealmTransferReadTools(s *mcp.Server, api API) {
 }
 
 func registerRealmTransferWriteTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name: "skycloak_create_realm_export",
 		Description: "Export a Keycloak realm to an encrypted archive. Asynchronous: poll skycloak_get_realm_export until status is 'completed'. " +
 			"The archive is always encrypted, so encryption_password is required, and the same password is needed to import it again. " +
@@ -45,14 +45,14 @@ func registerRealmTransferWriteTools(s *mcp.Server, api API) {
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), Title: "Export realm", ReadOnlyHint: false, DestructiveHint: ptr(false)},
 	}, createRealmExportHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name: "skycloak_create_realm_import_upload_url",
 		Description: "Get a presigned URL to upload a realm archive to. PUT the archive to upload_url, then pass the returned s3_key to skycloak_create_realm_import as upload_s3_key. " +
 			"Not needed when importing an existing export: pass that export's ID as source_export_id instead.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), Title: "Get realm import upload URL", ReadOnlyHint: false, DestructiveHint: ptr(false)},
 	}, createRealmImportUploadHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name: "skycloak_create_realm_import",
 		Description: "Import a Keycloak realm into a cluster from an uploaded archive or an existing realm export. Asynchronous: poll skycloak_get_realm_import. " +
 			"Creates a new realm: preflight refuses a name collision rather than overwriting, so an existing realm of the same name fails with 409. " +

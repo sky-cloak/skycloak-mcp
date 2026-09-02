@@ -30,7 +30,7 @@ type ListApplicationsOutput struct {
 }
 
 func registerApplicationReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_applications",
 		Description: "List the OIDC/SAML clients (applications) in a realm.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List applications"},
