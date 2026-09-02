@@ -85,7 +85,7 @@ var promptDefs = []promptDef{
 		prompt: &mcp.Prompt{
 			Name:        "review_admin_changes",
 			Title:       "Review admin changes",
-			Description: "Show who changed what in a realm recently, with a focus on login and security settings.",
+			Description: "Show what changed in a realm recently, with a focus on login and security settings. Admin events record no acting user, so the answer is what and when, not who.",
 			Arguments: []*mcp.PromptArgument{
 				{Name: "realm", Description: "The realm whose admin events to review.", Required: true},
 				{Name: "cluster_id", Description: "Cluster ID the realm lives in. Leave empty to locate it by realm name."},
