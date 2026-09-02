@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -933,4 +934,28 @@ func (s stubAPI) DownloadThemeContent(_ context.Context, _, _ string) ([]byte, e
 		return s.themeArchive, nil
 	}
 	return []byte("PK\x03\x04 theme archive"), nil
+}
+
+// A windowed listing is a partial view of the workspace. Nothing in the
+// payload says so, so the rendered text has to: a caller reading its page as
+// the whole fleet under-reports, which for a security question is the
+// dangerous direction.
+func TestListClustersSaysWhenTheViewIsWindowed(t *testing.T) {
+	api := stubAPI{clusters: []skycloak.Cluster{{ID: "c1", Name: "prod", Status: "available"}}}
+
+	res, _, err := listClustersHandler(api)(context.Background(), nil, ListClustersInput{Limit: 1})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if txt := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(txt, "window") {
+		t.Errorf("a limited listing must say it is partial: %q", txt)
+	}
+
+	res, _, err = listClustersHandler(api)(context.Background(), nil, ListClustersInput{})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if txt := res.Content[0].(*mcp.TextContent).Text; strings.Contains(txt, "window") {
+		t.Errorf("an unwindowed listing must not claim to be partial: %q", txt)
+	}
 }
