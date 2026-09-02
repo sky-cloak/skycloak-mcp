@@ -12,8 +12,8 @@ import (
 
 // ListClustersInput is the input schema for skycloak_list_clusters.
 type ListClustersInput struct {
-	Limit  int `json:"limit,omitempty" jsonschema:"maximum number of clusters to return (1-100, default 25)"`
-	Offset int `json:"offset,omitempty" jsonschema:"number of clusters to skip, for pagination"`
+	Limit  int `json:"limit,omitempty" jsonschema:"maximum number of clusters to return. Omit to return every cluster in the workspace"`
+	Offset int `json:"offset,omitempty" jsonschema:"number of clusters to skip before returning, for paging with limit"`
 }
 
 // ClusterSummary is one row of the list output.
@@ -107,7 +107,17 @@ func listClustersHandler(api API) mcp.ToolHandlerFor[ListClustersInput, ListClus
 				c.Name, c.ID, c.Status, c.Type, c.Size, c.Version, c.Location)
 		}
 		if len(clusters) == 0 {
-			b.WriteString("No clusters found in this workspace.")
+			if in.Offset > 0 {
+				fmt.Fprintf(&b, "No clusters at offset %d.", in.Offset)
+			} else {
+				b.WriteString("No clusters found in this workspace.")
+			}
+		}
+		// A windowed call returns a partial view, and nothing in the payload
+		// says so. Left unsaid, a caller reads its page as the whole workspace,
+		// which for a fleet question is the dangerous direction to be wrong in.
+		if in.Limit > 0 || in.Offset > 0 {
+			fmt.Fprintf(&b, "\nShowing a window of the workspace (offset %d, limit %d); omit both to list every cluster.", in.Offset, in.Limit)
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: b.String()}}}, out, nil
 	}

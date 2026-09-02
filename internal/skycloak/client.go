@@ -172,7 +172,21 @@ type ListClustersParams struct {
 }
 
 // ListClusters returns the workspace's clusters.
-func (c *Client) ListClusters(ctx context.Context, _ ListClustersParams) ([]Cluster, error) {
+// ListClusters returns the workspace's clusters.
+//
+// The tool advertises limit and offset, and they used to be taken and dropped
+// on the floor: a caller asking for one cluster got every cluster and had no
+// way to tell. GET /clusters has no paging of its own, so the window is applied
+// here. Absent params mean everything, which is what callers get today; a
+// default limit applied here would silently truncate every existing caller
+// instead.
+func (c *Client) ListClusters(ctx context.Context, p ListClustersParams) ([]Cluster, error) {
+	if p.Offset < 0 {
+		return nil, fmt.Errorf("offset must not be negative, got %d", p.Offset)
+	}
+	if p.Limit < 0 {
+		return nil, fmt.Errorf("limit must not be negative, got %d", p.Limit)
+	}
 	resp, err := c.gen.ListClustersWithResponse(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -180,9 +194,17 @@ func (c *Client) ListClusters(ctx context.Context, _ ListClustersParams) ([]Clus
 	if resp.JSON200 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	out := make([]Cluster, 0, len(*resp.JSON200))
-	for _, s := range *resp.JSON200 {
-		out = append(out, clusterSummaryFromAPI(&s))
+	all := *resp.JSON200
+	if p.Offset >= len(all) {
+		return []Cluster{}, nil
+	}
+	all = all[p.Offset:]
+	if p.Limit > 0 && p.Limit < len(all) {
+		all = all[:p.Limit]
+	}
+	out := make([]Cluster, 0, len(all))
+	for i := range all {
+		out = append(out, clusterSummaryFromAPI(&all[i]))
 	}
 	return out, nil
 }
