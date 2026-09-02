@@ -1392,6 +1392,18 @@ type Event struct {
 	// AuthMethod Authentication method. Present when `category` is `user`.
 	AuthMethod *string `json:"auth_method,omitempty"`
 
+	// AuthUserId Keycloak UUID of the administrator who performed the action. Present when
+	// `category` is `admin` and Keycloak recorded an authenticated actor.
+	//
+	// Distinct from `user_id`, which on a user event is the subject of the event.
+	// On an admin event the subject is identified by `resource_path` instead, so
+	// the actor needs a field of its own.
+	//
+	// A UUID. The actor's name, when the audit pipeline resolved one, is on
+	// `username`; a federated administrator has no UUID id, so `username` may be
+	// present while this is absent.
+	AuthUserId *openapi_types.UUID `json:"auth_user_id,omitempty"`
+
 	// Category Keycloak event category.
 	Category EventCategory `json:"category"`
 
@@ -1438,7 +1450,9 @@ type Event struct {
 	// UserId Keycloak user UUID. Present when `category` is `user`.
 	UserId *openapi_types.UUID `json:"user_id,omitempty"`
 
-	// Username Present when `category` is `user`.
+	// Username On a user event, the user the event is about. On an admin event, the
+	// administrator who performed the action, when the audit pipeline resolved a
+	// name for them.
 	Username *string `json:"username,omitempty"`
 }
 
