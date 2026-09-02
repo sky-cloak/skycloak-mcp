@@ -41,12 +41,22 @@ func TestListIdentityProvidersHandler(t *testing.T) {
 	}
 }
 
+// realm is still required; cluster_id is not, since omitting it now means the
+// whole workspace.
 func TestListIdentityProvidersHandler_MissingArgs(t *testing.T) {
-	res, _, err := listIdentityProvidersHandler(stubAPI{})(context.Background(), nil, ListIdentityProvidersInput{Realm: "app"})
+	res, _, err := listIdentityProvidersHandler(stubAPI{})(context.Background(), nil, ListIdentityProvidersInput{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !res.IsError {
-		t.Fatalf("expected IsError when cluster_id is empty")
+		t.Fatalf("expected IsError when realm is empty")
+	}
+
+	res, _, err = listIdentityProvidersHandler(stubAPI{})(context.Background(), nil, ListIdentityProvidersInput{Realm: "app"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("omitting cluster_id must fan out, not fail")
 	}
 }

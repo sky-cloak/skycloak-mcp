@@ -41,23 +41,25 @@ type stubAPI struct {
 	ctypes       []skycloak.ClusterTypeInfo
 	features     []skycloak.ClusterFeatureInfo
 	versionInfo  []skycloak.ClusterTypeVersion
-	upgrades     []skycloak.ClusterUpgrade
-	templates    []skycloak.ProviderTemplate
-	routes       []skycloak.DomainRoute
-	app          *skycloak.Application
-	idp          *skycloak.IdentityProvider
-	realm        *skycloak.Realm
-	smtp         *skycloak.SMTPConfig
-	theme        *skycloak.Theme
-	route        *skycloak.DomainRoute
-	upPath       []skycloak.UpgradePathStep
-	captcha      *skycloak.CAPTCHADomainsInfo
-	siem         *skycloak.SIEMDestination
-	siems        []skycloak.SIEMDestination
-	whEvent      []skycloak.WebhookEventType
-	webhook      *skycloak.WebhookSubscription
-	webhooks     []skycloak.WebhookSubscription
-	err          error
+	// realmErrFor fails specific clusters, so a partial fleet answer is testable.
+	realmErrFor map[string]error
+	upgrades    []skycloak.ClusterUpgrade
+	templates   []skycloak.ProviderTemplate
+	routes      []skycloak.DomainRoute
+	app         *skycloak.Application
+	idp         *skycloak.IdentityProvider
+	realm       *skycloak.Realm
+	smtp        *skycloak.SMTPConfig
+	theme       *skycloak.Theme
+	route       *skycloak.DomainRoute
+	upPath      []skycloak.UpgradePathStep
+	captcha     *skycloak.CAPTCHADomainsInfo
+	siem        *skycloak.SIEMDestination
+	siems       []skycloak.SIEMDestination
+	whEvent     []skycloak.WebhookEventType
+	webhook     *skycloak.WebhookSubscription
+	webhooks    []skycloak.WebhookSubscription
+	err         error
 
 	// Set to capture the query a handler built, for tests that assert on it.
 	gotLogQuery   *skycloak.LogQuery
@@ -78,16 +80,28 @@ func (s stubAPI) GetCluster(context.Context, string) (*skycloak.Cluster, error) 
 	return s.cluster, nil
 }
 
-func (s stubAPI) ListRealms(context.Context, string) ([]skycloak.Realm, error) {
-	return s.realms, s.err
+func (s stubAPI) ListRealms(_ context.Context, clusterID string) ([]skycloak.Realm, error) {
+	if err, ok := s.realmErrFor[clusterID]; ok {
+		return nil, err
+	}
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.realms, nil
 }
 
 func (s stubAPI) ListApplications(context.Context, string, string) ([]skycloak.Application, error) {
 	return s.apps, s.err
 }
 
-func (s stubAPI) ListIdentityProviders(context.Context, string, string) ([]skycloak.IdentityProvider, error) {
-	return s.idps, s.err
+func (s stubAPI) ListIdentityProviders(_ context.Context, clusterID, _ string) ([]skycloak.IdentityProvider, error) {
+	if err, ok := s.realmErrFor[clusterID]; ok {
+		return nil, err
+	}
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.idps, nil
 }
 
 func (s stubAPI) CreateRealm(_ context.Context, _ string, r skycloak.Realm) (*skycloak.Realm, error) {
@@ -868,13 +882,18 @@ func TestListRealmsHandler(t *testing.T) {
 	}
 }
 
-func TestListRealmsHandler_MissingClusterID(t *testing.T) {
-	res, _, err := listRealmsHandler(stubAPI{})(context.Background(), nil, ListRealmsInput{})
+// An omitted cluster_id is no longer an error: it means the whole workspace.
+// A workspace with no clusters is an empty answer, not a failure.
+func TestListRealmsHandler_NoClusterIDListsTheWorkspace(t *testing.T) {
+	res, out, err := listRealmsHandler(stubAPI{})(context.Background(), nil, ListRealmsInput{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !res.IsError {
-		t.Fatalf("expected IsError when cluster_id is empty")
+	if res.IsError {
+		t.Fatalf("omitting cluster_id must fan out, not fail")
+	}
+	if len(out.Realms) != 0 {
+		t.Fatalf("no clusters means no realms, got %+v", out.Realms)
 	}
 }
 
