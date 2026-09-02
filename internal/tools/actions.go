@@ -11,7 +11,7 @@ import (
 )
 
 func registerActionReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_discover_oidc",
 		Description: "Resolve an OIDC issuer's discovery document to obtain its authorization, token, and userinfo endpoints. Use the result when creating an identity provider.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), ReadOnlyHint: true, Title: "Discover OIDC endpoints"},
@@ -19,19 +19,19 @@ func registerActionReadTools(s *mcp.Server, api API) {
 }
 
 func registerActionWriteTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_test_smtp",
 		Description: "Send a test email through a realm's configured SMTP server to verify delivery.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Test SMTP"},
 	}, testSMTPHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_test_identity_provider",
 		Description: "Test connectivity to an identity provider, optionally overriding the client credentials for this test only.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Test identity provider"},
 	}, testIdentityProviderHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_cancel_cluster_upgrade",
 		Description: "Cancel an in-progress cluster version upgrade. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Cancel cluster upgrade"},

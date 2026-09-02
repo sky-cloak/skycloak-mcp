@@ -11,13 +11,13 @@ import (
 )
 
 func registerApplicationRoleReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_application_roles",
 		Description: "List the roles assigned to an application's service account.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List application roles"},
 	}, listApplicationRolesHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_application_sessions",
 		Description: "List active user sessions for an application.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List application sessions"},
@@ -25,13 +25,13 @@ func registerApplicationRoleReadTools(s *mcp.Server, api API) {
 }
 
 func registerApplicationRoleWriteTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_assign_application_role",
 		Description: "Grant a role to an application's service account. Provide role_client_id for a client role, or omit it for a realm role.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Assign application role"},
 	}, assignApplicationRoleHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_remove_application_role",
 		Description: "Remove a role from an application's service account.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Remove application role"},

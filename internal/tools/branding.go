@@ -11,25 +11,25 @@ import (
 )
 
 func registerBrandingReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_themes",
 		Description: "List the custom themes uploaded to a cluster, with their IDs, status, and theme types.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List themes"},
 	}, listThemesHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_theme_assignment",
 		Description: "Get the active custom theme per Keycloak theme type (login, account, admin, email) for a realm.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get theme assignment"},
 	}, getThemeAssignmentHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_login_branding",
 		Description: "Get the login-page branding (colors, logo, toggles) for a realm.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get login branding"},
 	}, getLoginBrandingHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_email_branding",
 		Description: "Get the email-template branding (colors, logo, footer) for a realm.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get email branding"},
@@ -37,7 +37,7 @@ func registerBrandingReadTools(s *mcp.Server, api API) {
 }
 
 func registerBrandingWriteTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_set_theme_assignment",
 		Description: "Assign custom themes to a realm per Keycloak theme type. Pass a theme ID to activate it, or an empty string to reset that type to Keycloak's built-in default. Only the provided fields are changed.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Set theme assignment"},

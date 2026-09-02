@@ -43,7 +43,7 @@ type ListRealmsOutput struct {
 }
 
 func registerRealmReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_realms",
 		Description: "List the Keycloak realms in a Skycloak cluster.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List realms"},

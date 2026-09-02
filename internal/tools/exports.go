@@ -11,13 +11,13 @@ import (
 )
 
 func registerExportReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_exports",
 		Description: "List the database export jobs for a cluster, with their status and expiry.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List exports"},
 	}, listExportsHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_export",
 		Description: "Get a database export job by ID, including its status, progress, and (once completed) the time-limited download URL.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get export"},
@@ -25,7 +25,7 @@ func registerExportReadTools(s *mcp.Server, api API) {
 }
 
 func registerExportWriteTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_create_export",
 		Description: "Start a database export for a cluster. Asynchronous: poll skycloak_get_export until the status is 'completed' to obtain the download URL. Including credentials requires an encryption_password.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create export"},

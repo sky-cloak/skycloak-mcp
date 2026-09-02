@@ -11,13 +11,13 @@ import (
 )
 
 func registerExtensionReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_extensions",
 		Description: "List the extension catalog available to the workspace (marketplace extensions that can be installed on a cluster).",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List extension catalog"},
 	}, listExtensionsHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_cluster_extensions",
 		Description: "List the extensions currently installed on a cluster, with their version and upgrade status.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List installed extensions"},
@@ -25,19 +25,19 @@ func registerExtensionReadTools(s *mcp.Server, api API) {
 }
 
 func registerExtensionWriteTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_install_extension",
 		Description: "Install a catalog extension on a cluster. Installation is asynchronous; poll skycloak_list_cluster_extensions until the status settles. Provide required parameters keyed by parameter name.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Install extension"},
 	}, installExtensionHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_upgrade_extension",
 		Description: "Upgrade an installed extension to the latest available version. Asynchronous.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Upgrade extension"},
 	}, upgradeExtensionHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_uninstall_extension",
 		Description: "Uninstall an extension from a cluster. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Uninstall extension"},

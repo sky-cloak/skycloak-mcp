@@ -16,19 +16,19 @@ const defaultLogLimit = 50
 const maxEventLimit = 100
 
 func registerObservabilityReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_logs",
 		Description: "Read recent Keycloak server logs for a cluster, optionally filtered by level and a search string.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get logs"},
 	}, getLogsHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_security_logs",
 		Description: "Read recent security (WAF) logs for a cluster — blocked requests, attack types, source IPs.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get security logs"},
 	}, getSecurityLogsHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_query_events",
 		Description: queryEventsDescription,
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Query events"},

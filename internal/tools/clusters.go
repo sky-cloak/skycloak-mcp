@@ -55,13 +55,13 @@ type GetClusterInput struct {
 }
 
 func registerClusterReadTools(s *mcp.Server, api API) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_clusters",
 		Description: "List the Keycloak clusters in your Skycloak workspace, with their status, type, size, version and location.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List clusters"},
 	}, listClustersHandler(api))
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster",
 		Description: "Get full details for a single Keycloak cluster by its ID.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get cluster"},
