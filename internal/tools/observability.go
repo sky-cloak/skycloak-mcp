@@ -189,7 +189,13 @@ func queryEventsHandler(api API) mcp.ToolHandlerFor[QueryEventsInput, EventsOutp
 		}
 		var b strings.Builder
 		for _, e := range events {
-			fmt.Fprintf(&b, "%s [%s] %s realm=%s user=%s%s%s\n", e.Timestamp, e.Category, e.Type, e.RealmName, e.Username, resourceSuffix(e), errSuffix(e.Error))
+			// An admin event names its actor; a user event names its subject, and
+			// repeating the same name in both places would read as two people.
+			if e.Category == "admin" {
+				fmt.Fprintf(&b, "%s [%s] %s realm=%s%s%s%s\n", e.Timestamp, e.Category, e.Type, e.RealmName, actorSuffix(e), resourceSuffix(e), errSuffix(e.Error))
+			} else {
+				fmt.Fprintf(&b, "%s [%s] %s realm=%s user=%s%s%s\n", e.Timestamp, e.Category, e.Type, e.RealmName, e.Username, resourceSuffix(e), errSuffix(e.Error))
+			}
 		}
 		if len(events) == 0 {
 			b.WriteString("No events matched.")
@@ -201,6 +207,22 @@ func queryEventsHandler(api API) mcp.ToolHandlerFor[QueryEventsInput, EventsOutp
 // resourceSuffix names what an admin event acted on. Without it every admin
 // UPDATE renders identically, whether it changed realm login settings, a user,
 // or a client, which is exactly the question operators ask of an audit trail.
+// actorSuffix names who performed an admin change. An admin event's user= field
+// is empty, because that column is the subject of a user event, so without this
+// the rendered line says what changed and never who.
+func actorSuffix(e skycloak.EventEntry) string {
+	switch {
+	case e.Username != "" && e.AuthUserID != "":
+		return " by=" + e.Username + " (" + e.AuthUserID + ")"
+	case e.Username != "":
+		return " by=" + e.Username
+	case e.AuthUserID != "":
+		return " by=" + e.AuthUserID
+	default:
+		return ""
+	}
+}
+
 func resourceSuffix(e skycloak.EventEntry) string {
 	switch {
 	case e.ResourceType != "" && e.ResourcePath != "":

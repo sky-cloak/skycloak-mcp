@@ -464,3 +464,60 @@ func TestRealmKeepsPresentID(t *testing.T) {
 		t.Errorf("id dropped or mangled: %q", r.ID)
 	}
 }
+
+// The API names the administrator behind an admin change; the MCP dropped it,
+// so "who changed this realm" stopped one layer short of the caller. The whole
+// chain, SPI to enricher to ClickHouse to API, exists to answer that.
+func TestQueryEventsMapsTheAdminActor(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, `[{
+			"id":"11111111-1111-1111-1111-111111111111",
+			"timestamp":"2026-09-02T20:42:43Z",
+			"category":"admin",
+			"realm_id":"r1","realm_name":"master",
+			"operation_type":"DELETE",
+			"resource_type":"IDENTITY_PROVIDER",
+			"resource_path":"identity-provider/instances/skycloak",
+			"auth_user_id":"93d8b074-0000-4000-8000-000000000001",
+			"username":"service-account-skycloak-service-f49a5d72"
+		}]`)
+	}))
+	defer srv.Close()
+
+	events, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid, EventQuery{})
+	if err != nil {
+		t.Fatalf("QueryEvents: %v", err)
+	}
+	e := events[0]
+	if e.AuthUserID != "93d8b074-0000-4000-8000-000000000001" {
+		t.Errorf("admin actor id dropped: %+v", e)
+	}
+	if e.Username != "service-account-skycloak-service-f49a5d72" {
+		t.Errorf("admin actor name dropped: %+v", e)
+	}
+}
+
+// A federated administrator has no UUID id, so the API sends a name and no
+// auth_user_id. Requiring both would make federated admins invisible.
+func TestQueryEventsMapsActorNameWithoutID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, `[{
+			"id":"11111111-1111-1111-1111-111111111111",
+			"timestamp":"2026-09-02T20:42:43Z","category":"admin",
+			"realm_id":"r1","realm_name":"master",
+			"operation_type":"UPDATE","username":"alice@example.com"
+		}]`)
+	}))
+	defer srv.Close()
+
+	events, err := newTestClient(srv.URL).QueryEvents(context.Background(), cuid, EventQuery{})
+	if err != nil {
+		t.Fatalf("QueryEvents: %v", err)
+	}
+	if events[0].Username != "alice@example.com" {
+		t.Errorf("actor name dropped when no id was sent: %+v", events[0])
+	}
+	if events[0].AuthUserID != "" {
+		t.Errorf("invented an actor id: %q", events[0].AuthUserID)
+	}
+}
