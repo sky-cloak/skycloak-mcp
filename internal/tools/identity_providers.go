@@ -16,6 +16,10 @@ type ListIdentityProvidersInput struct {
 
 // IdentityProviderSummary is one row of the list output.
 type IdentityProviderSummary struct {
+	// Which cluster the provider lives in, so fleet rows are never ambiguous.
+	ClusterID   string `json:"cluster_id"`
+	ClusterName string `json:"cluster_name,omitempty"`
+
 	ProviderID  string `json:"provider_id"`
 	Type        string `json:"type,omitempty"`
 	DisplayName string `json:"display_name,omitempty"`
@@ -26,6 +30,9 @@ type IdentityProviderSummary struct {
 type ListIdentityProvidersOutput struct {
 	IdentityProviders []IdentityProviderSummary `json:"identity_providers"`
 	Count             int                       `json:"count"`
+
+	// Clusters a fleet-wide call could not read; non-empty means partial.
+	Unreachable []UnreachableCluster `json:"unreachable,omitempty"`
 }
 
 func registerIdentityProviderReadTools(s *mcp.Server, api API) {
@@ -38,22 +45,43 @@ func registerIdentityProviderReadTools(s *mcp.Server, api API) {
 
 func listIdentityProvidersHandler(api API) mcp.ToolHandlerFor[ListIdentityProvidersInput, ListIdentityProvidersOutput] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in ListIdentityProvidersInput) (*mcp.CallToolResult, ListIdentityProvidersOutput, error) {
-		if in.ClusterID == "" || in.Realm == "" {
-			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "cluster_id and realm are required"}}}, ListIdentityProvidersOutput{}, nil
+		if in.Realm == "" {
+			return errResult("realm is required"), ListIdentityProvidersOutput{}, nil
 		}
-		idps, err := api.ListIdentityProviders(ctx, in.ClusterID, in.Realm)
+		targets, err := fleetTargets(ctx, api, in.ClusterID)
 		if err != nil {
 			return toolError(err), ListIdentityProvidersOutput{}, nil
 		}
-		out := ListIdentityProvidersOutput{Count: len(idps), IdentityProviders: []IdentityProviderSummary{}}
+		multi := len(targets) > 1 || in.ClusterID == ""
+
+		out := ListIdentityProvidersOutput{IdentityProviders: []IdentityProviderSummary{}}
 		var b strings.Builder
-		for _, p := range idps {
-			out.IdentityProviders = append(out.IdentityProviders, IdentityProviderSummary{ProviderID: p.ProviderID, Type: p.Type, DisplayName: p.DisplayName, Enabled: p.Enabled})
-			fmt.Fprintf(&b, "- %s (%s) — %s · enabled=%t\n", p.ProviderID, p.DisplayName, p.Type, p.Enabled)
+		for _, t := range targets {
+			idps, err := api.ListIdentityProviders(ctx, t.id, in.Realm)
+			if err != nil {
+				out.Unreachable = append(out.Unreachable, UnreachableCluster{
+					ClusterID: t.id, ClusterName: t.name, Error: err.Error(),
+				})
+				continue
+			}
+			for _, p := range idps {
+				out.IdentityProviders = append(out.IdentityProviders, IdentityProviderSummary{
+					ProviderID: p.ProviderID, Type: p.Type, DisplayName: p.DisplayName,
+					Enabled: p.Enabled, ClusterID: t.id, ClusterName: t.name,
+				})
+				fmt.Fprintf(&b, "- %s%s (%s) — %s · enabled=%t\n",
+					fleetHeader(t, multi), p.ProviderID, p.DisplayName, p.Type, p.Enabled)
+			}
 		}
-		if len(idps) == 0 {
-			b.WriteString("No identity providers found in this realm.")
+		out.Count = len(out.IdentityProviders)
+
+		if len(out.IdentityProviders) == 0 && len(out.Unreachable) > 0 {
+			return errResult("no cluster could be read." + fleetNote(out.Unreachable)), out, nil
 		}
+		if len(out.IdentityProviders) == 0 {
+			b.WriteString("No identity providers found.")
+		}
+		b.WriteString(fleetNote(out.Unreachable))
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: b.String()}}}, out, nil
 	}
 }
