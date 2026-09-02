@@ -711,11 +711,19 @@ func parseEventTime(field, v string) (time.Time, bool, error) {
 // Keycloak enables login_with_email by default, so an inline build is wrong on
 // most realms.
 func realmFromAPI(r *apiclient.Realm) Realm {
+	// RealmId is a value type, so an absent id arrives as the zero UUID and
+	// stringifies to 00000000-0000-0000-0000-000000000000 — a well-formed,
+	// entirely fabricated identifier that omitempty cannot catch and a caller
+	// could paste into a lookup. Emit nothing instead.
+	id := ""
+	if r.Id != (uuid.UUID{}) {
+		id = r.Id.String()
+	}
 	return Realm{
 		Name:        string(r.Name),
 		DisplayName: string(r.DisplayName),
 		Enabled:     r.Enabled,
-		ID:          r.Id.String(),
+		ID:          id,
 		SSLRequired: string(r.SslRequired),
 
 		RegistrationAllowed:         r.RegistrationAllowed,
