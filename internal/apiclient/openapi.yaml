@@ -19821,7 +19821,10 @@ components:
           description: Keycloak user UUID. Present when `category` is `user`.
         username:
           type: string
-          description: Present when `category` is `user`.
+          description: |-
+            On a user event, the user the event is about. On an admin event, the
+            administrator who performed the action, when the audit pipeline resolved a
+            name for them.
         session_id:
           type: string
           description: OAuth2 session identifier. Present when `category` is `user`.
@@ -19856,6 +19859,20 @@ components:
           type: string
           description: Full resource path. Present when `category` is `admin`.
           example: /users/550e8400-e29b-41d4-a716-446655440000
+        auth_user_id:
+          type: string
+          format: uuid
+          description: |-
+            Keycloak UUID of the administrator who performed the action. Present when
+            `category` is `admin` and Keycloak recorded an authenticated actor.
+
+            Distinct from `user_id`, which on a user event is the subject of the event.
+            On an admin event the subject is identified by `resource_path` instead, so
+            the actor needs a field of its own.
+
+            A UUID. The actor's name, when the audit pipeline resolved one, is on
+            `username`; a federated administrator has no UUID id, so `username` may be
+            present while this is absent.
       description: 'A Keycloak event recorded for a cluster. Fields present depend on `category`: user-event fields are absent for admin events and vice versa.'
     EventCategory:
       type: string
