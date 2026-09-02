@@ -18791,7 +18791,7 @@ components:
           description: Human-readable region name.
         available:
           type: boolean
-          description: Whether this region is globally available and accessible to the workspace.
+          description: Whether the workspace can create a cluster in this region. Regions the workspace cannot use are still listed, with this field set to false.
       description: Metadata about a supported deployment region.
     ClusterLog:
       type: object
