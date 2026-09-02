@@ -2,6 +2,8 @@ package tools
 
 import (
 	"encoding/json"
+
+	"github.com/google/jsonschema-go/jsonschema"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -59,9 +61,20 @@ func strictPaths(node any, path string) []string {
 	var out []string
 	switch n := node.(type) {
 	case map[string]any:
-		if v, ok := n["additionalProperties"]; ok {
+		// Three spellings of the same prohibition: the bool, a subschema that
+		// rejects everything, and unevaluatedProperties. Checking only the bool
+		// let the other two through, and both break clients identically.
+		for _, key := range []string{"additionalProperties", "unevaluatedProperties"} {
+			v, ok := n[key]
+			if !ok {
+				continue
+			}
 			if b, isBool := v.(bool); isBool && !b {
-				out = append(out, path+"/additionalProperties")
+				out = append(out, path+"/"+key)
+				continue
+			}
+			if sub, isMap := v.(map[string]any); isMap && rejectsEverything(sub) {
+				out = append(out, path+"/"+key)
 			}
 		}
 		for k, v := range n {
@@ -73,6 +86,22 @@ func strictPaths(node any, path string) []string {
 		}
 	}
 	return out
+}
+
+// rejectsEverything reports whether a subschema admits no value, which is what
+// {"not": {}} means: "not (anything)".
+func rejectsEverything(sub map[string]any) bool {
+	not, ok := sub["not"]
+	if !ok {
+		return false
+	}
+	switch n := not.(type) {
+	case map[string]any:
+		return len(n) == 0
+	case bool:
+		return n
+	}
+	return false
 }
 
 func itoa(i int) string {
@@ -114,4 +143,54 @@ func advertisedTools(t *testing.T) map[string]*mcp.Tool {
 		out[tool.Name] = tool
 	}
 	return out
+}
+
+// A map's value type is carried in additionalProperties, the same keyword used
+// to forbid unknown properties on a struct. Clearing it indiscriminately turns
+// map[string]string into "any object", losing information a caller uses to
+// build a valid request.
+func TestMapValueSchemasSurviveRelaxing(t *testing.T) {
+	type withMap struct {
+		Headers map[string]string `json:"headers"`
+	}
+	schema, err := jsonschema.For[withMap](nil)
+	if err != nil {
+		t.Fatalf("infer: %v", err)
+	}
+	relaxSchema(schema)
+
+	raw, _ := json.Marshal(schema)
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(strictPaths(doc, "")) != 0 {
+		t.Errorf("the struct's prohibition survived: %s", raw)
+	}
+	headers, _ := doc["properties"].(map[string]any)["headers"].(map[string]any)
+	ap, ok := headers["additionalProperties"].(map[string]any)
+	if !ok {
+		t.Fatalf("map value schema was dropped, so the value type is now unconstrained: %s", raw)
+	}
+	if ap["type"] != "string" {
+		t.Errorf("map value type = %v, want string", ap["type"])
+	}
+}
+
+// unevaluatedProperties:false forbids added fields exactly like
+// additionalProperties:false, so the guard has to recognise it too.
+func TestStrictPathsCatchesUnevaluatedProperties(t *testing.T) {
+	doc := map[string]any{"unevaluatedProperties": false}
+	if len(strictPaths(doc, "")) == 0 {
+		t.Error("unevaluatedProperties:false forbids unknown fields and must be flagged")
+	}
+}
+
+// A non-boolean schema that rejects everything is the same prohibition wearing
+// a different shape.
+func TestStrictPathsCatchesRejectingSchema(t *testing.T) {
+	doc := map[string]any{"additionalProperties": map[string]any{"not": map[string]any{}}}
+	if len(strictPaths(doc, "")) == 0 {
+		t.Error("a rejecting additionalProperties schema must be flagged")
+	}
 }

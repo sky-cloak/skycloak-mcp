@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"encoding/json"
+
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -32,6 +34,18 @@ func addTool[In, Out any](s *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, O
 	mcp.AddTool(s, t, h)
 }
 
+// isFalseSchema reports whether a schema rejects everything, which is how
+// jsonschema-go spells additionalProperties:false. Compared by marshalling
+// rather than by shape: the library canonicalises several forms to false, and
+// the marshalled result is what a client validates against.
+func isFalseSchema(s *jsonschema.Schema) bool {
+	if s == nil {
+		return false
+	}
+	b, err := json.Marshal(s)
+	return err == nil && string(b) == "false"
+}
+
 // relaxSchema clears additionalProperties everywhere in a schema, including
 // nested objects and array items, so a nested row type added later is as
 // forgiving as the envelope around it. An absent additionalProperties means
@@ -40,7 +54,15 @@ func relaxSchema(s *jsonschema.Schema) {
 	if s == nil {
 		return
 	}
-	s.AdditionalProperties = nil
+	// additionalProperties carries two different meanings. On a struct it is the
+	// prohibition being removed here; on a map it is the value type, and
+	// clearing it would turn map[string]string into "any object", losing real
+	// information for no benefit. Only the prohibition is dropped.
+	if isFalseSchema(s.AdditionalProperties) {
+		s.AdditionalProperties = nil
+	} else {
+		relaxSchema(s.AdditionalProperties)
+	}
 	for _, p := range s.Properties {
 		relaxSchema(p)
 	}
