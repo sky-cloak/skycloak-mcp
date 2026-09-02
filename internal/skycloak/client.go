@@ -670,6 +670,13 @@ type EventEntry struct {
 	Error     string `json:"error,omitempty"`
 
 	// Admin events.
+	//
+	// AuthUserID is the administrator who performed the action, distinct from
+	// UserID, which on a user event is the subject. On an admin event the
+	// subject is ResourcePath instead, so the actor needs its own field.
+	// Username carries their name when the audit pipeline resolved one; a
+	// federated administrator has no UUID id, so a name can arrive without one.
+	AuthUserID    string `json:"auth_user_id,omitempty"`
 	OperationType string `json:"operation_type,omitempty"`
 	ResourceType  string `json:"resource_type,omitempty"`
 	ResourcePath  string `json:"resource_path,omitempty"`
@@ -850,6 +857,9 @@ func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery
 		}
 		if e.UserId != nil {
 			entry.UserID = e.UserId.String()
+		}
+		if e.AuthUserId != nil {
+			entry.AuthUserID = e.AuthUserId.String()
 		}
 		// Carried as a pointer: admin events have no machine-to-machine notion,
 		// and a bare false would assert one rather than leave it unstated.

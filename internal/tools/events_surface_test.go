@@ -421,3 +421,62 @@ func TestEmptyListsMarshalAsArrays(t *testing.T) {
 		t.Errorf("applications is null, want []: %s", b)
 	}
 }
+
+// An admin event's user= column is empty, because that column is the subject of
+// a user event. Without the actor in the rendered line, a model reads what
+// changed and never who changed it — the question the whole audit chain exists
+// to answer.
+func TestQueryEventsRendersTheAdminActor(t *testing.T) {
+	api := stubAPI{events: []skycloak.EventEntry{{
+		Timestamp: "2026-09-02T20:42:43Z", Category: "admin", Type: "DELETE",
+		RealmName: "master", OperationType: "DELETE",
+		ResourceType: "IDENTITY_PROVIDER", ResourcePath: "identity-provider/instances/skycloak",
+		AuthUserID: "93d8b074-0000-4000-8000-000000000001",
+		Username:   "service-account-skycloak",
+	}}}
+
+	res, out, err := queryEventsHandler(api)(context.Background(), nil,
+		QueryEventsInput{ClusterID: "c1", Category: "admin"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if out.Events[0].AuthUserID == "" {
+		t.Fatalf("actor dropped from structured output: %+v", out.Events[0])
+	}
+	text := renderedText(res)
+	// Asserted as by=, not merely present: rendering an admin event through the
+	// user template shows the same name under user=, which on an admin event
+	// means the subject. A mislabelled actor is the field-reuse confusion this
+	// whole chain exists to remove.
+	if !strings.Contains(text, "by=service-account-skycloak") {
+		t.Errorf("admin actor must be labelled as the actor, not the subject: %q", text)
+	}
+	if strings.Contains(text, "user=service-account-skycloak") {
+		t.Errorf("admin actor rendered as the event's subject: %q", text)
+	}
+	if !strings.Contains(text, "IDENTITY_PROVIDER") {
+		t.Errorf("rendered admin event lost its resource: %q", text)
+	}
+}
+
+// A user event keeps naming its subject in user=, and must not gain a "by="
+// that would read as a second person.
+func TestQueryEventsKeepsUserEventRenderingUnchanged(t *testing.T) {
+	api := stubAPI{events: []skycloak.EventEntry{{
+		Timestamp: "2026-09-02T20:42:43Z", Category: "user", Type: "LOGIN",
+		RealmName: "alfred", Username: "bob",
+	}}}
+
+	res, _, err := queryEventsHandler(api)(context.Background(), nil,
+		QueryEventsInput{ClusterID: "c1", Category: "user"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	text := renderedText(res)
+	if !strings.Contains(text, "user=bob") {
+		t.Errorf("user event lost its subject: %q", text)
+	}
+	if strings.Contains(text, "by=") {
+		t.Errorf("user event gained an actor it does not have: %q", text)
+	}
+}
