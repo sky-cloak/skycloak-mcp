@@ -17,6 +17,7 @@ tags:
   - name: Realms
   - name: Realm Users
   - name: Realm Roles
+  - name: Client Roles
   - name: Realm Groups
   - name: Applications
   - name: Identity Providers
@@ -5494,7 +5495,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Realm'
+                $ref: '#/components/schemas/CreatedRealm'
         '401':
           description: Access is unauthorized.
           content:
@@ -7567,6 +7568,667 @@ paths:
         - ApiKeyAuth: []
       x-scopes:
         - applications:read
+  /clusters/{cluster_id}/realms/{realm_name}/clients/{client_id}/roles:
+    get:
+      operationId: listClientRoles
+      summary: List client roles
+      description: |-
+        Returns the roles defined on the specified client.
+
+        Required scope: `client-roles:read`
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ClusterId'
+        - name: realm_name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmName'
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmClientRef'
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClientRole'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Client Roles
+      security:
+        - ApiKeyAuth: []
+      x-scopes:
+        - client-roles:read
+    post:
+      operationId: createClientRole
+      summary: Create a client role
+      description: |-
+        Creates a new role on the specified client.
+
+        Required scope: `client-roles:write`
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ClusterId'
+        - name: realm_name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmName'
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmClientRef'
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '201':
+          description: The request has succeeded and a new resource has been created as a result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientRole'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '422':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Client Roles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientRoleRequest'
+      security:
+        - ApiKeyAuth: []
+      x-scopes:
+        - client-roles:write
+  /clusters/{cluster_id}/realms/{realm_name}/clients/{client_id}/roles/{role_name}:
+    get:
+      operationId: getClientRole
+      summary: Get a client role
+      description: |-
+        Returns a single role defined on the specified client.
+
+        Required scope: `client-roles:read`
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ClusterId'
+        - name: realm_name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmName'
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmClientRef'
+        - name: role_name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmRoleName'
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientRole'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Client Roles
+      security:
+        - ApiKeyAuth: []
+      x-scopes:
+        - client-roles:read
+    patch:
+      operationId: updateClientRole
+      summary: Update a client role
+      description: |-
+        Updates the role's name or description. The role stays on the same client, and renaming it does not affect existing assignments.
+
+        Required scope: `client-roles:write`
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ClusterId'
+        - name: realm_name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmName'
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmClientRef'
+        - name: role_name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmRoleName'
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientRole'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '422':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Client Roles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClientRoleRequest'
+      security:
+        - ApiKeyAuth: []
+      x-scopes:
+        - client-roles:write
+    delete:
+      operationId: deleteClientRole
+      summary: Delete a client role
+      description: |-
+        Deletes the role from the client and removes all its user and group assignments.
+
+        Required scope: `client-roles:write`
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/ClusterId'
+        - name: realm_name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmName'
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmClientRef'
+        - name: role_name
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/RealmRoleName'
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '204':
+          description: There is no content to send for this request, but the headers may be useful.
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - Client Roles
+      security:
+        - ApiKeyAuth: []
+      x-scopes:
+        - client-roles:write
   /clusters/{cluster_id}/realms/{realm_name}/groups:
     get:
       operationId: listRealmGroups
@@ -18535,6 +19197,46 @@ components:
           type: integer
           format: int64
           description: Mean time to solve a challenge, in milliseconds.
+    ClientRole:
+      type: object
+      required:
+        - name
+        - client_id
+        - client_uuid
+      properties:
+        id:
+          type: string
+          description: Keycloak identifier of the role.
+          example: 9a1f0f0e-1b2c-4d3e-8f5a-6b7c8d9e0f11
+        name:
+          allOf:
+            - $ref: '#/components/schemas/RealmRoleName'
+          example: invoices-read
+        description:
+          type: string
+          nullable: true
+          description: Human-friendly role description, when available.
+          example: Read invoices
+        composite:
+          type: boolean
+          description: Whether this role is composed from other roles.
+          example: false
+        client_id:
+          type: string
+          description: OAuth `client_id` of the client the role belongs to.
+          example: storefront
+        client_uuid:
+          type: string
+          description: Internal Keycloak UUID of the client the role belongs to.
+          example: 3f4a1c2e-5b6d-4e7f-8a9b-0c1d2e3f4a5b
+      description: Public representation of a role defined on a single client.
+      example:
+        id: 9a1f0f0e-1b2c-4d3e-8f5a-6b7c8d9e0f11
+        name: invoices-read
+        description: Read invoices
+        composite: false
+        client_id: storefront
+        client_uuid: 3f4a1c2e-5b6d-4e7f-8a9b-0c1d2e3f4a5b
     ClientStats:
       type: object
       required:
@@ -19147,6 +19849,23 @@ components:
             - $ref: '#/components/schemas/SAMLConfiguration'
           description: SAML configuration. Required when `protocol` is `saml`.
       description: Request body for creating a new application.
+    CreateClientRoleRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          allOf:
+            - $ref: '#/components/schemas/RealmRoleName'
+          example: invoices-read
+        description:
+          type: string
+          maxLength: 255
+          example: Read invoices
+      description: Request body for creating a client role.
+      example:
+        name: invoices-read
+        description: Read invoices
     CreateClusterRequest:
       type: object
       required:
@@ -19381,6 +20100,15 @@ components:
             - $ref: '#/components/schemas/RealmDisplayName'
           description: Human-friendly name for the realm. Defaults to `name` when omitted.
           example: Customer Portal
+        apply_default_branding:
+          type: boolean
+          description: |-
+            Whether to apply Skycloak's default login branding to the new realm. Defaults to `true`
+            when omitted, so the realm serves the Skycloak look instead of the stock Keycloak login
+            page. Set to `false` to leave the realm's themes untouched. Branding can always be
+            applied or reset later from the realm's Branding page.
+          example: true
+          default: true
       description: Request body for creating a realm. If `display_name` is omitted, the realm name is used.
       example:
         name: customer-portal
@@ -19515,6 +20243,66 @@ components:
           $ref: '#/components/schemas/RealmId'
         authorization_header:
           $ref: '#/components/schemas/WebhookAuthorizationHeader'
+    CreatedRealm:
+      type: object
+      required:
+        - id
+        - name
+        - display_name
+        - enabled
+        - ssl_required
+        - registration_allowed
+        - registration_email_as_username
+        - login_with_email_allowed
+        - duplicate_emails_allowed
+      properties:
+        id:
+          allOf:
+            - $ref: '#/components/schemas/RealmId'
+          example: 123e4567-e89b-12d3-a456-426614174000
+        name:
+          allOf:
+            - $ref: '#/components/schemas/RealmName'
+          example: customer-portal
+        display_name:
+          allOf:
+            - $ref: '#/components/schemas/RealmDisplayName'
+          example: Customer Portal
+        enabled:
+          type: boolean
+          description: Whether users can sign in to this realm.
+          example: true
+        ssl_required:
+          $ref: '#/components/schemas/RealmSslRequired'
+        registration_allowed:
+          type: boolean
+          description: Whether self-registration is open to anyone.
+          example: false
+        registration_email_as_username:
+          type: boolean
+          description: Whether email addresses are used as usernames during registration.
+          example: false
+        login_with_email_allowed:
+          type: boolean
+          description: Whether users can sign in with their email address instead of username.
+          example: true
+        duplicate_emails_allowed:
+          type: boolean
+          description: Whether multiple accounts may share the same email address.
+          example: false
+        created_at:
+          type: string
+          format: date-time
+          description: Time when the realm was created, when available.
+        default_branding_applied:
+          type: boolean
+          description: |-
+            Whether Skycloak's default login branding was applied to the realm as part of this
+            create. `false` when `apply_default_branding` was set to `false`, and also when the
+            branding step failed: the realm is created either way, and branding can be applied
+            from the realm's Branding page.
+          example: true
+      description: Realm details returned when a realm is created.
     CustomDomain:
       type: string
       minLength: 3
@@ -21214,6 +22002,12 @@ components:
         registration_email_as_username: false
         login_with_email_allowed: true
         duplicate_emails_allowed: false
+    RealmClientRef:
+      type: string
+      minLength: 1
+      maxLength: 255
+      description: 'Reference to a client in the realm: either its OAuth `client_id` or its internal Keycloak UUID. Both forms resolve to the same client.'
+      example: storefront
     RealmDisplayName:
       type: string
       minLength: 1
@@ -22738,6 +23532,20 @@ components:
           type: string
           description: Admin URL.
       description: Partial update request. All fields are optional; only provided fields are updated.
+    UpdateClientRoleRequest:
+      type: object
+      properties:
+        name:
+          allOf:
+            - $ref: '#/components/schemas/RealmRoleName'
+          example: invoices-reader
+        description:
+          type: string
+          maxLength: 255
+          example: Read and export invoices
+      description: Patch request for updating a client role. At least one field should be provided.
+      example:
+        description: Read and export invoices
     UpdateClusterRequest:
       type: object
       properties:
