@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: skycloak-mcp
+  labels:
+    name: skycloak-mcp
+    # Ambient mesh membership is a property of the namespace, so it has to be
+    # set here rather than left to whatever created the namespace first.
+    istio.io/dataplane-mode: ambient
+    app.kubernetes.io/managed-by: skycloak-mcp

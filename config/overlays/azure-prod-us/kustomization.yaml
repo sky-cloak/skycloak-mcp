@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - external-secret.yaml
+
+replicas:
+  - name: skycloak-mcp
+    count: 2
+
+patches:
+  - target:
+      kind: HTTPRoute
+      name: skycloak-mcp
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: mcp.skycloak.io
+  - target:
+      kind: Deployment
+      name: skycloak-mcp
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: SKYCLOAK_ENDPOINT
+            value: https://api.skycloak.io
+          - name: SKYCLOAK_ISSUER
+            value: https://login.app.skycloak.io/realms/skycloak
+          - name: SKYCLOAK_DASHBOARD_URL
+            value: https://app.skycloak.io
+          - name: SKYCLOAK_PUBLIC_URL
+            value: https://mcp.skycloak.io

@@ -11,6 +11,8 @@ permissions:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,12 +26,29 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Read the version from the tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Dev follows every release automatically; prod is promoted by hand from
+  # promote.yml. The tag is the version, with the leading v stripped to match
+  # the image goreleaser pushes.
+  deploy-dev:
+    needs: goreleaser
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: ovh-dev
+      overlay: ovh-dev
+      image_tag: ${{ needs.goreleaser.outputs.version }}
+      hostname: mcp.dev.skycloak.io
+    secrets:
+      DEPLOY_KUBECONFIG: ${{ secrets.OVH_KUBECONFIG }}
 
   publish-registry:
     name: publish to the MCP registry

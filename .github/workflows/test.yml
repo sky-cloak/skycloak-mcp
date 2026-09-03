@@ -49,6 +49,38 @@ jobs:
           go generate ./internal/apiclient/...
           git diff --exit-code internal/apiclient
 
+  manifests:
+    name: manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+      - uses: imranismail/setup-kustomize@v2
+      # A manifest that does not build is only discovered at deploy time
+      # otherwise, which is after a release has already been cut.
+      - name: Build every overlay
+        run: |
+          set -euo pipefail
+          for overlay in config/overlays/*/; do
+            echo "== $overlay"
+            kustomize build "$overlay" > /dev/null
+          done
+      # The overlays exist to differ. If one ever stops setting its own
+      # endpoints, it silently points an environment at the other one's.
+      - name: Each overlay points at its own environment
+        run: |
+          set -euo pipefail
+          kustomize build config/overlays/ovh-dev | grep -q 'https://api.dev.skycloak.io'
+          kustomize build config/overlays/ovh-dev | grep -q 'mcp.dev.skycloak.io'
+          kustomize build config/overlays/azure-prod-us | grep -q 'https://api.skycloak.io'
+          kustomize build config/overlays/azure-prod-us | grep -q 'mcp.skycloak.io'
+          if kustomize build config/overlays/azure-prod-us | grep -q 'dev.skycloak.io'; then
+            echo "::error::the prod overlay references a dev hostname"; exit 1
+          fi
+          if kustomize build config/overlays/ovh-dev | grep -q 'placeholder'; then
+            echo "::error::the dev overlay left a base placeholder unset"; exit 1
+          fi
+
   server-json:
     name: server.json
     runs-on: ubuntu-latest

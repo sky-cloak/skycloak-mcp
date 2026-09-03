@@ -1,0 +1,77 @@
+# Applies the kustomize overlay for one environment. Called by release.yml for
+# dev, and by promote.yml for prod, so both paths deploy the same way from the
+# same manifests.
+name: deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      overlay:
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
+      hostname:
+        required: true
+        type: string
+    secrets:
+      DEPLOY_KUBECONFIG:
+        required: true
+
+jobs:
+  deploy:
+    name: deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-kubectl@v4
+      - uses: imranismail/setup-kustomize@v2
+
+      - name: Configure kubeconfig
+        env:
+          KUBECONFIG_DATA: ${{ secrets.DEPLOY_KUBECONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          printf '%s' "$KUBECONFIG_DATA" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Verify cluster access
+        run: kubectl get nodes
+
+      - name: Pin the image to this release
+        working-directory: config/overlays/${{ inputs.overlay }}
+        run: kustomize edit set image ghcr.io/sky-cloak/skycloak-mcp=ghcr.io/sky-cloak/skycloak-mcp:${{ inputs.image_tag }}
+
+      - name: Apply
+        run: |
+          kustomize build config/overlays/${{ inputs.overlay }} | kubectl apply -f -
+          kubectl -n skycloak-mcp rollout status deployment/skycloak-mcp --timeout=300s
+
+      # The rollout succeeding is not on its own proof the intended build is
+      # serving: a wrong tag that happens to exist rolls out perfectly.
+      - name: Verify the running image is the one released
+        run: |
+          set -euo pipefail
+          WANT="ghcr.io/sky-cloak/skycloak-mcp:${{ inputs.image_tag }}"
+          GOT=$(kubectl -n skycloak-mcp get deployment skycloak-mcp \
+            -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "want: $WANT"
+          echo "got:  $GOT"
+          [ "$GOT" = "$WANT" ] || { echo "::error::deployed image is not the released one"; exit 1; }
+          kubectl -n skycloak-mcp get pods -l app.kubernetes.io/instance=skycloak-mcp
+
+      - name: Check the server answers on its public hostname
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 10); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://${{ inputs.hostname }}/readyz" || echo 000)
+            [ "$CODE" = "200" ] && { echo "readyz OK"; exit 0; }
+            echo "attempt $i: $CODE"; sleep 6
+          done
+          echo "::error::${{ inputs.hostname }}/readyz never returned 200"; exit 1

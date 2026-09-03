@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skycloak-mcp
+  namespace: skycloak-mcp
+  labels:
+    app.kubernetes.io/name: skycloak-mcp
+    app.kubernetes.io/instance: skycloak-mcp
+spec:
+  replicas: 2
+  # Stateless and session-free, so rolling is safe: an in-flight call finishes
+  # on the old Pod (SIGTERM drains) and the next request can land anywhere.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: skycloak-mcp
+      app.kubernetes.io/instance: skycloak-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: skycloak-mcp
+        app.kubernetes.io/instance: skycloak-mcp
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      # Give in-flight tool calls time to finish before SIGKILL; the server
+      # drains for up to 20s on SIGTERM.
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: server
+          image: ghcr.io/sky-cloak/skycloak-mcp:latest
+          imagePullPolicy: Always
+          args:
+            - run
+            - --transport
+            - http
+            - --http-addr
+            - ":8080"
+            - --allow-writes
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # The only configuration it takes. No API key: callers supply theirs
+            # per request. Every value below is set per overlay, because a wrong
+            # one silently authenticates users against the other environment.
+            - name: SKYCLOAK_ENDPOINT
+              value: placeholder
+            - name: SKYCLOAK_ISSUER
+              value: placeholder
+            - name: SKYCLOAK_DASHBOARD_URL
+              value: placeholder
+            # The OAuth discovery document has to advertise the URL clients
+            # actually connect on. Cloudflare terminates TLS and the hop into the
+            # cluster is plain HTTP, so the gateway sets X-Forwarded-Proto: http
+            # and the server would otherwise publish an http:// resource for an
+            # https:// endpoint. A conforming client rejects that mismatch.
+            - name: SKYCLOAK_PUBLIC_URL
+              value: placeholder
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            # Numeric, because the image's own USER is the name `nonroot`, and
+            # the kubelet cannot verify a name is non-root: it refuses to start
+            # the container instead. 65532 is what distroless nonroot resolves to.
+            runAsUser: 65532
+            runAsGroup: 65532
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

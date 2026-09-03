@@ -1,0 +1,26 @@
+# Manual promotion of an already-released version to prod. Deliberately not
+# automatic on a tag: prod moves when a human says so, gated by the
+# azure-prod-us environment's reviewers.
+name: promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Released version to deploy, without the leading v (e.g. 0.11.4)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prod:
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: azure-prod-us
+      overlay: azure-prod-us
+      image_tag: ${{ inputs.version }}
+      hostname: mcp.skycloak.io
+    secrets:
+      DEPLOY_KUBECONFIG: ${{ secrets.AZURE_PROD_US_KUBECONFIG }}

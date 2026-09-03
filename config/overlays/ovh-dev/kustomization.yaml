@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - external-secret.yaml
+
+# Two replicas on purpose: the hosted MCP server mints a session key per
+# replica, and the bug that cost us a release only appears when more than one
+# is running. Dev has to be able to show it.
+replicas:
+  - name: skycloak-mcp
+    count: 2
+
+patches:
+  - target:
+      kind: HTTPRoute
+      name: skycloak-mcp
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: mcp.dev.skycloak.io
+  - target:
+      kind: Deployment
+      name: skycloak-mcp
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: SKYCLOAK_ENDPOINT
+            value: https://api.dev.skycloak.io
+          - name: SKYCLOAK_ISSUER
+            value: https://login.app.dev.skycloak.io/realms/skycloak-dev
+          - name: SKYCLOAK_DASHBOARD_URL
+            value: https://app.dev.skycloak.io
+          - name: SKYCLOAK_PUBLIC_URL
+            value: https://mcp.dev.skycloak.io
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
