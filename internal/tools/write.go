@@ -79,7 +79,8 @@ type CreateApplicationInput struct {
 	Name         string   `json:"name" jsonschema:"display name"`
 	Type         string   `json:"type,omitempty" jsonschema:"OAuth client type: confidential or public (case-insensitive); defaults to confidential"`
 	Protocol     string   `json:"protocol,omitempty" jsonschema:"authentication protocol: openid-connect or saml (case-insensitive); defaults to openid-connect"`
-	RedirectURIs []string `json:"redirect_uris,omitempty" jsonschema:"allowed redirect URIs"`
+	GrantTypes   []string `json:"grant_types,omitempty" jsonschema:"enabled OAuth 2.0 grant types: authorization_code, implicit, password, client_credentials or refresh_token (case-insensitive). Defaults to authorization_code, the browser login flow. Ignored for SAML"`
+	RedirectURIs []string `json:"redirect_uris,omitempty" jsonschema:"allowed redirect URIs; required whenever authorization_code or implicit is enabled"`
 }
 
 // CreateApplicationOutput is the structured result.
@@ -93,9 +94,14 @@ func createApplicationHandler(api API) mcp.ToolHandlerFor[CreateApplicationInput
 		if in.ClusterID == "" || in.Realm == "" || in.ClientID == "" {
 			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "cluster_id, realm and client_id are required"}}}, CreateApplicationOutput{}, nil
 		}
+		protocol := enumApplicationProtocol.canonical(in.Protocol)
+		grants, errMsg := resolveGrantTypes(protocol, in.GrantTypes, in.RedirectURIs)
+		if errMsg != "" {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: errMsg}}}, CreateApplicationOutput{}, nil
+		}
 		clientID, secret, err := api.CreateApplication(ctx, in.ClusterID, in.Realm, skycloak.CreateApplicationRequest{
 			ClientID: in.ClientID, Name: in.Name, Type: enumApplicationType.canonical(in.Type),
-			Protocol: enumApplicationProtocol.canonical(in.Protocol), RedirectURIs: in.RedirectURIs,
+			Protocol: protocol, GrantTypes: grants, RedirectURIs: in.RedirectURIs,
 		})
 		if err != nil {
 			return toolError(err), CreateApplicationOutput{}, nil
@@ -106,6 +112,37 @@ func createApplicationHandler(api API) mcp.ToolHandlerFor[CreateApplicationInput
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, CreateApplicationOutput{ClientID: clientID, ClientSecret: secret}, nil
 	}
+}
+
+// resolveGrantTypes picks the grant types to send, and reports why the call
+// cannot succeed rather than letting the API reject it.
+//
+// The API requires at least one grant type on anything but SAML, so an omitted
+// parameter has to become the browser login flow rather than an empty list. It
+// then requires redirect URIs for that flow, so defaulting it silently would
+// swap one rejection for another naming a parameter the caller never sent.
+func resolveGrantTypes(protocol string, grants, redirectURIs []string) (out []string, errMsg string) {
+	if protocol == "saml" {
+		return nil, ""
+	}
+	out = canonicalEach(enumGrantType, grants)
+	defaulted := len(out) == 0
+	if defaulted {
+		out = []string{"authorization_code"}
+	}
+	needsRedirect := false
+	for _, g := range out {
+		if g == "authorization_code" || g == "implicit" {
+			needsRedirect = true
+		}
+	}
+	if !needsRedirect || len(redirectURIs) > 0 {
+		return out, ""
+	}
+	if defaulted {
+		return nil, "redirect_uris is required: grant_types defaults to authorization_code, which is a browser redirect flow. Pass redirect_uris, or pass grant_types=[\"client_credentials\"] for a machine-to-machine client."
+	}
+	return nil, "redirect_uris is required when grant_types includes authorization_code or implicit."
 }
 
 // DeleteApplicationInput is the input schema for skycloak_delete_application.

@@ -113,6 +113,7 @@ var (
 	enumExportFormat        = apiEnum{schema: "ExportFormat", values: []string{"sql", "pgdump"}}
 	enumApplicationType     = apiEnum{schema: "ApplicationType", values: []string{"confidential", "public"}}
 	enumApplicationProtocol = apiEnum{schema: "ApplicationProtocol", values: []string{"openid-connect", "saml"}}
+	enumGrantType           = apiEnum{schema: "GrantType", values: []string{"authorization_code", "implicit", "password", "client_credentials", "refresh_token"}}
 	enumClusterType         = apiEnum{schema: "ClusterType", values: []string{"keycloak", "tidecloak"}}
 	enumClusterSize         = apiEnum{schema: "ClusterSize", values: []string{"small", "medium", "large"}}
 	enumClusterLocation     = apiEnum{schema: "ClusterLocation", values: []string{"us", "ca", "au", "eu"}}
@@ -170,6 +171,7 @@ var enumParams = []enumParam{
 	{"skycloak_create_export", "format", enumExportFormat},
 	{"skycloak_create_application", "type", enumApplicationType},
 	{"skycloak_create_application", "protocol", enumApplicationProtocol},
+	{"skycloak_create_application", "grant_types", enumGrantType},
 	{"skycloak_create_cluster", "type", enumClusterType},
 	{"skycloak_create_cluster", "size", enumClusterSize},
 	{"skycloak_create_cluster", "location", enumClusterLocation},
