@@ -412,6 +412,7 @@ type CreateApplicationRequest struct {
 	Name         string
 	Type         string
 	Protocol     string
+	GrantTypes   []string
 	RedirectURIs []string
 }
 
@@ -421,7 +422,10 @@ func (c *Client) CreateApplication(ctx context.Context, clusterID, realm string,
 	body := apiclient.CreateApplicationJSONRequestBody{
 		ClientId:   apiclient.ApplicationClientId(req.ClientID),
 		Name:       req.Name,
-		GrantTypes: []apiclient.GrantType{},
+		GrantTypes: make([]apiclient.GrantType, 0, len(req.GrantTypes)),
+	}
+	for _, g := range req.GrantTypes {
+		body.GrantTypes = append(body.GrantTypes, apiclient.GrantType(g))
 	}
 	if req.Type != "" {
 		t := apiclient.ApplicationType(req.Type)

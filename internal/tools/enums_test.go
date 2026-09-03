@@ -43,6 +43,9 @@ func (r recAPI) CreateExport(_ context.Context, _, format string, _ bool, _ stri
 func (r recAPI) CreateApplication(_ context.Context, _, _ string, req skycloak.CreateApplicationRequest) (string, string, error) {
 	r.seen["skycloak_create_application.type"] = req.Type
 	r.seen["skycloak_create_application.protocol"] = req.Protocol
+	if len(req.GrantTypes) > 0 {
+		r.seen["skycloak_create_application.grant_types"] = req.GrantTypes[0]
+	}
 	return req.ClientID, "", nil
 }
 
@@ -199,10 +202,13 @@ var enumProbes = map[string]func(v string) map[string]any{
 		return map[string]any{"cluster_id": "c1", "format": v}
 	},
 	"skycloak_create_application.type": func(v string) map[string]any {
-		return map[string]any{"cluster_id": "c1", "realm": "r", "client_id": "app", "name": "App", "type": v}
+		return map[string]any{"cluster_id": "c1", "realm": "r", "client_id": "app", "name": "App", "redirect_uris": []string{"https://a/cb"}, "type": v}
 	},
 	"skycloak_create_application.protocol": func(v string) map[string]any {
-		return map[string]any{"cluster_id": "c1", "realm": "r", "client_id": "app", "name": "App", "protocol": v}
+		return map[string]any{"cluster_id": "c1", "realm": "r", "client_id": "app", "name": "App", "redirect_uris": []string{"https://a/cb"}, "protocol": v}
+	},
+	"skycloak_create_application.grant_types": func(v string) map[string]any {
+		return map[string]any{"cluster_id": "c1", "realm": "r", "client_id": "app", "name": "App", "redirect_uris": []string{"https://a/cb"}, "grant_types": []string{v}}
 	},
 	"skycloak_create_cluster.type": func(v string) map[string]any {
 		return map[string]any{"name": "n", "size": "small", "version": "26.1", "location": "eu", "type": v}
