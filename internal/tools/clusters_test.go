@@ -679,14 +679,14 @@ func (s stubAPI) UpsertLoginBranding(_ context.Context, _, _ string, req skycloa
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &skycloak.LoginBranding{PrimaryColor: req.PrimaryColor, Status: "applied"}, nil
+	return &skycloak.LoginBranding{PrimaryColor: strDerefTest(req.PrimaryColor), Status: "applied"}, nil
 }
 
 func (s stubAPI) UpsertEmailBranding(_ context.Context, _, _ string, req skycloak.UpsertEmailBrandingRequest) (*skycloak.EmailBranding, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &skycloak.EmailBranding{PrimaryColor: req.PrimaryColor, Status: "applied"}, nil
+	return &skycloak.EmailBranding{PrimaryColor: strDerefTest(req.PrimaryColor), Status: "applied"}, nil
 }
 
 func (s stubAPI) DeleteLoginBranding(context.Context, string, string) error { return s.err }
@@ -977,4 +977,11 @@ func TestListClustersSaysWhenTheViewIsWindowed(t *testing.T) {
 	if txt := res.Content[0].(*mcp.TextContent).Text; strings.Contains(txt, "window") {
 		t.Errorf("an unwindowed listing must not claim to be partial: %q", txt)
 	}
+}
+
+func strDerefTest(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }

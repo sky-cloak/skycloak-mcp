@@ -2655,20 +2655,106 @@ func (c *Client) UpsertSMTP(ctx context.Context, clusterID, realm string, req Up
 	return &SMTPConfig{Host: string(s.Host), Port: int64(s.Port), Encryption: string(s.Encryption), FromEmail: string(s.FromEmail), AuthType: string(s.AuthType), HasPassword: s.HasPassword, Status: string(s.Status)}, nil
 }
 
-// UpsertLoginBrandingRequest holds the common login-branding fields.
+// UpsertLoginBrandingRequest holds the login-branding fields a caller may set.
+// Every field is a pointer because the endpoint replaces rather than merges: a
+// nil means "leave whatever is there", which only works if it can be told apart
+// from an explicit zero value.
 type UpsertLoginBrandingRequest struct {
-	PrimaryColor        string
-	BackgroundColor     string
-	LogoURL             string
-	RegistrationEnabled *bool
+	PrimaryColor          *string
+	BackgroundColor       *string
+	LogoURL               *string
+	FaviconURL            *string
+	FontURL               *string
+	RegistrationEnabled   *bool
+	RememberMeEnabled     *bool
+	ForgotPasswordEnabled *bool
+	TermsOfServiceURL     *string
+	PrivacyPolicyURL      *string
+	ShowPoweredBy         *bool
+}
+
+// loginBrandingBody turns the realm's current branding into a request body, so
+// a field the caller leaves alone is written back as it stands. Without this the
+// API applies its own default to every omitted field, and a caller changing one
+// colour silently drops the realm's favicon, policy links, SSO layout and
+// locales — none of which the tool surface can even put back.
+func loginBrandingBody(b *apiclient.LoginBranding) apiclient.UpsertLoginBrandingJSONRequestBody {
+	return apiclient.UpsertLoginBrandingJSONRequestBody{
+		PrimaryColor:          b.PrimaryColor,
+		BackgroundColor:       b.BackgroundColor,
+		LogoUrl:               b.LogoUrl,
+		FaviconUrl:            b.FaviconUrl,
+		FontUrl:               b.FontUrl,
+		RegistrationEnabled:   &b.RegistrationEnabled,
+		RememberMeEnabled:     &b.RememberMeEnabled,
+		ForgotPasswordEnabled: &b.ForgotPasswordEnabled,
+		TermsOfServiceUrl:     b.TermsOfServiceUrl,
+		PrivacyPolicyUrl:      b.PrivacyPolicyUrl,
+		ShowPoweredBy:         &b.ShowPoweredBy,
+		Sso:                   b.Sso,
+		Internationalization:  b.Internationalization,
+	}
+}
+
+// setIf overwrites dst only when the caller actually supplied a value, leaving
+// the seeded current value in place otherwise.
+func setIf[T any](dst **T, v *T) {
+	if v != nil {
+		*dst = v
+	}
+}
+
+// currentLoginBrandingBody seeds a request body from the realm's current
+// branding. A realm with none yet (404) starts from an empty body; any other
+// read failure aborts, because writing a body we could not seed would erase
+// exactly the settings this merge exists to protect.
+func (c *Client) currentLoginBrandingBody(ctx context.Context, clusterID, realm string) (apiclient.UpsertLoginBrandingJSONRequestBody, error) {
+	resp, err := c.gen.GetLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
+	if err != nil {
+		return apiclient.UpsertLoginBrandingJSONRequestBody{}, err
+	}
+	switch {
+	case resp.JSON200 != nil:
+		return loginBrandingBody(resp.JSON200), nil
+	case resp.HTTPResponse != nil && resp.HTTPResponse.StatusCode == http.StatusNotFound:
+		return apiclient.UpsertLoginBrandingJSONRequestBody{}, nil
+	default:
+		return apiclient.UpsertLoginBrandingJSONRequestBody{}, statusError(resp.HTTPResponse, resp.Body)
+	}
+}
+
+func (c *Client) currentEmailBrandingBody(ctx context.Context, clusterID, realm string) (apiclient.UpsertEmailBrandingJSONRequestBody, error) {
+	resp, err := c.gen.GetEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil)
+	if err != nil {
+		return apiclient.UpsertEmailBrandingJSONRequestBody{}, err
+	}
+	switch {
+	case resp.JSON200 != nil:
+		return emailBrandingBody(resp.JSON200), nil
+	case resp.HTTPResponse != nil && resp.HTTPResponse.StatusCode == http.StatusNotFound:
+		return apiclient.UpsertEmailBrandingJSONRequestBody{}, nil
+	default:
+		return apiclient.UpsertEmailBrandingJSONRequestBody{}, statusError(resp.HTTPResponse, resp.Body)
+	}
 }
 
 // UpsertLoginBranding creates or updates login-page branding.
 func (c *Client) UpsertLoginBranding(ctx context.Context, clusterID, realm string, req UpsertLoginBrandingRequest) (*LoginBranding, error) {
-	body := apiclient.UpsertLoginBrandingJSONRequestBody{RegistrationEnabled: req.RegistrationEnabled}
-	body.PrimaryColor = sptr(req.PrimaryColor)
-	body.BackgroundColor = sptr(req.BackgroundColor)
-	body.LogoUrl = sptr(req.LogoURL)
+	body, err := c.currentLoginBrandingBody(ctx, clusterID, realm)
+	if err != nil {
+		return nil, err
+	}
+	setIf(&body.PrimaryColor, req.PrimaryColor)
+	setIf(&body.BackgroundColor, req.BackgroundColor)
+	setIf(&body.LogoUrl, req.LogoURL)
+	setIf(&body.FaviconUrl, req.FaviconURL)
+	setIf(&body.FontUrl, req.FontURL)
+	setIf(&body.TermsOfServiceUrl, req.TermsOfServiceURL)
+	setIf(&body.PrivacyPolicyUrl, req.PrivacyPolicyURL)
+	setIf(&body.RegistrationEnabled, req.RegistrationEnabled)
+	setIf(&body.RememberMeEnabled, req.RememberMeEnabled)
+	setIf(&body.ForgotPasswordEnabled, req.ForgotPasswordEnabled)
+	setIf(&body.ShowPoweredBy, req.ShowPoweredBy)
 	resp, err := c.gen.UpsertLoginBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
@@ -2680,19 +2766,41 @@ func (c *Client) UpsertLoginBranding(ctx context.Context, clusterID, realm strin
 	return &LoginBranding{PrimaryColor: strDeref(b.PrimaryColor), BackgroundColor: strDeref(b.BackgroundColor), LogoURL: strDeref(b.LogoUrl), RegistrationEnabled: b.RegistrationEnabled, ForgotPasswordEnabled: b.ForgotPasswordEnabled, Status: string(b.Status)}, nil
 }
 
-// UpsertEmailBrandingRequest holds the common email-branding fields.
+// UpsertEmailBrandingRequest holds the email-branding fields a caller may set.
+// Pointers for the same reason as UpsertLoginBrandingRequest.
 type UpsertEmailBrandingRequest struct {
-	PrimaryColor       string
-	HeaderLogoLightURL string
-	FooterCompanyName  string
+	PrimaryColor       *string
+	HeaderLogoLightURL *string
+	HeaderLogoDarkURL  *string
+	CompanyURL         *string
+	FooterCompanyName  *string
+	FooterText         *string
+}
+
+func emailBrandingBody(b *apiclient.EmailBranding) apiclient.UpsertEmailBrandingJSONRequestBody {
+	return apiclient.UpsertEmailBrandingJSONRequestBody{
+		PrimaryColor:         b.PrimaryColor,
+		HeaderLogoLightUrl:   b.HeaderLogoLightUrl,
+		HeaderLogoDarkUrl:    b.HeaderLogoDarkUrl,
+		CompanyUrl:           b.CompanyUrl,
+		FooterCompanyName:    b.FooterCompanyName,
+		FooterText:           b.FooterText,
+		Internationalization: b.Internationalization,
+	}
 }
 
 // UpsertEmailBranding creates or updates email-template branding.
 func (c *Client) UpsertEmailBranding(ctx context.Context, clusterID, realm string, req UpsertEmailBrandingRequest) (*EmailBranding, error) {
-	body := apiclient.UpsertEmailBrandingJSONRequestBody{}
-	body.PrimaryColor = sptr(req.PrimaryColor)
-	body.HeaderLogoLightUrl = sptr(req.HeaderLogoLightURL)
-	body.FooterCompanyName = sptr(req.FooterCompanyName)
+	body, err := c.currentEmailBrandingBody(ctx, clusterID, realm)
+	if err != nil {
+		return nil, err
+	}
+	setIf(&body.PrimaryColor, req.PrimaryColor)
+	setIf(&body.HeaderLogoLightUrl, req.HeaderLogoLightURL)
+	setIf(&body.HeaderLogoDarkUrl, req.HeaderLogoDarkURL)
+	setIf(&body.CompanyUrl, req.CompanyURL)
+	setIf(&body.FooterCompanyName, req.FooterCompanyName)
+	setIf(&body.FooterText, req.FooterText)
 	resp, err := c.gen.UpsertEmailBrandingWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), nil, body)
 	if err != nil {
 		return nil, err
