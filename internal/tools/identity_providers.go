@@ -52,11 +52,14 @@ func listIdentityProvidersHandler(api API) mcp.ToolHandlerFor[ListIdentityProvid
 		if err != nil {
 			return toolError(err), ListIdentityProvidersOutput{}, nil
 		}
+		// Only the cluster needs a prefix, and only when more than one is in play.
+		// The realm is printed on every row regardless, so naming one cluster and
+		// searching all its realms stays unambiguous without repeating the cluster
+		// the caller just named.
 		multi := len(targets) > 1 || in.ClusterID == ""
 
 		out := ListIdentityProvidersOutput{IdentityProviders: []IdentityProviderSummary{}}
 		var b strings.Builder
-		multi = multi || in.Realm == ""
 		for _, t := range targets {
 			realms, err := realmTargets(ctx, api, t, in.Realm)
 			if err != nil {

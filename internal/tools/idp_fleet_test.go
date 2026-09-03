@@ -105,10 +105,11 @@ func TestListIdentityProvidersReportsUnreadableRealms(t *testing.T) {
 // makes, keyed so a test can tell which cluster and realm each row came from.
 type fleetStub struct {
 	stubAPI
-	clusters []string
-	realms   map[string][]string
-	idps     map[string][]string
-	failIDPs map[string]bool
+	clusters   []string
+	realms     map[string][]string
+	idps       map[string][]string
+	failIDPs   map[string]bool
+	failRealms map[string]bool
 }
 
 func (f fleetStub) ListClusters(context.Context, skycloak.ListClustersParams) ([]skycloak.Cluster, error) {
@@ -120,6 +121,9 @@ func (f fleetStub) ListClusters(context.Context, skycloak.ListClustersParams) ([
 }
 
 func (f fleetStub) ListRealms(_ context.Context, clusterID string) ([]skycloak.Realm, error) {
+	if f.failRealms[clusterID] {
+		return nil, errors.New("realms unavailable")
+	}
 	out := make([]skycloak.Realm, 0)
 	for _, r := range f.realms[clusterID] {
 		out = append(out, skycloak.Realm{Name: r, Enabled: true})
@@ -137,4 +141,74 @@ func (f fleetStub) ListIdentityProviders(_ context.Context, clusterID, realm str
 		out = append(out, skycloak.IdentityProvider{ProviderID: id, Enabled: true})
 	}
 	return out, nil
+}
+
+// A cluster whose realms cannot be listed contributes nothing, which looks
+// exactly like a cluster with no SSO configured. It has to be reported.
+func TestListIdentityProvidersReportsClustersWhoseRealmsAreUnreadable(t *testing.T) {
+	api := fleetStub{
+		clusters:   []string{"c1", "c2"},
+		realms:     map[string][]string{"c1": {"master"}, "c2": {"master"}},
+		idps:       map[string][]string{"c1/master": {"okta"}},
+		failRealms: map[string]bool{"c2": true},
+	}
+	res, out, err := listIdentityProvidersHandler(api)(context.Background(), nil, ListIdentityProvidersInput{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Unreachable) != 1 || out.Unreachable[0].ClusterID != "c2" {
+		t.Fatalf("unreachable = %+v, want c2 reported", out.Unreachable)
+	}
+	if out.Count != 1 {
+		t.Errorf("count = %d, want the one provider that could be read", out.Count)
+	}
+	if txt := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(txt, "Incomplete") {
+		t.Errorf("a partial answer must say so: %q", txt)
+	}
+}
+
+// The realm belongs on the row that failed, so a reader can tell one bad realm
+// from a whole bad cluster.
+func TestUnreachableNamesTheRealmWhenOnlyOneFailed(t *testing.T) {
+	api := fleetStub{
+		clusters: []string{"c1"},
+		realms:   map[string][]string{"c1": {"master", "broken"}},
+		idps:     map[string][]string{"c1/master": {"okta"}},
+		failIDPs: map[string]bool{"c1/broken": true},
+	}
+	_, out, err := listIdentityProvidersHandler(api)(context.Background(), nil, ListIdentityProvidersInput{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out.Unreachable) != 1 || out.Unreachable[0].Realm != "broken" {
+		t.Fatalf("unreachable = %+v, want realm \"broken\" named", out.Unreachable)
+	}
+}
+
+// With one cluster named but every realm searched, the rows still span realms,
+// so they have to stay distinguishable.
+func TestListIdentityProvidersLabelsRowsWhenOnlyRealmIsOmitted(t *testing.T) {
+	api := fleetStub{
+		clusters: []string{"c1"},
+		realms:   map[string][]string{"c1": {"master", "alfred"}},
+		idps:     map[string][]string{"c1/master": {"okta"}, "c1/alfred": {"azure"}},
+	}
+	res, out, err := listIdentityProvidersHandler(api)(context.Background(), nil,
+		ListIdentityProvidersInput{ClusterID: "c1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Count != 2 {
+		t.Fatalf("count = %d, want both realms searched", out.Count)
+	}
+	txt := res.Content[0].(*mcp.TextContent).Text
+	for _, want := range []string{"master/okta", "alfred/azure"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("text does not name %q, so the rows cannot be told apart: %q", want, txt)
+		}
+	}
+	// The caller named this cluster, so repeating its id on every row is noise.
+	if strings.Contains(txt, "c1") {
+		t.Errorf("rows repeat the cluster the caller already named: %q", txt)
+	}
 }

@@ -208,7 +208,10 @@ var toolAreas = []toolArea{
 	{name: "clusters", scopes: []string{"clusters:read"}, register: registerClusterReadTools},
 	{name: "realms", scopes: []string{"realms:read"}, register: registerRealmReadTools},
 	{name: "applications", scopes: []string{"applications:read"}, register: registerApplicationReadTools},
-	{name: "identity providers", scopes: []string{"identity-providers:read"}, register: registerIdentityProviderReadTools},
+	// Spans three API areas: omitting realm lists the cluster's realms, and
+	// omitting cluster_id lists the workspace's clusters, so both reads are part
+	// of the default path rather than optional extras.
+	{name: "identity providers", scopes: []string{"identity-providers:read", "realms:read", "clusters:read"}, register: registerIdentityProviderReadTools},
 	// Security logs are a log endpoint, not a security-settings one, so this
 	// area needs no clusters:security:read.
 	{name: "observability", scopes: []string{"clusters:logs:read", "clusters:events:read"}, register: registerObservabilityReadTools},
