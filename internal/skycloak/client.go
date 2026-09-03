@@ -2719,7 +2719,7 @@ func (c *Client) currentLoginBrandingBody(ctx context.Context, clusterID, realm 
 	case resp.HTTPResponse != nil && resp.HTTPResponse.StatusCode == http.StatusNotFound:
 		return apiclient.UpsertLoginBrandingJSONRequestBody{}, nil
 	default:
-		return apiclient.UpsertLoginBrandingJSONRequestBody{}, statusError(resp.HTTPResponse, resp.Body)
+		return apiclient.UpsertLoginBrandingJSONRequestBody{}, fmt.Errorf("reading current login branding (branding:read is required to preserve fields you are not changing): %w", statusError(resp.HTTPResponse, resp.Body))
 	}
 }
 
@@ -2734,7 +2734,7 @@ func (c *Client) currentEmailBrandingBody(ctx context.Context, clusterID, realm 
 	case resp.HTTPResponse != nil && resp.HTTPResponse.StatusCode == http.StatusNotFound:
 		return apiclient.UpsertEmailBrandingJSONRequestBody{}, nil
 	default:
-		return apiclient.UpsertEmailBrandingJSONRequestBody{}, statusError(resp.HTTPResponse, resp.Body)
+		return apiclient.UpsertEmailBrandingJSONRequestBody{}, fmt.Errorf("reading current email branding (branding:read is required to preserve fields you are not changing): %w", statusError(resp.HTTPResponse, resp.Body))
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -155,5 +156,114 @@ func TestUpsertEmailBrandingDoesNotWriteWhenCurrentIsUnreadable(t *testing.T) {
 	}
 	if *sawPut {
 		t.Fatalf("a failed read must not be followed by a write")
+	}
+}
+
+// Every overlay line has to be exercised at the wire, not only at the tool
+// layer: deleting any one of them leaves the seeded value in place, which is
+// invisible unless the test sends a value that differs from the seed.
+func TestUpsertLoginBrandingOverlaysEveryField(t *testing.T) {
+	srv, put, _ := brandingServer(t, 200, fullLoginBranding)
+	s := func(v string) *string { return &v }
+	yes := true
+	req := UpsertLoginBrandingRequest{
+		PrimaryColor: s("#aaa"), BackgroundColor: s("#bbb"), LogoURL: s("https://new/logo.png"),
+		FaviconURL: s("https://new/fav.ico"), FontURL: s("https://new/font.woff2"),
+		TermsOfServiceURL: s("https://new/tos"), PrivacyPolicyURL: s("https://new/privacy"),
+		// The fixture has all four false, so true proves the value travelled.
+		RegistrationEnabled: &yes, RememberMeEnabled: &yes, ForgotPasswordEnabled: &yes, ShowPoweredBy: &yes,
+	}
+	if _, err := newTestClient(srv.URL).UpsertLoginBranding(context.Background(), cuid, "app", req); err != nil {
+		t.Fatalf("UpsertLoginBranding: %v", err)
+	}
+	for k, want := range map[string]any{
+		"primary_color": "#aaa", "background_color": "#bbb", "logo_url": "https://new/logo.png",
+		"favicon_url": "https://new/fav.ico", "font_url": "https://new/font.woff2",
+		"terms_of_service_url": "https://new/tos", "privacy_policy_url": "https://new/privacy",
+		"registration_enabled": true, "remember_me_enabled": true, "forgot_password_enabled": true,
+		"show_powered_by": true,
+	} {
+		if (*put)[k] != want {
+			t.Errorf("%s = %v, want %v", k, (*put)[k], want)
+		}
+	}
+}
+
+// Seeding the four booleans from each other is invisible while they all share a
+// value, so each one is checked against a config where only it is true.
+func TestLoginBrandingSeedsEachBooleanFromItsOwnField(t *testing.T) {
+	for _, field := range []string{"registration_enabled", "remember_me_enabled", "forgot_password_enabled", "show_powered_by"} {
+		t.Run(field, func(t *testing.T) {
+			body := `{"cluster_id":"` + cuid + `","realm":"app","status":"applied",
+				"created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-01T00:00:00Z",
+				"registration_enabled":false,"remember_me_enabled":false,
+				"forgot_password_enabled":false,"show_powered_by":false}`
+			body = strings.Replace(body, `"`+field+`":false`, `"`+field+`":true`, 1)
+			srv, put, _ := brandingServer(t, 200, body)
+			color := "#ff0000"
+			if _, err := newTestClient(srv.URL).UpsertLoginBranding(context.Background(), cuid, "app",
+				UpsertLoginBrandingRequest{PrimaryColor: &color}); err != nil {
+				t.Fatalf("UpsertLoginBranding: %v", err)
+			}
+			for _, k := range []string{"registration_enabled", "remember_me_enabled", "forgot_password_enabled", "show_powered_by"} {
+				want := k == field
+				if (*put)[k] != want {
+					t.Errorf("%s = %v, want %v (seeded from the wrong field?)", k, (*put)[k], want)
+				}
+			}
+		})
+	}
+}
+
+func TestUpsertEmailBrandingOverlaysEveryField(t *testing.T) {
+	srv, put, _ := brandingServer(t, 200, fullEmailBranding)
+	s := func(v string) *string { return &v }
+	req := UpsertEmailBrandingRequest{
+		PrimaryColor: s("#aaa"), HeaderLogoLightURL: s("https://new/l.png"), HeaderLogoDarkURL: s("https://new/d.png"),
+		CompanyURL: s("https://new"), FooterCompanyName: s("New Co"), FooterText: s("new text"),
+	}
+	if _, err := newTestClient(srv.URL).UpsertEmailBranding(context.Background(), cuid, "app", req); err != nil {
+		t.Fatalf("UpsertEmailBranding: %v", err)
+	}
+	for k, want := range map[string]any{
+		"primary_color": "#aaa", "header_logo_light_url": "https://new/l.png",
+		"header_logo_dark_url": "https://new/d.png", "company_url": "https://new",
+		"footer_company_name": "New Co", "footer_text": "new text",
+	} {
+		if (*put)[k] != want {
+			t.Errorf("%s = %v, want %v", k, (*put)[k], want)
+		}
+	}
+}
+
+func TestUpsertEmailBrandingCreatesWhenNoneExists(t *testing.T) {
+	srv, put, sawPut := brandingServer(t, 404, `{"title":"not found"}`)
+	name := "Acme"
+	if _, err := newTestClient(srv.URL).UpsertEmailBranding(context.Background(), cuid, "app",
+		UpsertEmailBrandingRequest{FooterCompanyName: &name}); err != nil {
+		t.Fatalf("UpsertEmailBranding: %v", err)
+	}
+	if !*sawPut {
+		t.Fatalf("expected the create to be attempted")
+	}
+	if (*put)["footer_company_name"] != "Acme" {
+		t.Fatalf("footer_company_name = %v", (*put)["footer_company_name"])
+	}
+}
+
+// A create must send only what the caller gave. Seeding from a zero-valued
+// config instead of an empty body would post explicit defaults, so the realm
+// would be pinned to them rather than taking the API's own.
+func TestUpsertBrandingCreateSendsOnlyWhatWasGiven(t *testing.T) {
+	srv, put, _ := brandingServer(t, 404, `{"title":"not found"}`)
+	color := "#ff0000"
+	if _, err := newTestClient(srv.URL).UpsertLoginBranding(context.Background(), cuid, "app",
+		UpsertLoginBrandingRequest{PrimaryColor: &color}); err != nil {
+		t.Fatalf("UpsertLoginBranding: %v", err)
+	}
+	for _, k := range []string{"show_powered_by", "registration_enabled", "remember_me_enabled", "forgot_password_enabled", "background_color", "favicon_url"} {
+		if _, present := (*put)[k]; present {
+			t.Errorf("%s was sent on a create; only the caller's fields belong in the body", k)
+		}
 	}
 }
