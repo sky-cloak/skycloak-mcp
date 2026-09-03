@@ -243,6 +243,10 @@ var toolAreas = []toolArea{
 	{name: "siem writes", write: true, scopes: []string{"siem:write"}, register: registerSIEMWriteTools},
 	{name: "webhook writes", write: true, scopes: []string{"webhooks:write"}, register: registerWebhookWriteTools},
 	{name: "detail writes", write: true, scopes: []string{"realm-roles:write", "realm-groups:write", "realm-users:write", "domains:write", "applications:write", "identity-providers:write", "clusters:write", "extensions:write", "themes:write", "smtp:write", "branding:write", "clusters:events:read"}, register: registerWrites2Tools},
+	// The branding upserts are read-modify-write: the endpoint resets any field
+	// the body omits, so they read the current config to preserve it. That makes
+	// branding:read a requirement of writing, not only of reading.
+	{name: "branding upserts", write: true, scopes: []string{"branding:write", "branding:read"}, register: registerBrandingUpsertTools},
 	{name: "realm transfer writes", write: true, scopes: []string{"clusters:exports:write", "clusters:imports:write"}, register: registerRealmTransferWriteTools},
 	{name: "cluster writes", write: true, scopes: []string{"clusters:write"}, register: registerClusterWriteTools},
 	{name: "application writes", write: true, scopes: []string{"applications:write"}, register: registerApplicationWriteTools},

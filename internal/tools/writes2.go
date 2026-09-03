@@ -20,13 +20,21 @@ func registerWrites2Tools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{Name: "skycloak_update_extension", Description: "Update a custom extension's name or description.", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(false), Title: "Update extension"}}, updateExtensionHandler(api))
 	addTool(s, &mcp.Tool{Name: "skycloak_update_theme", Description: "Update a theme's name, description, or version.", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(false), Title: "Update theme"}}, updateThemeHandler(api))
 	addTool(s, &mcp.Tool{Name: "skycloak_upsert_smtp", Description: "Create or update a realm's SMTP configuration (basic auth).", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(false), Title: "Upsert SMTP"}}, upsertSMTPHandler(api))
-	addTool(s, &mcp.Tool{Name: "skycloak_upsert_login_branding", Description: "Create or update login-page branding (colors, logo, registration toggle).", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(false), Title: "Upsert login branding"}}, upsertLoginBrandingHandler(api))
-	addTool(s, &mcp.Tool{Name: "skycloak_upsert_email_branding", Description: "Create or update email-template branding (color, logo, footer).", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(false), Title: "Upsert email branding"}}, upsertEmailBrandingHandler(api))
 	addTool(s, &mcp.Tool{Name: "skycloak_delete_login_branding", Description: "Revert login branding to defaults. Set confirm=true to proceed.", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete login branding"}}, deleteLoginBrandingHandler(api))
 	addTool(s, &mcp.Tool{Name: "skycloak_delete_email_branding", Description: "Revert email branding to defaults. Set confirm=true to proceed.", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete email branding"}}, deleteEmailBrandingHandler(api))
 	addTool(s, &mcp.Tool{Name: "skycloak_export_cluster_events", Description: "Export a cluster's events as a document and return its contents.", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Export cluster events"}}, exportClusterEventsHandler(api))
 	addTool(s, &mcp.Tool{Name: "skycloak_set_cluster_maintenance_window", Description: "Create or replace a cluster-specific maintenance window.", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(false), Title: "Set maintenance window"}}, setClusterMaintenanceWindowHandler(api))
 	addTool(s, &mcp.Tool{Name: "skycloak_delete_cluster_maintenance_window", Description: "Delete a cluster-specific maintenance window so the cluster follows the workspace default. Set confirm=true to proceed.", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete maintenance window"}}, deleteClusterMaintenanceWindowHandler(api))
+}
+
+// registerBrandingUpsertTools is its own group because these two upserts read the
+// current branding before writing, so they need branding:read on top of
+// branding:write. Scopes are declared per group, so leaving them among the
+// other detail writes would force branding:read on unrelated tools like
+// skycloak_update_identity_provider.
+func registerBrandingUpsertTools(s *mcp.Server, api API) {
+	addTool(s, &mcp.Tool{Name: "skycloak_upsert_login_branding", Description: "Create or update login-page branding: colors, logo, favicon, font, terms and privacy links, the registration, remember-me, forgot-password and Powered by Skycloak toggles. Fields you omit keep their current value.", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(false), Title: "Upsert login branding"}}, upsertLoginBrandingHandler(api))
+	addTool(s, &mcp.Tool{Name: "skycloak_upsert_email_branding", Description: "Create or update email-template branding: color, light and dark logos, company URL and footer text. Fields you omit keep their current value.", Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(false), Title: "Upsert email branding"}}, upsertEmailBrandingHandler(api))
 }
 
 // UpdateRealmRoleInput is the input for skycloak_update_realm_role.
@@ -307,12 +315,19 @@ func upsertSMTPHandler(api API) mcp.ToolHandlerFor[UpsertSMTPInput, skycloak.SMT
 
 // UpsertLoginBrandingInput is the input for skycloak_upsert_login_branding.
 type UpsertLoginBrandingInput struct {
-	ClusterID           string `json:"cluster_id" jsonschema:"the cluster ID"`
-	Realm               string `json:"realm" jsonschema:"the Keycloak realm name"`
-	PrimaryColor        string `json:"primary_color,omitempty" jsonschema:"primary accent color (hex)"`
-	BackgroundColor     string `json:"background_color,omitempty" jsonschema:"background color (hex)"`
-	LogoURL             string `json:"logo_url,omitempty" jsonschema:"logo URL"`
-	RegistrationEnabled *bool  `json:"registration_enabled,omitempty" jsonschema:"show the self-registration link"`
+	ClusterID             string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Realm                 string `json:"realm" jsonschema:"the Keycloak realm name"`
+	PrimaryColor          string `json:"primary_color,omitempty" jsonschema:"primary accent color (hex)"`
+	BackgroundColor       string `json:"background_color,omitempty" jsonschema:"background color (hex)"`
+	LogoURL               string `json:"logo_url,omitempty" jsonschema:"logo URL"`
+	FaviconURL            string `json:"favicon_url,omitempty" jsonschema:"favicon URL"`
+	FontURL               string `json:"font_url,omitempty" jsonschema:"custom web font URL"`
+	RegistrationEnabled   *bool  `json:"registration_enabled,omitempty" jsonschema:"show the self-registration link"`
+	RememberMeEnabled     *bool  `json:"remember_me_enabled,omitempty" jsonschema:"show the remember-me checkbox"`
+	ForgotPasswordEnabled *bool  `json:"forgot_password_enabled,omitempty" jsonschema:"show the forgot-password link"`
+	TermsOfServiceURL     string `json:"terms_of_service_url,omitempty" jsonschema:"terms of service URL linked from the login page"`
+	PrivacyPolicyURL      string `json:"privacy_policy_url,omitempty" jsonschema:"privacy policy URL linked from the login page"`
+	ShowPoweredBy         *bool  `json:"show_powered_by,omitempty" jsonschema:"display the Powered by Skycloak badge"`
 }
 
 func upsertLoginBrandingHandler(api API) mcp.ToolHandlerFor[UpsertLoginBrandingInput, skycloak.LoginBranding] {
@@ -321,7 +336,11 @@ func upsertLoginBrandingHandler(api API) mcp.ToolHandlerFor[UpsertLoginBrandingI
 			return errResult("cluster_id and realm are required"), skycloak.LoginBranding{}, nil
 		}
 		b, err := api.UpsertLoginBranding(ctx, in.ClusterID, in.Realm, skycloak.UpsertLoginBrandingRequest{
-			PrimaryColor: in.PrimaryColor, BackgroundColor: in.BackgroundColor, LogoURL: in.LogoURL, RegistrationEnabled: in.RegistrationEnabled,
+			PrimaryColor: strOpt(in.PrimaryColor), BackgroundColor: strOpt(in.BackgroundColor), LogoURL: strOpt(in.LogoURL),
+			FaviconURL: strOpt(in.FaviconURL), FontURL: strOpt(in.FontURL),
+			TermsOfServiceURL: strOpt(in.TermsOfServiceURL), PrivacyPolicyURL: strOpt(in.PrivacyPolicyURL),
+			RegistrationEnabled: in.RegistrationEnabled, RememberMeEnabled: in.RememberMeEnabled,
+			ForgotPasswordEnabled: in.ForgotPasswordEnabled, ShowPoweredBy: in.ShowPoweredBy,
 		})
 		if err != nil {
 			return toolError(err), skycloak.LoginBranding{}, nil
@@ -336,7 +355,10 @@ type UpsertEmailBrandingInput struct {
 	Realm              string `json:"realm" jsonschema:"the Keycloak realm name"`
 	PrimaryColor       string `json:"primary_color,omitempty" jsonschema:"primary accent color (hex)"`
 	HeaderLogoLightURL string `json:"header_logo_light_url,omitempty" jsonschema:"logo URL for light email clients"`
+	HeaderLogoDarkURL  string `json:"header_logo_dark_url,omitempty" jsonschema:"logo URL for dark email clients"`
+	CompanyURL         string `json:"company_url,omitempty" jsonschema:"company website linked from the footer"`
 	FooterCompanyName  string `json:"footer_company_name,omitempty" jsonschema:"company name in the footer"`
+	FooterText         string `json:"footer_text,omitempty" jsonschema:"free text in the footer"`
 }
 
 func upsertEmailBrandingHandler(api API) mcp.ToolHandlerFor[UpsertEmailBrandingInput, skycloak.EmailBranding] {
@@ -345,7 +367,9 @@ func upsertEmailBrandingHandler(api API) mcp.ToolHandlerFor[UpsertEmailBrandingI
 			return errResult("cluster_id and realm are required"), skycloak.EmailBranding{}, nil
 		}
 		b, err := api.UpsertEmailBranding(ctx, in.ClusterID, in.Realm, skycloak.UpsertEmailBrandingRequest{
-			PrimaryColor: in.PrimaryColor, HeaderLogoLightURL: in.HeaderLogoLightURL, FooterCompanyName: in.FooterCompanyName,
+			PrimaryColor: strOpt(in.PrimaryColor), HeaderLogoLightURL: strOpt(in.HeaderLogoLightURL),
+			HeaderLogoDarkURL: strOpt(in.HeaderLogoDarkURL), CompanyURL: strOpt(in.CompanyURL),
+			FooterCompanyName: strOpt(in.FooterCompanyName), FooterText: strOpt(in.FooterText),
 		})
 		if err != nil {
 			return toolError(err), skycloak.EmailBranding{}, nil
@@ -404,4 +428,15 @@ func exportClusterEventsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, Ex
 
 func okResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
+}
+
+// strOpt distinguishes "the caller left this out" from a value, so an omitted
+// field keeps whatever the realm already has rather than being overwritten.
+// An empty string therefore cannot clear a field; the branding endpoints have
+// no way to express that either.
+func strOpt(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
 }
