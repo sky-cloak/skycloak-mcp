@@ -83,7 +83,10 @@ func TestCreateApplicationRedirectErrorNamesTheParameter(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	text := res.Content[0].(*mcp.TextContent).Text
-	for _, want := range []string{"redirect_uris", "authorization_code"} {
+	// client_credentials is the escape hatch out of the default, so the message
+	// has to name it: without that the caller only learns what is missing, not
+	// that they may not have wanted a redirect flow at all.
+	for _, want := range []string{"redirect_uris", "authorization_code", "client_credentials"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("message %q does not mention %q", text, want)
 		}
@@ -93,11 +96,15 @@ func TestCreateApplicationRedirectErrorNamesTheParameter(t *testing.T) {
 // SAML clients carry no grant types at all; defaulting one in would send a
 // field the protocol has no use for.
 func TestCreateApplicationSAMLSendsNoGrantTypes(t *testing.T) {
-	rec, isErr := createApp(t, base(CreateApplicationInput{Protocol: "SAML"}))
-	if isErr {
-		t.Fatalf("expected success for SAML without redirect URIs")
-	}
-	if len(rec.got.GrantTypes) != 0 {
-		t.Fatalf("grant types = %v, want none for SAML", rec.got.GrantTypes)
+	// Both spellings matter: omitted grants must not be defaulted in, and grants
+	// the caller passed anyway must be dropped rather than forwarded.
+	for _, grants := range [][]string{nil, {"authorization_code"}, {"client_credentials"}} {
+		rec, isErr := createApp(t, base(CreateApplicationInput{Protocol: "SAML", GrantTypes: grants}))
+		if isErr {
+			t.Fatalf("grants %v: expected success for SAML without redirect URIs", grants)
+		}
+		if len(rec.got.GrantTypes) != 0 {
+			t.Fatalf("grants %v: grant types = %v, want none for SAML", grants, rec.got.GrantTypes)
+		}
 	}
 }
