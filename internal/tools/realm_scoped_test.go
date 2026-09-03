@@ -41,15 +41,15 @@ func TestListIdentityProvidersHandler(t *testing.T) {
 	}
 }
 
-// realm is still required; cluster_id is not, since omitting it now means the
-// whole workspace.
+// Neither argument is required any more: each one narrows the search, and
+// omitting both asks the whole workspace. Fleet coverage is in idp_fleet_test.go.
 func TestListIdentityProvidersHandler_MissingArgs(t *testing.T) {
 	res, _, err := listIdentityProvidersHandler(stubAPI{})(context.Background(), nil, ListIdentityProvidersInput{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !res.IsError {
-		t.Fatalf("expected IsError when realm is empty")
+	if res.IsError {
+		t.Fatalf("omitting both cluster_id and realm must search the workspace, not fail")
 	}
 
 	res, _, err = listIdentityProvidersHandler(stubAPI{})(context.Background(), nil, ListIdentityProvidersInput{Realm: "app"})

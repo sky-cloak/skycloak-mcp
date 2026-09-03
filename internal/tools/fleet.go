@@ -17,7 +17,9 @@ import (
 type UnreachableCluster struct {
 	ClusterID   string `json:"cluster_id"`
 	ClusterName string `json:"cluster_name,omitempty"`
-	Error       string `json:"error"`
+	// Set when the failure was scoped to one realm rather than the whole cluster.
+	Realm string `json:"realm,omitempty"`
+	Error string `json:"error"`
 }
 
 // fleetTarget is one cluster a fan-out call should visit.
