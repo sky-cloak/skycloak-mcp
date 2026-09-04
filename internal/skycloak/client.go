@@ -316,6 +316,12 @@ type Realm struct {
 	RegistrationEmailAsUsername bool   `json:"registration_email_as_username"`
 	LoginWithEmailAllowed       bool   `json:"login_with_email_allowed"`
 	DuplicateEmailsAllowed      bool   `json:"duplicate_emails_allowed"`
+
+	// DefaultBrandingApplied reports whether creation also applied Skycloak's
+	// default login branding. Only creation answers this, so it is a pointer:
+	// a realm that was merely read has nothing to say, and false would claim
+	// branding was skipped.
+	DefaultBrandingApplied *bool `json:"default_branding_applied,omitempty"`
 }
 
 // ListRealms returns the realms in a cluster.
@@ -774,6 +780,8 @@ func createdRealmFromAPI(r *apiclient.CreatedRealm) Realm {
 		RegistrationEmailAsUsername: r.RegistrationEmailAsUsername,
 		LoginWithEmailAllowed:       r.LoginWithEmailAllowed,
 		DuplicateEmailsAllowed:      r.DuplicateEmailsAllowed,
+
+		DefaultBrandingApplied: r.DefaultBrandingApplied,
 	}
 }
 
@@ -2865,4 +2873,103 @@ func (c *Client) ExportClusterEvents(ctx context.Context, clusterID string) ([]b
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
 	return resp.Body, nil
+}
+
+// ClientRole is a role defined on an application (Keycloak client) rather than
+// on the realm.
+type ClientRole struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	ClientID    string `json:"client_id"`
+	ClientUUID  string `json:"client_uuid,omitempty"`
+	ID          string `json:"id,omitempty"`
+	Composite   bool   `json:"composite"`
+}
+
+// ClientRoleRequest carries the fields a caller may set. Pointers because the
+// update is a patch: a nil leaves the stored value alone, where an empty string
+// would blank a description the caller never mentioned.
+type ClientRoleRequest struct {
+	Name        string
+	Description string
+}
+
+func clientRoleFromAPI(r *apiclient.ClientRole) ClientRole {
+	out := ClientRole{
+		Name:       string(r.Name),
+		ClientID:   r.ClientId,
+		ClientUUID: r.ClientUuid,
+		ID:         strDeref(r.Id),
+	}
+	if r.Composite != nil {
+		out.Composite = *r.Composite
+	}
+	if v, err := r.Description.Get(); err == nil {
+		out.Description = v
+	}
+	return out
+}
+
+// CreateClientRole defines a new role on an application.
+func (c *Client) CreateClientRole(ctx context.Context, clusterID, realm, clientID string, req ClientRoleRequest) (*ClientRole, error) {
+	body := apiclient.CreateClientRoleJSONRequestBody{Name: apiclient.RealmRoleName(req.Name)}
+	if req.Description != "" {
+		body.Description = &req.Description
+	}
+	resp, err := c.gen.CreateClientRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.RealmClientRef(clientID), nil, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON201 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := clientRoleFromAPI(resp.JSON201)
+	return &out, nil
+}
+
+// GetClientRole returns one role defined on an application.
+func (c *Client) GetClientRole(ctx context.Context, clusterID, realm, clientID, roleName string) (*ClientRole, error) {
+	resp, err := c.gen.GetClientRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.RealmClientRef(clientID), apiclient.RealmRoleName(roleName), nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := clientRoleFromAPI(resp.JSON200)
+	return &out, nil
+}
+
+// UpdateClientRole renames a role or changes its description. Fields the caller
+// left empty are not sent, so the stored value survives.
+func (c *Client) UpdateClientRole(ctx context.Context, clusterID, realm, clientID, roleName string, req ClientRoleRequest) (*ClientRole, error) {
+	body := apiclient.UpdateClientRoleJSONRequestBody{}
+	if req.Name != "" {
+		n := apiclient.RealmRoleName(req.Name)
+		body.Name = &n
+	}
+	if req.Description != "" {
+		body.Description = &req.Description
+	}
+	resp, err := c.gen.UpdateClientRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.RealmClientRef(clientID), apiclient.RealmRoleName(roleName), nil, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := clientRoleFromAPI(resp.JSON200)
+	return &out, nil
+}
+
+// DeleteClientRole removes a role from an application.
+func (c *Client) DeleteClientRole(ctx context.Context, clusterID, realm, clientID, roleName string) error {
+	resp, err := c.gen.DeleteClientRoleWithResponse(ctx, cid(clusterID), apiclient.RealmName(realm), apiclient.RealmClientRef(clientID), apiclient.RealmRoleName(roleName), nil)
+	if err != nil {
+		return err
+	}
+	if resp.HTTPResponse != nil && resp.HTTPResponse.StatusCode/100 == 2 {
+		return nil
+	}
+	return statusError(resp.HTTPResponse, resp.Body)
 }
