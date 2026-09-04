@@ -61,6 +61,10 @@ type API interface {
 	AddRealmUserToGroup(ctx context.Context, clusterID, realm, userID, groupID string) error
 	RemoveRealmUserFromGroup(ctx context.Context, clusterID, realm, userID, groupID string) error
 	ListApplicationRoles(ctx context.Context, clusterID, realm, clientID string) ([]skycloak.ApplicationRole, error)
+	GetClientRole(ctx context.Context, clusterID, realm, clientID, roleName string) (*skycloak.ClientRole, error)
+	CreateClientRole(ctx context.Context, clusterID, realm, clientID string, req skycloak.ClientRoleRequest) (*skycloak.ClientRole, error)
+	UpdateClientRole(ctx context.Context, clusterID, realm, clientID, roleName string, req skycloak.ClientRoleRequest) (*skycloak.ClientRole, error)
+	DeleteClientRole(ctx context.Context, clusterID, realm, clientID, roleName string) error
 	AssignApplicationRole(ctx context.Context, clusterID, realm, clientID, roleName, roleClientID string) error
 	RemoveApplicationRole(ctx context.Context, clusterID, realm, clientID, roleName, roleClientID string) error
 	ListApplicationSessions(ctx context.Context, clusterID, realm, clientID string) ([]skycloak.ApplicationSession, error)
@@ -236,6 +240,8 @@ var toolAreas = []toolArea{
 	{name: "branding writes", write: true, scopes: []string{"themes:write"}, register: registerBrandingWriteTools},
 	{name: "extension writes", write: true, scopes: []string{"clusters:extensions:write"}, register: registerExtensionWriteTools},
 	{name: "export writes", write: true, scopes: []string{"clusters:exports:write"}, register: registerExportWriteTools},
+	{name: "client roles", scopes: []string{"client-roles:read"}, register: registerClientRoleReadTools},
+	{name: "client role writes", write: true, scopes: []string{"client-roles:write", "client-roles:read"}, register: registerClientRoleWriteTools},
 	{name: "rbac writes", write: true, scopes: []string{"realm-roles:write", "realm-groups:write", "realm-users:write"}, register: registerRBACWriteTools},
 	{name: "application role writes", write: true, scopes: []string{"applications:write"}, register: registerApplicationRoleWriteTools},
 	{name: "parity writes", write: true, scopes: []string{"applications:write", "realms:write", "smtp:write", "domains:write", "themes:write", "extensions:write", "clusters:exports:write"}, register: registerParityWriteTools},

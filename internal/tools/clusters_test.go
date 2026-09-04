@@ -985,3 +985,32 @@ func strDerefTest(v *string) string {
 	}
 	return *v
 }
+
+func (s stubAPI) GetClientRole(_ context.Context, _, _, clientID, roleName string) (*skycloak.ClientRole, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.ClientRole{Name: roleName, ClientID: clientID}, nil
+}
+
+func (s stubAPI) CreateClientRole(_ context.Context, _, _, clientID string, req skycloak.ClientRoleRequest) (*skycloak.ClientRole, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.ClientRole{Name: req.Name, Description: req.Description, ClientID: clientID}, nil
+}
+
+func (s stubAPI) UpdateClientRole(_ context.Context, _, _, clientID, roleName string, req skycloak.ClientRoleRequest) (*skycloak.ClientRole, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	name := req.Name
+	if name == "" {
+		name = roleName
+	}
+	return &skycloak.ClientRole{Name: name, Description: req.Description, ClientID: clientID}, nil
+}
+
+func (s stubAPI) DeleteClientRole(context.Context, string, string, string, string) error {
+	return s.err
+}
