@@ -94,3 +94,52 @@ func TestClientRoleWritesAreGatedOnAllowWrites(t *testing.T) {
 		t.Error("skycloak_get_application_role is a read and should be registered")
 	}
 }
+
+func TestGetApplicationRoleRequiresTheFullPath(t *testing.T) {
+	for _, in := range []ClientRoleRef{
+		{Realm: "app", ClientID: "web", RoleName: "r"},
+		{ClusterID: "c1", ClientID: "web", RoleName: "r"},
+		{ClusterID: "c1", Realm: "app", RoleName: "r"},
+		{ClusterID: "c1", Realm: "app", ClientID: "web"},
+	} {
+		res, _, err := getClientRoleHandler(stubAPI{})(context.Background(), nil, in)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !res.IsError {
+			t.Errorf("expected an error for %+v: a role is only identified by all four", in)
+		}
+	}
+}
+
+func TestGetApplicationRoleReturnsTheRole(t *testing.T) {
+	res, out, err := getClientRoleHandler(stubAPI{})(context.Background(), nil,
+		ClientRoleRef{ClusterID: "c1", Realm: "app", ClientID: "web", RoleName: "invoices-read"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError {
+		t.Fatal("expected success")
+	}
+	if out.Name != "invoices-read" || out.ClientID != "web" {
+		t.Fatalf("out = %+v", out)
+	}
+	// The rendered line is what a reader sees, so it has to name both.
+	txt := res.Content[0].(*mcp.TextContent).Text
+	if !strings.Contains(txt, "invoices-read") || !strings.Contains(txt, "web") {
+		t.Errorf("text names neither the role nor its application: %q", txt)
+	}
+}
+
+// A write-only key should still get the write tools: none of them read.
+func TestClientRoleWritesDoNotRequireTheReadScope(t *testing.T) {
+	names := map[string]bool{}
+	for _, n := range registeredTools(t, true, Scopes{"client-roles:write": true}) {
+		names[n] = true
+	}
+	for _, want := range []string{"skycloak_create_application_role", "skycloak_update_application_role", "skycloak_delete_application_role"} {
+		if !names[want] {
+			t.Errorf("%s is hidden from a key holding client-roles:write, though it never reads", want)
+		}
+	}
+}

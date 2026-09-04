@@ -241,7 +241,7 @@ var toolAreas = []toolArea{
 	{name: "extension writes", write: true, scopes: []string{"clusters:extensions:write"}, register: registerExtensionWriteTools},
 	{name: "export writes", write: true, scopes: []string{"clusters:exports:write"}, register: registerExportWriteTools},
 	{name: "client roles", scopes: []string{"client-roles:read"}, register: registerClientRoleReadTools},
-	{name: "client role writes", write: true, scopes: []string{"client-roles:write", "client-roles:read"}, register: registerClientRoleWriteTools},
+	{name: "client role writes", write: true, scopes: []string{"client-roles:write"}, register: registerClientRoleWriteTools},
 	{name: "rbac writes", write: true, scopes: []string{"realm-roles:write", "realm-groups:write", "realm-users:write"}, register: registerRBACWriteTools},
 	{name: "application role writes", write: true, scopes: []string{"applications:write"}, register: registerApplicationRoleWriteTools},
 	{name: "parity writes", write: true, scopes: []string{"applications:write", "realms:write", "smtp:write", "domains:write", "themes:write", "extensions:write", "clusters:exports:write"}, register: registerParityWriteTools},
