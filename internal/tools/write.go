@@ -299,7 +299,12 @@ func createRealmHandler(api API) mcp.ToolHandlerFor[CreateRealmInput, RealmSumma
 		if err != nil {
 			return toolError(err), RealmSummary{}, nil
 		}
-		out := RealmSummary{Name: realm.Name, DisplayName: realm.DisplayName, Enabled: realm.Enabled}
+		out := RealmSummary{
+			Name: realm.Name, DisplayName: realm.DisplayName, Enabled: realm.Enabled,
+			RegistrationAllowed: realm.RegistrationAllowed, LoginWithEmailAllowed: realm.LoginWithEmailAllowed,
+			SSLRequired: realm.SSLRequired, ClusterID: in.ClusterID,
+			DefaultBrandingApplied: realm.DefaultBrandingApplied,
+		}
 		text := fmt.Sprintf("Created realm %q in cluster %s.", realm.Name, in.ClusterID)
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, out, nil
 	}
