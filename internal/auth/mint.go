@@ -87,6 +87,7 @@ var writeScopes = []string{
 	"realm-roles:read", "realm-roles:write",
 	"realm-groups:read", "realm-groups:write",
 	"applications:read", "applications:write",
+	"client-roles:read", "client-roles:write",
 	"identity-providers:read", "identity-providers:write",
 	"domains:read", "domains:write",
 	"themes:read", "themes:write",

@@ -348,7 +348,7 @@ func (c *Client) CreateRealm(ctx context.Context, clusterID string, r Realm) (*R
 	if resp.JSON201 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	out := realmFromAPI(resp.JSON201)
+	out := createdRealmFromAPI(resp.JSON201)
 	return &out, nil
 }
 
@@ -744,6 +744,25 @@ func parseEventTime(field, v string) (time.Time, bool, error) {
 // Keycloak enables login_with_email by default, so an inline build is wrong on
 // most realms.
 func realmFromAPI(r *apiclient.Realm) Realm {
+	return Realm{
+		Name:        string(r.Name),
+		DisplayName: string(r.DisplayName),
+		Enabled:     r.Enabled,
+		ID:          uuidString(r.Id),
+		SSLRequired: string(r.SslRequired),
+
+		RegistrationAllowed:         r.RegistrationAllowed,
+		RegistrationEmailAsUsername: r.RegistrationEmailAsUsername,
+		LoginWithEmailAllowed:       r.LoginWithEmailAllowed,
+		DuplicateEmailsAllowed:      r.DuplicateEmailsAllowed,
+	}
+}
+
+// createdRealmFromAPI maps the create response, which the API models as its own
+// type rather than a Realm: creation can also apply default branding, and it
+// reports whether that happened. The shared fields are spelled the same, so
+// only the mapping differs, not the meaning.
+func createdRealmFromAPI(r *apiclient.CreatedRealm) Realm {
 	return Realm{
 		Name:        string(r.Name),
 		DisplayName: string(r.DisplayName),
