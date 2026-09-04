@@ -26,6 +26,10 @@ type RealmSummary struct {
 	LoginWithEmailAllowed bool   `json:"login_with_email_allowed"`
 	SSLRequired           string `json:"ssl_required,omitempty"`
 
+	// Only realm creation answers this, so it is a pointer: a listed or read
+	// realm has nothing to say, and false would claim branding was skipped.
+	DefaultBrandingApplied *bool `json:"default_branding_applied,omitempty"`
+
 	// Which cluster the realm lives in. Always set, so a fleet-wide result and a
 	// single-cluster one have the same shape and rows are never ambiguous.
 	ClusterID   string `json:"cluster_id"`
