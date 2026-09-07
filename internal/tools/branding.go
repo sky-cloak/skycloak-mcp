@@ -1,7 +1,10 @@
 package tools
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -42,6 +45,16 @@ func registerBrandingWriteTools(s *mcp.Server, api API) {
 		Description: "Assign custom themes to a realm per Keycloak theme type. Pass a theme ID to activate it, or an empty string to reset that type to Keycloak's built-in default. Only the provided fields are changed.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Set theme assignment"},
 	}, setThemeAssignmentHandler(api))
+
+	addTool(s, &mcp.Tool{
+		Name: "skycloak_update_theme_content",
+		Description: "Replace an existing theme's archive with a new one, in place. The theme keeps its ID, its name and every realm and application assignment, and the new content deploys immediately, so this is the way to edit a theme: deleting and re-uploading detaches it and leaves the sign-in page unbranded in between. " +
+			"Pass the ZIP or Keycloakify JAR base64-encoded in content_base64. The replacement must still contain every theme type the theme provides today, or the API rejects it; a theme created by a platform migration has pinned content and answers 409.",
+		// Destructive because the archive it overwrites is not recoverable
+		// afterwards, the way rotate_application_secret discards the old secret.
+		// The theme's identity and assignments survive, which is the point.
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Update theme content"},
+	}, updateThemeContentHandler(api))
 }
 
 // RealmRef identifies a realm on a cluster.
@@ -153,4 +166,83 @@ func themeAssignmentText(a *skycloak.ThemeAssignment) string {
 	return strings.Join([]string{
 		field("login", a.Login), field("account", a.Account), field("admin", a.Admin), field("email", a.Email),
 	}, " ")
+}
+
+// maxThemeArchive caps the archive this tool will send. The endpoint's body
+// limit is 50 MB; refusing here turns a spent upload and an opaque rejection
+// into an answer the caller can act on.
+const maxThemeArchive = 50 << 20
+
+// defaultThemeFilename names an archive the caller did not name. The API reads
+// the media type from the filename, so an unnamed archive has to default to
+// something, and ZIP is what a theme package is unless it says otherwise.
+const defaultThemeFilename = "theme.zip"
+
+// UpdateThemeContentInput is the input for skycloak_update_theme_content.
+type UpdateThemeContentInput struct {
+	ClusterID     string `json:"cluster_id" jsonschema:"the cluster ID"`
+	ThemeID       string `json:"theme_id" jsonschema:"the ID of the theme whose content is replaced"`
+	ContentBase64 string `json:"content_base64" jsonschema:"the replacement theme archive (ZIP or Keycloakify JAR) base64-encoded"`
+	Filename      string `json:"filename,omitempty" jsonschema:"archive filename; a .jar name is sent as a Keycloakify JAR, anything else as a ZIP (default theme.zip)"`
+	Version       string `json:"version,omitempty" jsonschema:"new version label to record once the content is live, e.g. v2.4; omit to keep the current one"`
+}
+
+// decodeThemeArchive turns a caller's base64 into archive bytes, refusing what
+// the endpoint would refuse anyway. Whitespace is tolerated because base64 from
+// a shell pipeline or a model arrives wrapped, and a line break is not a reason
+// to send the caller round a retry.
+func decodeThemeArchive(content string, limit int) ([]byte, error) {
+	stripped := strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\t', '\r', '\n':
+			return -1
+		}
+		return r
+	}, content)
+
+	// Check before decoding: a base64 string this long cannot decode to
+	// anything within the limit, and decoding it first would allocate it.
+	if base64.StdEncoding.DecodedLen(len(stripped)) > limit {
+		return nil, fmt.Errorf("theme archive is larger than the %d byte limit", limit)
+	}
+	raw, err := base64.StdEncoding.DecodeString(stripped)
+	if err != nil {
+		return nil, fmt.Errorf("content_base64 is not valid base64: %w", err)
+	}
+	if len(raw) > limit {
+		return nil, fmt.Errorf("theme archive is larger than the %d byte limit", limit)
+	}
+	// ZIP and JAR both start with the ZIP local file header. Catching a
+	// mis-encoded payload here beats uploading it to be told.
+	if !bytes.HasPrefix(raw, []byte("PK")) {
+		return nil, errors.New("content_base64 does not decode to a ZIP or JAR archive")
+	}
+	return raw, nil
+}
+
+func updateThemeContentHandler(api API) mcp.ToolHandlerFor[UpdateThemeContentInput, skycloak.Theme] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateThemeContentInput) (*mcp.CallToolResult, skycloak.Theme, error) {
+		if in.ClusterID == "" || in.ThemeID == "" {
+			return errResult("cluster_id and theme_id are required"), skycloak.Theme{}, nil
+		}
+		if in.ContentBase64 == "" {
+			return errResult("content_base64 is required: it carries the replacement theme archive"), skycloak.Theme{}, nil
+		}
+		archive, err := decodeThemeArchive(in.ContentBase64, maxThemeArchive)
+		if err != nil {
+			return errResult(err.Error()), skycloak.Theme{}, nil
+		}
+		filename := in.Filename
+		if filename == "" {
+			filename = defaultThemeFilename
+		}
+
+		t, err := api.UpdateThemeContent(ctx, in.ClusterID, in.ThemeID, filename, archive, in.Version)
+		if err != nil {
+			return toolError(err), skycloak.Theme{}, nil
+		}
+		text := fmt.Sprintf("Replaced the content of theme %s (%s): status=%s types=%s. Its realm and application assignments are unchanged.",
+			t.Name, t.ID, t.Status, strings.Join(t.ThemeTypes, ","))
+		return okResult(text), *t, nil
+	}
 }

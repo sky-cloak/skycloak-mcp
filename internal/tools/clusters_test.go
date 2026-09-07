@@ -945,6 +945,13 @@ func (s stubAPI) GetRealmImport(_ context.Context, importID string) (*skycloak.R
 	return &skycloak.RealmImport{ID: importID, Realm: "app", Status: "completed", Progress: 100}, nil
 }
 
+func (s stubAPI) UpdateThemeContent(_ context.Context, _, themeID, _ string, _ []byte, version string) (*skycloak.Theme, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.Theme{ID: themeID, Name: "corporate", Status: "deploying", ThemeTypes: []string{"login"}, Version: version}, nil
+}
+
 func (s stubAPI) DownloadThemeContent(_ context.Context, _, _ string) ([]byte, error) {
 	if s.err != nil {
 		return nil, s.err

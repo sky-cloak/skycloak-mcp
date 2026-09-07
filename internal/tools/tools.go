@@ -145,6 +145,7 @@ type API interface {
 	CreateRealmImport(ctx context.Context, clusterID string, req skycloak.CreateRealmImportRequest) (*skycloak.RealmImport, error)
 	GetRealmImport(ctx context.Context, importID string) (*skycloak.RealmImport, error)
 	DownloadThemeContent(ctx context.Context, clusterID, themeID string) ([]byte, error)
+	UpdateThemeContent(ctx context.Context, clusterID, themeID, filename string, archive []byte, version string) (*skycloak.Theme, error)
 }
 
 // clusterCredentialsScope reads a cluster's Keycloak admin credentials. It is
