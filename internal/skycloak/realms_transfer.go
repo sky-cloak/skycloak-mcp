@@ -1,7 +1,12 @@
 package skycloak
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"mime/multipart"
+	"net/textproto"
+	"strings"
 
 	"github.com/sky-cloak/skycloak-mcp/internal/apiclient"
 )
@@ -176,4 +181,64 @@ func (c *Client) DownloadThemeContent(ctx context.Context, clusterID, themeID st
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
 	return resp.Body, nil
+}
+
+// themeArchiveMediaType is what the theme_file part declares. The endpoint
+// accepts only these two, and a Keycloakify JAR is a ZIP by format, so the
+// filename is the only thing that can tell them apart.
+func themeArchiveMediaType(filename string) string {
+	if strings.HasSuffix(strings.ToLower(filename), ".jar") {
+		return "application/java-archive"
+	}
+	return "application/zip"
+}
+
+// quoteMIMEValue escapes a value for a quoted MIME parameter, as
+// mime/multipart does for the filenames it writes itself.
+var quoteMIMEValue = strings.NewReplacer("\\", "\\\\", `"`, "\\\"").Replace
+
+// UpdateThemeContent replaces a theme's archive in place, keeping the theme's
+// ID, name and every realm and application assignment pointing at it. It is the
+// path that avoids delete-then-re-upload, which detaches the theme and leaves
+// the sign-in page unbranded in between.
+//
+// version is optional: an empty one leaves the recorded label alone rather than
+// blanking it, so the part is omitted rather than sent empty.
+//
+// The multipart body is buffered rather than streamed on purpose. http.Request
+// derives GetBody from a *bytes.Reader, and without it the retry transport
+// would replay a PUT 503 with an empty body.
+func (c *Client) UpdateThemeContent(ctx context.Context, clusterID, themeID, filename string, archive []byte, version string) (*Theme, error) {
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="theme_file"; filename="%s"`, quoteMIMEValue(filename)))
+	h.Set("Content-Type", themeArchiveMediaType(filename))
+	part, err := w.CreatePart(h)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := part.Write(archive); err != nil {
+		return nil, err
+	}
+	if version != "" {
+		if err := w.WriteField("version", version); err != nil {
+			return nil, err
+		}
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+
+	resp, err := c.gen.UpdateThemeContentWithBodyWithResponse(ctx, cid(clusterID), uid(themeID), nil,
+		w.FormDataContentType(), bytes.NewReader(body.Bytes()))
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	t := themeFromAPI(resp.JSON200)
+	return &t, nil
 }
