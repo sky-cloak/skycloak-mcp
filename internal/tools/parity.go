@@ -87,7 +87,7 @@ func registerParityWriteTools(s *mcp.Server, api API) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_delete_theme",
-		Description: "Delete a custom theme. Set confirm=true to proceed.",
+		Description: "Delete a custom theme. Set confirm=true to proceed. To change an existing theme's files, use skycloak_update_theme_content instead: deleting a theme that is still assigned returns 409, and re-uploading it gives a new ID.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete theme"},
 	}, deleteThemeHandler(api))
 
