@@ -6,6 +6,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `skycloak_update_theme_content`, which replaces a deployed theme's archive in
+  place through `PUT /clusters/{cluster_id}/themes/{theme_id}/content`. Editing
+  a theme from MCP no longer means detaching it, deleting it and uploading a
+  replacement under a new ID: the theme keeps its ID and name, every realm and
+  application assignment keeps pointing at it, and the sign-in page is never
+  left unbranded in between. The archive is passed base64-encoded in
+  `content_base64` (ZIP, or a Keycloakify JAR when `filename` ends in `.jar`),
+  the same encoding `skycloak_download_theme_content` returns, and an optional
+  `version` records a new label once the content is live. Oversized, non-base64
+  and non-archive payloads are refused before the upload rather than after it.
+  `docs/theme-content-update.md` explains the call; the existing theme tools are
+  unchanged.
+
+### Fixed
+- The tool counts in the README, which had drifted from what the server
+  registers.
+
 ## [0.9.0] - 2026-08-18
 
 ### Added
