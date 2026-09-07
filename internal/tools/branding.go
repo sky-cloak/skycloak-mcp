@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -49,7 +50,7 @@ func registerBrandingWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_update_theme_content",
 		Description: "Replace an existing theme's archive with a new one, in place. The theme keeps its ID, its name and every realm and application assignment, and the new content deploys immediately, so this is the way to edit a theme: deleting and re-uploading detaches it and leaves the sign-in page unbranded in between. " +
-			"Pass the ZIP or Keycloakify JAR base64-encoded in content_base64. The replacement must still contain every theme type the theme provides today, or the API rejects it; a theme created by a platform migration has pinned content and answers 409.",
+			"Pass the ZIP or Keycloakify JAR base64-encoded in content_base64. Set confirm=true to proceed: the archive being replaced is not recoverable afterwards. The replacement must still contain every theme type the theme provides today, or the API rejects it; a theme created by a platform migration has pinned content and answers 409.",
 		// Destructive because the archive it overwrites is not recoverable
 		// afterwards, the way rotate_application_secret discards the old secret.
 		// The theme's identity and assignments survive, which is the point.
@@ -185,6 +186,7 @@ type UpdateThemeContentInput struct {
 	ContentBase64 string `json:"content_base64" jsonschema:"the replacement theme archive (ZIP or Keycloakify JAR) base64-encoded"`
 	Filename      string `json:"filename,omitempty" jsonschema:"archive filename; a .jar name is sent as a Keycloakify JAR, anything else as a ZIP (default theme.zip)"`
 	Version       string `json:"version,omitempty" jsonschema:"new version label to record once the content is live, e.g. v2.4; omit to keep the current one"`
+	Confirm       bool   `json:"confirm" jsonschema:"must be true to confirm the current archive is overwritten, which cannot be undone"`
 }
 
 // decodeThemeArchive turns a caller's base64 into archive bytes, refusing what
@@ -212,10 +214,16 @@ func decodeThemeArchive(content string, limit int) ([]byte, error) {
 	if len(raw) > limit {
 		return nil, fmt.Errorf("theme archive is larger than the %d byte limit", limit)
 	}
-	// ZIP and JAR both start with the ZIP local file header. Catching a
-	// mis-encoded payload here beats uploading it to be told.
-	if !bytes.HasPrefix(raw, []byte("PK")) {
-		return nil, errors.New("content_base64 does not decode to a ZIP or JAR archive")
+	// A JAR is a ZIP, so reading the central directory is what tells both apart
+	// from a payload that merely looks like one: it walks the real structure
+	// rather than a two-byte prefix. Catching a mis-encoded or truncated body
+	// here beats uploading it to be told.
+	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if err != nil {
+		return nil, fmt.Errorf("content_base64 does not decode to a valid ZIP or JAR archive: %w", err)
+	}
+	if len(zr.File) == 0 {
+		return nil, errors.New("content_base64 decodes to an empty ZIP or JAR archive, which carries no theme")
 	}
 	return raw, nil
 }
@@ -227,6 +235,9 @@ func updateThemeContentHandler(api API) mcp.ToolHandlerFor[UpdateThemeContentInp
 		}
 		if in.ContentBase64 == "" {
 			return errResult("content_base64 is required: it carries the replacement theme archive"), skycloak.Theme{}, nil
+		}
+		if !in.Confirm {
+			return errResult(fmt.Sprintf("Refusing to replace the content of theme %s: set confirm=true. The archive it overwrites is not recoverable.", in.ThemeID)), skycloak.Theme{}, nil
 		}
 		archive, err := decodeThemeArchive(in.ContentBase64, maxThemeArchive)
 		if err != nil {

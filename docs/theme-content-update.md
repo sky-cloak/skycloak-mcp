@@ -37,8 +37,17 @@ anything is sent, `decodeThemeArchive`:
   wrapped, and a line break is not worth a failed call;
 - refuses anything over 50 MB, the endpoint's body limit, so an oversized
   archive costs a message rather than the upload;
-- refuses a payload that does not start with the ZIP local file header (`PK`),
-  which catches a mis-encoded body before it becomes a remote `400`.
+- reads the archive's central directory with `archive/zip`, refusing anything
+  that is not a real ZIP (a JAR is one by format) or that holds no entries. A
+  prefix check would pass a payload that merely starts with `PK`, so the
+  structure is what gets read, which catches a mis-encoded or truncated body
+  before it becomes a remote `400`.
+
+The replacement is destructive: the archive it overwrites is gone afterwards,
+the way `rotate_application_secret` discards the old secret. So the tool takes
+`confirm`, and refuses without `confirm=true`, like every other destructive tool
+on this server. What survives is the theme's identity: its ID, its name and its
+assignments, which is the point of the endpoint.
 
 `filename` is what decides the media type: a `.jar` name is sent as
 `application/java-archive` (Keycloakify's packaging), anything else as
@@ -81,5 +90,5 @@ rename-and-re-upload is the only route for a pinned theme.
 | Layer | File | What it covers |
 |---|---|---|
 | Client (httptest) | `internal/skycloak/realms_transfer_test.go` | multipart wire shape, part media type for ZIP vs JAR, omitted version, `409` surfacing, body replay on retry |
-| Tool handler | `internal/tools/branding_test.go` | in-place update with no detach or reassignment, filename default, input validation, wrapped base64, API errors |
+| Tool handler | `internal/tools/branding_test.go` | in-place update with no detach or reassignment, filename default, the `confirm=true` gate, input validation (non-archive, `PK`-prefixed junk, truncated and empty archives), wrapped base64, API errors |
 | Registration | `internal/tools/annotations_test.go`, `internal/tools/scopes_test.go` | schema inference, annotations, `themes:write` gating |

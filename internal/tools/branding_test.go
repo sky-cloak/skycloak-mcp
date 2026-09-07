@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -108,19 +109,41 @@ func newThemeContentStub() (themeContentStub, *[]string, *string, *[]byte, *stri
 	return themeContentStub{calls: calls, filename: filename, archive: archive, version: version}, calls, filename, archive, version
 }
 
+// themeZIP builds a real archive, because the tool now reads the central
+// directory rather than trusting a "PK" prefix. Padding makes the bytes long
+// enough for the tests that slice the encoded form.
+func themeZIP(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create("theme/login/theme.properties")
+	if err != nil {
+		t.Fatalf("creating the zip entry: %v", err)
+	}
+	if _, err := w.Write([]byte("parent=keycloak\n")); err != nil {
+		t.Fatalf("writing the zip entry: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("closing the zip: %v", err)
+	}
+	return buf.Bytes()
+}
+
 // The point of the content endpoint is that one call replaces the archive: no
 // delete, no rename, no reassignment. A tool that reached for any of those
 // would take the realm's sign-in page unbranded in between, which is the bug
 // this path exists to fix, so assert the absence as well as the update.
 func TestUpdateThemeContentReplacesInPlace(t *testing.T) {
 	api, calls, filename, archive, version := newThemeContentStub()
+	raw := themeZIP(t)
 
 	res, out, err := updateThemeContentHandler(api)(context.Background(), nil, UpdateThemeContentInput{
 		ClusterID:     "c1",
 		ThemeID:       "t1",
-		ContentBase64: base64.StdEncoding.EncodeToString([]byte("PK\x03\x04new archive")),
+		ContentBase64: base64.StdEncoding.EncodeToString(raw),
 		Filename:      "corporate.zip",
 		Version:       "v2.4",
+		Confirm:       true,
 	})
 	if err != nil || res.IsError {
 		t.Fatalf("err=%v res=%+v", err, res)
@@ -128,7 +151,7 @@ func TestUpdateThemeContentReplacesInPlace(t *testing.T) {
 	if got := *calls; len(got) != 1 || got[0] != "UpdateThemeContent c1/t1" {
 		t.Fatalf("calls = %v, want the content update alone", got)
 	}
-	if *filename != "corporate.zip" || string(*archive) != "PK\x03\x04new archive" || *version != "v2.4" {
+	if *filename != "corporate.zip" || !bytes.Equal(*archive, raw) || *version != "v2.4" {
 		t.Fatalf("sent filename=%q archive=%q version=%q", *filename, *archive, *version)
 	}
 	if out.ID != "t1" || out.Status != "deploying" {
@@ -145,7 +168,7 @@ func TestUpdateThemeContentDefaultsTheFilename(t *testing.T) {
 	api, _, filename, _, _ := newThemeContentStub()
 
 	res, _, err := updateThemeContentHandler(api)(context.Background(), nil, UpdateThemeContentInput{
-		ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString([]byte("PK\x03\x04")),
+		ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString(themeZIP(t)), Confirm: true,
 	})
 	if err != nil || res.IsError {
 		t.Fatalf("err=%v res=%+v", err, res)
@@ -155,18 +178,49 @@ func TestUpdateThemeContentDefaultsTheFilename(t *testing.T) {
 	}
 }
 
+// Replacing the archive discards the current one for good, so the tool obeys
+// the same confirm=true contract as the other destructive tools: without it,
+// nothing reaches the API.
+func TestUpdateThemeContentRequiresConfirmation(t *testing.T) {
+	api, calls, _, _, _ := newThemeContentStub()
+
+	res, _, err := updateThemeContentHandler(api)(context.Background(), nil, UpdateThemeContentInput{
+		ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString(themeZIP(t)),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected an error result without confirm=true")
+	}
+	if txt := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(txt, "confirm=true") {
+		t.Errorf("message %q does not say how to confirm", txt)
+	}
+	if len(*calls) != 0 {
+		t.Errorf("calls = %v, want nothing sent without confirmation", *calls)
+	}
+}
+
 func TestUpdateThemeContentValidatesInput(t *testing.T) {
-	zip := base64.StdEncoding.EncodeToString([]byte("PK\x03\x04"))
+	archive := base64.StdEncoding.EncodeToString(themeZIP(t))
+	var empty bytes.Buffer
+	if err := zip.NewWriter(&empty).Close(); err != nil {
+		t.Fatalf("building the empty zip: %v", err)
+	}
 	cases := []struct {
 		name string
 		in   UpdateThemeContentInput
 		want string
 	}{
-		{"no cluster", UpdateThemeContentInput{ThemeID: "t1", ContentBase64: zip}, "cluster_id"},
-		{"no theme", UpdateThemeContentInput{ClusterID: "c1", ContentBase64: zip}, "theme_id"},
-		{"no content", UpdateThemeContentInput{ClusterID: "c1", ThemeID: "t1"}, "content_base64"},
-		{"not base64", UpdateThemeContentInput{ClusterID: "c1", ThemeID: "t1", ContentBase64: "not base64!"}, "base64"},
-		{"not an archive", UpdateThemeContentInput{ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString([]byte("<html>"))}, "ZIP"},
+		{"no cluster", UpdateThemeContentInput{ThemeID: "t1", ContentBase64: archive, Confirm: true}, "cluster_id"},
+		{"no theme", UpdateThemeContentInput{ClusterID: "c1", ContentBase64: archive, Confirm: true}, "theme_id"},
+		{"no content", UpdateThemeContentInput{ClusterID: "c1", ThemeID: "t1", Confirm: true}, "content_base64"},
+		{"not base64", UpdateThemeContentInput{ClusterID: "c1", ThemeID: "t1", ContentBase64: "not base64!", Confirm: true}, "base64"},
+		{"not an archive", UpdateThemeContentInput{ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString([]byte("<html>")), Confirm: true}, "ZIP"},
+		// A "PK" prefix is what a two-byte check would have accepted.
+		{"only looks like an archive", UpdateThemeContentInput{ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString([]byte("PKnot-a-zip")), Confirm: true}, "ZIP"},
+		{"truncated archive", UpdateThemeContentInput{ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString(themeZIP(t)[:20]), Confirm: true}, "ZIP"},
+		{"empty archive", UpdateThemeContentInput{ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString(empty.Bytes()), Confirm: true}, "empty"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -192,12 +246,12 @@ func TestUpdateThemeContentValidatesInput(t *testing.T) {
 // rejected line break would send the caller round a pointless retry.
 func TestUpdateThemeContentAcceptsWrappedBase64(t *testing.T) {
 	api, _, _, archive, _ := newThemeContentStub()
-	raw := []byte("PK\x03\x04a slightly longer archive body")
+	raw := themeZIP(t)
 	wrapped := base64.StdEncoding.EncodeToString(raw)
 	wrapped = wrapped[:8] + "\n" + wrapped[8:16] + "\r\n " + wrapped[16:]
 
 	res, _, err := updateThemeContentHandler(api)(context.Background(), nil, UpdateThemeContentInput{
-		ClusterID: "c1", ThemeID: "t1", ContentBase64: wrapped,
+		ClusterID: "c1", ThemeID: "t1", ContentBase64: wrapped, Confirm: true,
 	})
 	if err != nil || res.IsError {
 		t.Fatalf("err=%v res=%+v", err, res)
@@ -211,7 +265,7 @@ func TestUpdateThemeContentAcceptsWrappedBase64(t *testing.T) {
 // upload to be told, and the message has to say the limit so the caller can
 // act. Tested through the helper so the case costs no 50 MB allocation.
 func TestDecodeThemeArchiveRefusesAnOversizedArchive(t *testing.T) {
-	content := base64.StdEncoding.EncodeToString([]byte("PK\x03\x04 padding padding"))
+	content := base64.StdEncoding.EncodeToString(themeZIP(t))
 	if _, err := decodeThemeArchive(content, 8); err == nil {
 		t.Fatal("expected an error for an archive over the limit")
 	} else if !strings.Contains(err.Error(), "8") {
@@ -224,7 +278,7 @@ func TestUpdateThemeContentSurfacesAPIErrors(t *testing.T) {
 	api.stubAPI = stubAPI{err: errors.New("theme content is pinned")}
 
 	res, _, err := updateThemeContentHandler(api)(context.Background(), nil, UpdateThemeContentInput{
-		ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString([]byte("PK\x03\x04")),
+		ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString(themeZIP(t)), Confirm: true,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

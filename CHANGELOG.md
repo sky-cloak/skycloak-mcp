@@ -15,8 +15,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   left unbranded in between. The archive is passed base64-encoded in
   `content_base64` (ZIP, or a Keycloakify JAR when `filename` ends in `.jar`),
   the same encoding `skycloak_download_theme_content` returns, and an optional
-  `version` records a new label once the content is live. Oversized, non-base64
-  and non-archive payloads are refused before the upload rather than after it.
+  `version` records a new label once the content is live. Replacing the archive
+  discards the current one for good, so the tool requires `confirm=true` like
+  the other destructive tools. Oversized, non-base64 and non-archive payloads
+  are refused before the upload rather than after it: the archive's central
+  directory is read locally, so a truncated or empty ZIP is caught too.
   `docs/theme-content-update.md` explains the call; the existing theme tools are
   unchanged.
 
