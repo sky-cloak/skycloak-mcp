@@ -92,12 +92,16 @@ func New(endpoint, apiKey, apiVersion string, opts ...Option) *Client {
 	return &Client{gen: gen}
 }
 
-// Problem is the RFC 9457 application/problem+json error body.
+// Problem is the RFC 9457 application/problem+json error body. Code is an
+// extension field some 409 responses carry (e.g. restart-instances) that
+// names the conflict rather than leaving it to prose; it is absent from the
+// generated ErrorBody schema, so it is parsed here from the raw body instead.
 type Problem struct {
 	Type   string `json:"type,omitempty"`
 	Title  string `json:"title,omitempty"`
 	Status int    `json:"status,omitempty"`
 	Detail string `json:"detail,omitempty"`
+	Code   string `json:"code,omitempty"`
 }
 
 // APIError wraps a non-2xx response.
@@ -807,6 +811,10 @@ func strDeref(p *string) string {
 	return ""
 }
 
+func boolDeref(p *bool) bool {
+	return p != nil && *p
+}
+
 // QueryEvents returns a page of Keycloak events (user and admin).
 func (c *Client) QueryEvents(ctx context.Context, clusterID string, q EventQuery) ([]EventEntry, error) {
 	params := &apiclient.ListClusterEventsParams{}
@@ -1040,10 +1048,15 @@ type Theme struct {
 	ThemeTypes []string `json:"theme_types"`
 	Version    string   `json:"version,omitempty"`
 	FileSize   int64    `json:"file_size"`
+
+	// RestartRequired is true when this theme's content was replaced under its
+	// exact name and Keycloak has not restarted since, so the previous content
+	// may still be live. Only set for workspaces with exact_theme_names on.
+	RestartRequired bool `json:"restart_required,omitempty"`
 }
 
 func themeFromAPI(t *apiclient.Theme) Theme {
-	out := Theme{ID: uuidString(t.Id), Name: t.Name, Status: string(t.Status), FileSize: t.FileSize}
+	out := Theme{ID: uuidString(t.Id), Name: t.Name, Status: string(t.Status), FileSize: t.FileSize, RestartRequired: boolDeref(t.RestartRequired)}
 	out.Version = strDeref(t.Version)
 	for _, tt := range t.ThemeTypes {
 		out.ThemeTypes = append(out.ThemeTypes, string(tt))
@@ -1125,6 +1138,42 @@ func (c *Client) SetThemeAssignment(ctx context.Context, clusterID, realm string
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
 	return themeAssignmentFromAPI(resp.JSON200), nil
+}
+
+// ThemeSettings is the workspace's theme naming policy.
+type ThemeSettings struct {
+	ExactThemeNames bool `json:"exact_theme_names"`
+}
+
+func themeSettingsFromAPI(s *apiclient.ThemeSettings) *ThemeSettings {
+	return &ThemeSettings{ExactThemeNames: s.ExactThemeNames}
+}
+
+// GetThemeSettings returns the workspace's theme naming policy.
+func (c *Client) GetThemeSettings(ctx context.Context) (*ThemeSettings, error) {
+	resp, err := c.gen.GetThemeSettingsWithResponse(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return themeSettingsFromAPI(resp.JSON200), nil
+}
+
+// UpdateThemeSettings changes the workspace's theme naming policy. The caller's
+// API key must have been minted for a workspace owner or admin; any other role
+// gets a 403 even with themes:write. Turning exact_theme_names on moves
+// existing themes to their exact served names in the background.
+func (c *Client) UpdateThemeSettings(ctx context.Context, exactThemeNames bool) (*ThemeSettings, error) {
+	resp, err := c.gen.UpdateThemeSettingsWithResponse(ctx, nil, apiclient.UpdateThemeSettingsJSONRequestBody{ExactThemeNames: exactThemeNames})
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return themeSettingsFromAPI(resp.JSON200), nil
 }
 
 // LoginBranding is the login-page branding for a realm (subset used by the tools).
@@ -2261,6 +2310,38 @@ func (c *Client) CancelClusterUpgrade(ctx context.Context, clusterID string) err
 		return statusError(resp.HTTPResponse, resp.Body)
 	}
 	return nil
+}
+
+// ClusterRestartOutcome is the outcome of a requested Keycloak instance restart.
+type ClusterRestartOutcome struct {
+	// Deferred is true when the restart is queued for the cluster's maintenance
+	// window instead of applying immediately.
+	Deferred bool `json:"deferred"`
+	// NextWindow is when a deferred restart's maintenance window next opens,
+	// RFC3339. Empty when Deferred is false, or the next window is not known.
+	NextWindow string `json:"next_window,omitempty"`
+	// Impact describes how disruptive the restart is for this cluster's size.
+	Impact string `json:"impact"`
+}
+
+// RestartClusterInstances rolls a cluster's Keycloak instances, for example so
+// theme content replaced under its exact name (see UpdateThemeSettings) starts
+// rendering. Returns an *APIError with StatusCode 409 and a Problem.Code of
+// cluster_busy, cluster_not_available or env_var_limit when the cluster cannot
+// restart right now.
+func (c *Client) RestartClusterInstances(ctx context.Context, clusterID string) (*ClusterRestartOutcome, error) {
+	resp, err := c.gen.RestartClusterInstancesWithResponse(ctx, cid(clusterID), nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON202 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := &ClusterRestartOutcome{Deferred: resp.JSON202.Deferred, Impact: resp.JSON202.Impact}
+	if resp.JSON202.NextWindow != nil {
+		out.NextWindow = fmtTime(*resp.JSON202.NextWindow)
+	}
+	return out, nil
 }
 
 // ---- Read parity: credentials, builds, upgrade path, insights, role/group get, members ----

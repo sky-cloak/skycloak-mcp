@@ -19,7 +19,7 @@ func registerParityReadTools(s *mcp.Server, api API) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_theme",
-		Description: "Get a custom theme by ID.",
+		Description: "Get a custom theme by ID. restart_required is true when the theme's content was replaced under its exact name (see skycloak_get_theme_settings) and Keycloak has not restarted since, so the previous content may still be live; use skycloak_restart_cluster_instances to apply it.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get theme"},
 	}, getThemeHandler(api))
 
@@ -127,7 +127,8 @@ func getThemeHandler(api API) mcp.ToolHandlerFor[ThemeRef, skycloak.Theme] {
 		if err != nil {
 			return toolError(err), skycloak.Theme{}, nil
 		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("%s (%s) status=%s", t.Name, t.ID, t.Status)}}}, *t, nil
+		text := fmt.Sprintf("%s (%s) status=%s%s", t.Name, t.ID, t.Status, restartRequiredSuffix(t.RestartRequired))
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, *t, nil
 	}
 }
 
