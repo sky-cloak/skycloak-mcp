@@ -74,10 +74,11 @@ func TestGetBrandingHandlers(t *testing.T) {
 // assert what the tool did NOT do as well as what it did.
 type themeContentStub struct {
 	stubAPI
-	calls    *[]string
-	filename *string
-	archive  *[]byte
-	version  *string
+	calls           *[]string
+	filename        *string
+	archive         *[]byte
+	version         *string
+	restartRequired bool
 }
 
 func (s themeContentStub) UpdateThemeContent(_ context.Context, clusterID, themeID, filename string, archive []byte, version string) (*skycloak.Theme, error) {
@@ -86,7 +87,7 @@ func (s themeContentStub) UpdateThemeContent(_ context.Context, clusterID, theme
 	}
 	*s.calls = append(*s.calls, "UpdateThemeContent "+clusterID+"/"+themeID)
 	*s.filename, *s.archive, *s.version = filename, archive, version
-	return &skycloak.Theme{ID: themeID, Name: "corporate", Status: "deploying", ThemeTypes: []string{"login", "email"}, Version: version}, nil
+	return &skycloak.Theme{ID: themeID, Name: "corporate", Status: "deploying", ThemeTypes: []string{"login", "email"}, Version: version, RestartRequired: s.restartRequired}, nil
 }
 
 func (s themeContentStub) DeleteTheme(_ context.Context, _, _ string) error {
@@ -159,6 +160,27 @@ func TestUpdateThemeContentReplacesInPlace(t *testing.T) {
 	}
 	if txt := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(txt, "assignments") {
 		t.Errorf("text does not say the assignments survived: %q", txt)
+	}
+}
+
+// A content replace under exact_theme_names is the very call that sets
+// restart_required server-side, so a caller reading only the text (not the
+// structured output) still needs to be told a restart is now pending.
+func TestUpdateThemeContentSurfacesRestartRequired(t *testing.T) {
+	api, _, _, _, _ := newThemeContentStub()
+	api.restartRequired = true
+
+	res, out, err := updateThemeContentHandler(api)(context.Background(), nil, UpdateThemeContentInput{
+		ClusterID: "c1", ThemeID: "t1", ContentBase64: base64.StdEncoding.EncodeToString(themeZIP(t)), Confirm: true,
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("err=%v res=%+v", err, res)
+	}
+	if !out.RestartRequired {
+		t.Fatalf("out.RestartRequired = false, want true")
+	}
+	if txt := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(txt, "restart_required=true") || !strings.Contains(txt, "skycloak_restart_cluster_instances") {
+		t.Errorf("text does not flag the pending restart: %q", txt)
 	}
 }
 
@@ -300,7 +322,7 @@ func TestGetThemeSettingsHandler(t *testing.T) {
 }
 
 func TestUpdateThemeSettingsHandler(t *testing.T) {
-	res, out, err := updateThemeSettingsHandler(stubAPI{})(context.Background(), nil, UpdateThemeSettingsInput{ExactThemeNames: true})
+	res, out, err := updateThemeSettingsHandler(stubAPI{})(context.Background(), nil, UpdateThemeSettingsInput{ExactThemeNames: true, Confirm: true})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -312,9 +334,21 @@ func TestUpdateThemeSettingsHandler(t *testing.T) {
 	}
 }
 
+// Turning exact_theme_names on moves every theme in the workspace, so it
+// follows the same confirm=true gate as the repo's other destructive tools.
+func TestUpdateThemeSettingsHandlerRequiresConfirm(t *testing.T) {
+	res, _, err := updateThemeSettingsHandler(stubAPI{})(context.Background(), nil, UpdateThemeSettingsInput{ExactThemeNames: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("update_theme_settings should require confirm")
+	}
+}
+
 func TestUpdateThemeSettingsHandlerSurfacesForbidden(t *testing.T) {
 	api := stubAPI{err: errors.New("key has no user, or user is not a workspace owner or admin")}
-	res, _, err := updateThemeSettingsHandler(api)(context.Background(), nil, UpdateThemeSettingsInput{ExactThemeNames: true})
+	res, _, err := updateThemeSettingsHandler(api)(context.Background(), nil, UpdateThemeSettingsInput{ExactThemeNames: true, Confirm: true})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

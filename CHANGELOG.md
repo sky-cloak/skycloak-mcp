@@ -27,10 +27,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Turning it on serves every theme from a folder named exactly like the theme
   and moves existing themes there in the background; the update requires the
   API key to have been minted for a workspace owner or admin, so it 403s for
-  any other role even with `themes:write`. `skycloak_get_theme` and
-  `skycloak_list_themes` now surface each theme's `restart_required`, set when
-  its content was replaced under its exact name and Keycloak has not restarted
-  since.
+  any other role even with `themes:write`; the tool requires `confirm=true`
+  because turning it on moves every theme in the workspace. `skycloak_get_theme`,
+  `skycloak_list_themes` and `skycloak_update_theme_content` now surface each
+  theme's `restart_required`, set when its content was replaced under its
+  exact name and Keycloak has not restarted since.
 - `skycloak_restart_cluster_instances`, covering
   `POST /clusters/{cluster_id}/restart-instances`, to roll a cluster's Keycloak
   instances so replaced theme content starts rendering. Applies immediately
@@ -40,6 +41,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or `env_var_limit`), which the tool now translates into a plain-language
   hint instead of a bare code. Requires `confirm=true` like the other
   destructive tools.
+
+### Changed
+- `internal/apiclient` regenerated from the app's current spec (`make generate`)
+  to add the two endpoints above. That pulled in a few unrelated upstream
+  additions along with them: `Extension.display_name`, a machine-readable
+  `code` field on plan-limit `429` errors, and reworded validation text on
+  webhook/SIEM destination `headers`. No tool in this repo consumes any of the
+  three yet.
 
 ### Fixed
 - The tool counts in the README, which had drifted from what the server

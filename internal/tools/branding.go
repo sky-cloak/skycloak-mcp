@@ -58,7 +58,8 @@ func registerBrandingWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_update_theme_content",
 		Description: "Replace an existing theme's archive with a new one, in place. The theme keeps its ID, its name and every realm and application assignment, and the new content deploys immediately, so this is the way to edit a theme: deleting and re-uploading detaches it and leaves the sign-in page unbranded in between. " +
-			"Pass the ZIP or Keycloakify JAR base64-encoded in content_base64. Set confirm=true to proceed: the archive being replaced is not recoverable afterwards. The replacement must still contain every theme type the theme provides today, or the API rejects it; a theme created by a platform migration has pinned content and answers 409.",
+			"Pass the ZIP or Keycloakify JAR base64-encoded in content_base64. Set confirm=true to proceed: the archive being replaced is not recoverable afterwards. The replacement must still contain every theme type the theme provides today, or the API rejects it; a theme created by a platform migration has pinned content and answers 409. " +
+			"When the workspace has exact_theme_names on (see skycloak_get_theme_settings), this sets restart_required=true on the theme until skycloak_restart_cluster_instances applies it.",
 		// Destructive because the archive it overwrites is not recoverable
 		// afterwards, the way rotate_application_secret discards the old secret.
 		// The theme's identity and assignments survive, which is the point.
@@ -70,7 +71,7 @@ func registerBrandingWriteTools(s *mcp.Server, api API) {
 		Description: "Turn the workspace's exact_theme_names policy on or off. The caller's API key must have been minted for a workspace owner or admin; any other role, including a cluster admin, gets 403 even with themes:write. " +
 			"Turning it on moves every existing theme in the workspace to its exact served name in the background, not blocking this call; a theme that cannot move right away (its cluster is busy updating, say) moves on its next content replace instead. " +
 			"Turning it off changes nothing immediately: each theme keeps its current served folder until its next content replace, after which the folder changes on every replace again. " +
-			"A theme replaced under its exact name sets restart_required=true on skycloak_get_theme and skycloak_list_themes until Keycloak restarts; use skycloak_restart_cluster_instances to apply it.",
+			"A theme replaced under its exact name sets restart_required=true on skycloak_get_theme and skycloak_list_themes until Keycloak restarts; use skycloak_restart_cluster_instances to apply it. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Update theme settings"},
 	}, updateThemeSettingsHandler(api))
 }
@@ -269,8 +270,11 @@ func updateThemeContentHandler(api API) mcp.ToolHandlerFor[UpdateThemeContentInp
 		if err != nil {
 			return toolError(err), skycloak.Theme{}, nil
 		}
-		text := fmt.Sprintf("Replaced the content of theme %s (%s): status=%s types=%s. Its realm and application assignments are unchanged.",
-			t.Name, t.ID, t.Status, strings.Join(t.ThemeTypes, ","))
+		text := fmt.Sprintf("Replaced the content of theme %s (%s): status=%s types=%s%s. Its realm and application assignments are unchanged.",
+			t.Name, t.ID, t.Status, strings.Join(t.ThemeTypes, ","), restartRequiredSuffix(t.RestartRequired))
+		if t.RestartRequired {
+			text += " Keycloak has not restarted since; use skycloak_restart_cluster_instances to apply the new content."
+		}
 		return okResult(text), *t, nil
 	}
 }
@@ -304,10 +308,14 @@ func getThemeSettingsHandler(api API) mcp.ToolHandlerFor[NoInput, skycloak.Theme
 // UpdateThemeSettingsInput is the input for skycloak_update_theme_settings.
 type UpdateThemeSettingsInput struct {
 	ExactThemeNames bool `json:"exact_theme_names" jsonschema:"true to serve every theme from a folder named exactly like the theme; false for the default, changing folder per content replace"`
+	Confirm         bool `json:"confirm" jsonschema:"must be true to confirm the change, which moves every theme in the workspace and needs a workspace owner or admin key"`
 }
 
 func updateThemeSettingsHandler(api API) mcp.ToolHandlerFor[UpdateThemeSettingsInput, skycloak.ThemeSettings] {
 	return func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateThemeSettingsInput) (*mcp.CallToolResult, skycloak.ThemeSettings, error) {
+		if !in.Confirm {
+			return errResult("Refusing to change theme settings: set confirm=true. Turning exact_theme_names on moves every theme in the workspace."), skycloak.ThemeSettings{}, nil
+		}
 		s, err := api.UpdateThemeSettings(ctx, in.ExactThemeNames)
 		if err != nil {
 			return toolError(err), skycloak.ThemeSettings{}, nil
