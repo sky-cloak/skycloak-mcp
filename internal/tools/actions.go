@@ -36,6 +36,14 @@ func registerActionWriteTools(s *mcp.Server, api API) {
 		Description: "Cancel an in-progress cluster version upgrade. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Cancel cluster upgrade"},
 	}, cancelClusterUpgradeHandler(api))
+
+	addTool(s, &mcp.Tool{
+		Name: "skycloak_restart_cluster_instances",
+		Description: "Restart a cluster's Keycloak instances, disrupting live traffic on it. Use this after skycloak_update_theme_settings turns exact_theme_names on: a theme whose content was replaced under its exact name only serves the new content once Keycloak restarts (see restart_required on skycloak_get_theme / skycloak_list_themes). " +
+			"Applies immediately unless the workspace latches disruptive changes to the maintenance window, in which case the result reports deferred=true and, when known, next_window (RFC3339). " +
+			"Returns a conflict when the cluster cannot restart right now: already busy with a restart or other update, not in an available state, or the operator has no environment variable slot left. Set confirm=true to proceed.",
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Restart cluster instances"},
+	}, restartClusterInstancesHandler(api))
 }
 
 // DiscoverOIDCInput is the input for skycloak_discover_oidc.
@@ -118,6 +126,36 @@ func cancelClusterUpgradeHandler(api API) mcp.ToolHandlerFor[CancelUpgradeInput,
 			return toolError(err), struct{}{}, nil
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "Cancelled the in-progress upgrade for cluster " + in.ClusterID}}}, struct{}{}, nil
+	}
+}
+
+// RestartClusterInstancesInput is the input for skycloak_restart_cluster_instances.
+type RestartClusterInstancesInput struct {
+	ClusterID string `json:"cluster_id" jsonschema:"the cluster ID"`
+	Confirm   bool   `json:"confirm" jsonschema:"must be true to confirm the restart, which disrupts live traffic on the cluster"`
+}
+
+func restartClusterInstancesHandler(api API) mcp.ToolHandlerFor[RestartClusterInstancesInput, skycloak.ClusterRestartOutcome] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in RestartClusterInstancesInput) (*mcp.CallToolResult, skycloak.ClusterRestartOutcome, error) {
+		if in.ClusterID == "" {
+			return errResult("cluster_id is required"), skycloak.ClusterRestartOutcome{}, nil
+		}
+		if !in.Confirm {
+			return errResult("Refusing to restart cluster instances: set confirm=true. This disrupts live traffic on the cluster."), skycloak.ClusterRestartOutcome{}, nil
+		}
+		out, err := api.RestartClusterInstances(ctx, in.ClusterID)
+		if err != nil {
+			return toolError(err), skycloak.ClusterRestartOutcome{}, nil
+		}
+		text := fmt.Sprintf("Restarting instances for cluster %s. %s", in.ClusterID, out.Impact)
+		if out.Deferred {
+			text = fmt.Sprintf("Restart for cluster %s is deferred to its maintenance window.", in.ClusterID)
+			if out.NextWindow != "" {
+				text += " Next window: " + out.NextWindow + "."
+			}
+			text += " " + out.Impact
+		}
+		return okResult(text), *out, nil
 	}
 }
 

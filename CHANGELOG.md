@@ -22,6 +22,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   directory is read locally, so a truncated or empty ZIP is caught too.
   `docs/theme-content-update.md` explains the call; the existing theme tools are
   unchanged.
+- `skycloak_get_theme_settings` and `skycloak_update_theme_settings`, covering
+  `GET`/`PUT /theme-settings`: the workspace's `exact_theme_names` policy.
+  Turning it on serves every theme from a folder named exactly like the theme
+  and moves existing themes there in the background; the update requires the
+  API key to have been minted for a workspace owner or admin, so it 403s for
+  any other role even with `themes:write`. `skycloak_get_theme` and
+  `skycloak_list_themes` now surface each theme's `restart_required`, set when
+  its content was replaced under its exact name and Keycloak has not restarted
+  since.
+- `skycloak_restart_cluster_instances`, covering
+  `POST /clusters/{cluster_id}/restart-instances`, to roll a cluster's Keycloak
+  instances so replaced theme content starts rendering. Applies immediately
+  unless the workspace latches disruptive changes to the maintenance window,
+  reported as `deferred: true` with `next_window` when known. A `409` names why
+  the cluster cannot restart right now (`cluster_busy`, `cluster_not_available`,
+  or `env_var_limit`), which the tool now translates into a plain-language
+  hint instead of a bare code. Requires `confirm=true` like the other
+  destructive tools.
 
 ### Fixed
 - The tool counts in the README, which had drifted from what the server

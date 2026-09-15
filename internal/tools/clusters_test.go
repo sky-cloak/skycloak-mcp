@@ -43,24 +43,26 @@ type stubAPI struct {
 	features     []skycloak.ClusterFeatureInfo
 	versionInfo  []skycloak.ClusterTypeVersion
 	// realmErrFor fails specific clusters, so a partial fleet answer is testable.
-	realmErrFor map[string]error
-	upgrades    []skycloak.ClusterUpgrade
-	templates   []skycloak.ProviderTemplate
-	routes      []skycloak.DomainRoute
-	app         *skycloak.Application
-	idp         *skycloak.IdentityProvider
-	realm       *skycloak.Realm
-	smtp        *skycloak.SMTPConfig
-	theme       *skycloak.Theme
-	route       *skycloak.DomainRoute
-	upPath      []skycloak.UpgradePathStep
-	captcha     *skycloak.CAPTCHADomainsInfo
-	siem        *skycloak.SIEMDestination
-	siems       []skycloak.SIEMDestination
-	whEvent     []skycloak.WebhookEventType
-	webhook     *skycloak.WebhookSubscription
-	webhooks    []skycloak.WebhookSubscription
-	err         error
+	realmErrFor   map[string]error
+	upgrades      []skycloak.ClusterUpgrade
+	templates     []skycloak.ProviderTemplate
+	routes        []skycloak.DomainRoute
+	app           *skycloak.Application
+	idp           *skycloak.IdentityProvider
+	realm         *skycloak.Realm
+	smtp          *skycloak.SMTPConfig
+	theme         *skycloak.Theme
+	route         *skycloak.DomainRoute
+	upPath        []skycloak.UpgradePathStep
+	captcha       *skycloak.CAPTCHADomainsInfo
+	siem          *skycloak.SIEMDestination
+	siems         []skycloak.SIEMDestination
+	whEvent       []skycloak.WebhookEventType
+	webhook       *skycloak.WebhookSubscription
+	webhooks      []skycloak.WebhookSubscription
+	themeSettings *skycloak.ThemeSettings
+	restart       *skycloak.ClusterRestartOutcome
+	err           error
 
 	// Set to capture the query a handler built, for tests that assert on it.
 	gotLogQuery   *skycloak.LogQuery
@@ -1020,4 +1022,31 @@ func (s stubAPI) UpdateClientRole(_ context.Context, _, _, clientID, roleName st
 
 func (s stubAPI) DeleteClientRole(context.Context, string, string, string, string) error {
 	return s.err
+}
+
+func (s stubAPI) GetThemeSettings(context.Context) (*skycloak.ThemeSettings, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.themeSettings != nil {
+		return s.themeSettings, nil
+	}
+	return &skycloak.ThemeSettings{}, nil
+}
+
+func (s stubAPI) UpdateThemeSettings(_ context.Context, exactThemeNames bool) (*skycloak.ThemeSettings, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.ThemeSettings{ExactThemeNames: exactThemeNames}, nil
+}
+
+func (s stubAPI) RestartClusterInstances(context.Context, string) (*skycloak.ClusterRestartOutcome, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.restart != nil {
+		return s.restart, nil
+	}
+	return &skycloak.ClusterRestartOutcome{Impact: "restart"}, nil
 }

@@ -3,6 +3,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -146,6 +147,9 @@ type API interface {
 	GetRealmImport(ctx context.Context, importID string) (*skycloak.RealmImport, error)
 	DownloadThemeContent(ctx context.Context, clusterID, themeID string) ([]byte, error)
 	UpdateThemeContent(ctx context.Context, clusterID, themeID, filename string, archive []byte, version string) (*skycloak.Theme, error)
+	GetThemeSettings(ctx context.Context) (*skycloak.ThemeSettings, error)
+	UpdateThemeSettings(ctx context.Context, exactThemeNames bool) (*skycloak.ThemeSettings, error)
+	RestartClusterInstances(ctx context.Context, clusterID string) (*skycloak.ClusterRestartOutcome, error)
 }
 
 // clusterCredentialsScope reads a cluster's Keycloak admin credentials. It is
@@ -288,6 +292,15 @@ func Register(s *mcp.Server, api API, allowWrites bool, scopes Scopes) {
 // ptr returns a pointer to v. Used for optional *bool tool annotations.
 func ptr[T any](v T) *T { return &v }
 
+// conflictCodeHints explains the problem+json "code" extension field some 409
+// responses carry, so a bare enum value reaches the model as guidance instead
+// of an opaque string it has to guess at.
+var conflictCodeHints = map[string]string{
+	"cluster_busy":          "another restart or update is already in progress on this cluster; retry once it finishes",
+	"cluster_not_available": "the cluster is not in a state that accepts this right now (failed, deleting, stopped, provisioning, degraded, or under maintenance)",
+	"env_var_limit":         "no environment variable slot is left on this cluster's operator to trigger the action",
+}
+
 // toolError converts an error into a tool-call error result the model can read
 // and act on. Transport-level failures are returned as Go errors; API-level
 // failures (4xx/5xx) are surfaced as IsError results with actionable hints.
@@ -296,11 +309,17 @@ func toolError(err error) *mcp.CallToolResult {
 	if apiErr, ok := skycloak.AsAPIError(err); ok {
 		switch apiErr.StatusCode {
 		case 401:
-			msg = "Unauthorized — the API key is missing or invalid. " + msg
+			msg = "Unauthorized, the API key is missing or invalid. " + msg
 		case 403:
-			msg = "Forbidden — your API key lacks the required scope for this action. " + msg
+			msg = "Forbidden, your API key lacks the required scope (or role) for this action. " + msg
+		case 409:
+			if hint, ok := conflictCodeHints[apiErr.Problem.Code]; ok {
+				msg = fmt.Sprintf("Conflict (%s): %s. %s", apiErr.Problem.Code, hint, msg)
+			} else {
+				msg = "Conflict with the current state of the resource. " + msg
+			}
 		case 429:
-			msg = "Rate limited by the Skycloak gateway — wait and retry. " + msg
+			msg = "Rate limited by the Skycloak gateway, wait and retry. " + msg
 		}
 	}
 	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: msg}}}

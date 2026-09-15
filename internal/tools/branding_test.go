@@ -287,3 +287,64 @@ func TestUpdateThemeContentSurfacesAPIErrors(t *testing.T) {
 		t.Fatalf("res = %+v, want the API's reason surfaced", res)
 	}
 }
+
+func TestGetThemeSettingsHandler(t *testing.T) {
+	api := stubAPI{themeSettings: &skycloak.ThemeSettings{ExactThemeNames: true}}
+	res, out, err := getThemeSettingsHandler(api)(context.Background(), nil, NoInput{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError || !out.ExactThemeNames {
+		t.Fatalf("unexpected: err=%v out=%+v", res.IsError, out)
+	}
+}
+
+func TestUpdateThemeSettingsHandler(t *testing.T) {
+	res, out, err := updateThemeSettingsHandler(stubAPI{})(context.Background(), nil, UpdateThemeSettingsInput{ExactThemeNames: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.IsError || !out.ExactThemeNames {
+		t.Fatalf("unexpected: err=%v out=%+v", res.IsError, out)
+	}
+	if txt := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(txt, "restart_required") {
+		t.Errorf("turning exact_theme_names on should mention restart_required, got %q", txt)
+	}
+}
+
+func TestUpdateThemeSettingsHandlerSurfacesForbidden(t *testing.T) {
+	api := stubAPI{err: errors.New("key has no user, or user is not a workspace owner or admin")}
+	res, _, err := updateThemeSettingsHandler(api)(context.Background(), nil, UpdateThemeSettingsInput{ExactThemeNames: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "workspace owner or admin") {
+		t.Fatalf("res = %+v, want the API's reason surfaced", res)
+	}
+}
+
+// list_themes and get_theme are curated structs, not passthrough, so
+// restart_required has to be mapped through explicitly or it silently drops.
+func TestListAndGetThemeSurfaceRestartRequired(t *testing.T) {
+	api := stubAPI{
+		themes: []skycloak.Theme{{ID: "t1", Name: "corporate", Status: "deployed", RestartRequired: true}},
+		theme:  &skycloak.Theme{ID: "t1", Name: "corporate", Status: "deployed", RestartRequired: true},
+	}
+	_, listOut, err := listThemesHandler(api)(context.Background(), nil, ListDomainsInput{ClusterID: "c1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !listOut.Themes[0].RestartRequired {
+		t.Fatalf("list_themes dropped restart_required: %+v", listOut.Themes[0])
+	}
+	getRes, getOut, err := getThemeHandler(api)(context.Background(), nil, ThemeRef{ClusterID: "c1", ThemeID: "t1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !getOut.RestartRequired {
+		t.Fatalf("get_theme dropped restart_required: %+v", getOut)
+	}
+	if txt := getRes.Content[0].(*mcp.TextContent).Text; !strings.Contains(txt, "restart_required=true") {
+		t.Errorf("get_theme text should flag restart_required, got %q", txt)
+	}
+}
