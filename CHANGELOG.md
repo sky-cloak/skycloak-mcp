@@ -50,6 +50,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   webhook/SIEM destination `headers`. No tool in this repo consumes any of the
   three yet.
 
+- `skycloak_list_extensions` now prints each catalog extension's `version`
+  (also added to the structured result), and `skycloak_list_cluster_extensions`
+  prints `available_version` next to the installed version and
+  `upgrade_available`, so a caller sees what an upgrade would move to without a
+  second call. Versions are shown verbatim (`v1.5.0`, `v2.7`,
+  `v1.4.1-SNAPSHOT`), and a missing one reads `unknown`. The values come from
+  the app's public API, which reports the real resolved artifact once the app
+  release that stores it is live; until then marketplace rows still read
+  `1.0.0`. The em-dashes in both summary lines are gone.
+
 ### Fixed
 - The tool counts in the README, which had drifted from what the server
   registers.
