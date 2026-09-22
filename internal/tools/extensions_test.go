@@ -31,7 +31,7 @@ func TestListClusterExtensionsHandler(t *testing.T) {
 }
 
 // The catalog line states the version the catalog ships, and a version the
-// catalog already prefixes with "v" is not prefixed twice.
+// API returns is printed verbatim, with or without a leading "v".
 func TestListExtensionsLinePrintsVersion(t *testing.T) {
 	api := stubAPI{catalog: []skycloak.ExtensionInfo{
 		{ID: "e1", Name: "Email OTP", Source: "platform", Version: "1.5.0", KeycloakVersions: []string{"25", "26"}},
@@ -41,7 +41,7 @@ func TestListExtensionsLinePrintsVersion(t *testing.T) {
 	res, _, _ := listExtensionsHandler(api)(context.Background(), nil, ListExtensionsInput{})
 	txt := res.Content[0].(*mcp.TextContent).Text
 	for _, want := range []string{
-		"- Email OTP (e1): version=v1.5.0 source=platform keycloak=25,26\n",
+		"- Email OTP (e1): version=1.5.0 source=platform keycloak=25,26\n",
 		"- PII Encryption (e2): version=v2.7 source=platform keycloak=26\n",
 		"- Phone Provider (e3): version=unknown source=platform keycloak=26\n",
 	} {
@@ -63,8 +63,8 @@ func TestListClusterExtensionsLinePrintsAvailableVersion(t *testing.T) {
 	res, _, _ := listClusterExtensionsHandler(api)(context.Background(), nil, ListDomainsInput{ClusterID: "c1"})
 	txt := res.Content[0].(*mcp.TextContent).Text
 	for _, want := range []string{
-		"- Email OTP (e1): installed=v1.3.5 available=v1.5.0 status=active upgrade_available=true\n",
-		"- SCIM (e2): installed=v1.4.1-SNAPSHOT available=v1.4.1-SNAPSHOT status=active upgrade_available=false\n",
+		"- Email OTP (e1): installed=1.3.5 available=1.5.0 status=active upgrade_available=true\n",
+		"- SCIM (e2): installed=1.4.1-SNAPSHOT available=1.4.1-SNAPSHOT status=active upgrade_available=false\n",
 		"- Magic Link (e3): installed=unknown available=unknown status=active upgrade_available=false\n",
 	} {
 		if !strings.Contains(txt, want) {

@@ -98,18 +98,14 @@ func listClusterExtensionsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, 
 }
 
 // versionLabel renders an extension version for the text summary. Versions are
-// free-form upstream strings (1.5.0, v2.7, 1.4.1-SNAPSHOT), so a "v" is added
-// only in front of a leading digit, and a missing version reads "unknown",
-// the same word the API uses for an artifact it cannot identify.
+// free-form upstream strings (1.5.0, v2.7, 1.4.1-SNAPSHOT) and are shown
+// verbatim; a missing version reads "unknown", the same word the API uses for
+// an artifact it cannot identify.
 func versionLabel(v string) string {
-	switch {
-	case v == "":
+	if v == "" {
 		return "unknown"
-	case v[0] >= '0' && v[0] <= '9':
-		return "v" + v
-	default:
-		return v
 	}
+	return v
 }
 
 // InstallExtensionInput is the input for skycloak_install_extension.
