@@ -1245,6 +1245,7 @@ type ExtensionInfo struct {
 	Name             string   `json:"name"`
 	Description      string   `json:"description,omitempty"`
 	Source           string   `json:"source"`
+	Version          string   `json:"version,omitempty"`
 	KeycloakVersions []string `json:"keycloak_versions"`
 	DocumentationURL string   `json:"documentation_url,omitempty"`
 }
@@ -1252,7 +1253,7 @@ type ExtensionInfo struct {
 func extensionInfoFromAPI(e *apiclient.Extension) ExtensionInfo {
 	return ExtensionInfo{
 		ID: uuidString(e.Id), Name: e.Name, Description: nstrN(e.Description), Source: string(e.Source),
-		KeycloakVersions: e.KeycloakVersions, DocumentationURL: nstrN(e.DocumentationUrl),
+		Version: e.Version, KeycloakVersions: e.KeycloakVersions, DocumentationURL: nstrN(e.DocumentationUrl),
 	}
 }
 

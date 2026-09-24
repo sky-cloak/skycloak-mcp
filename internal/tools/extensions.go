@@ -19,7 +19,7 @@ func registerExtensionReadTools(s *mcp.Server, api API) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_cluster_extensions",
-		Description: "List the extensions currently installed on a cluster, with their version and upgrade status.",
+		Description: "List the extensions currently installed on a cluster, with their installed version, the version available for the cluster's Keycloak, and upgrade status.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List installed extensions"},
 	}, listClusterExtensionsHandler(api))
 }
@@ -61,7 +61,7 @@ func listExtensionsHandler(api API) mcp.ToolHandlerFor[ListExtensionsInput, Exte
 		}
 		var b strings.Builder
 		for _, e := range exts {
-			fmt.Fprintf(&b, "- %s (%s) — source=%s keycloak=%s\n", e.Name, e.ID, e.Source, strings.Join(e.KeycloakVersions, ","))
+			fmt.Fprintf(&b, "- %s (%s): version=%s source=%s keycloak=%s\n", e.Name, e.ID, versionLabel(e.Version), e.Source, strings.Join(e.KeycloakVersions, ","))
 		}
 		if len(exts) == 0 {
 			b.WriteString("No extensions in the catalog.")
@@ -87,13 +87,25 @@ func listClusterExtensionsHandler(api API) mcp.ToolHandlerFor[ListDomainsInput, 
 		}
 		var b strings.Builder
 		for _, e := range exts {
-			fmt.Fprintf(&b, "- %s (%s) — v%s status=%s upgrade_available=%t\n", e.ExtensionName, e.ExtensionID, e.InstalledVersion, e.Status, e.UpgradeAvailable)
+			fmt.Fprintf(&b, "- %s (%s): installed=%s available=%s status=%s upgrade_available=%t\n",
+				e.ExtensionName, e.ExtensionID, versionLabel(e.InstalledVersion), versionLabel(e.AvailableVersion), e.Status, e.UpgradeAvailable)
 		}
 		if len(exts) == 0 {
 			b.WriteString("No extensions installed on this cluster.")
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: b.String()}}}, ClusterExtensionsOutput{Extensions: exts, Count: len(exts)}, nil
 	}
+}
+
+// versionLabel renders an extension version for the text summary. Versions are
+// free-form upstream strings (1.5.0, v2.7, 1.4.1-SNAPSHOT) and are shown
+// verbatim; a missing version reads "unknown", the same word the API uses for
+// an artifact it cannot identify.
+func versionLabel(v string) string {
+	if v == "" {
+		return "unknown"
+	}
+	return v
 }
 
 // InstallExtensionInput is the input for skycloak_install_extension.
