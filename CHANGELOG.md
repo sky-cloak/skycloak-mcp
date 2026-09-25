@@ -7,6 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `us-west` (US West) as a cluster location of its own. `create_cluster`
+  accepts it in any case, and `list_clusters`, `get_cluster` and
+  `list_cluster_locations` report it instead of folding West Coast clusters
+  into `us`, which now always means US East. It is open only to workspaces
+  granted access; without access the create returns the API's `400`
+  "location not available", like any other closed region. The vendored OpenAPI
+  spec and the generated client carry the new enum value.
 - `skycloak_update_theme_content`, which replaces a deployed theme's archive in
   place through `PUT /clusters/{cluster_id}/themes/{theme_id}/content`. Editing
   a theme from MCP no longer means detaching it, deleting it and uploading a
