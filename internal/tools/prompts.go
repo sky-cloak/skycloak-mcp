@@ -106,7 +106,7 @@ var promptDefs = []promptDef{
 			Description: "Create a cluster, add a realm, and wire up an identity provider, confirming each step with the user first.",
 			Arguments: []*mcp.PromptArgument{
 				{Name: "cluster_name", Description: "Name for the new cluster.", Required: true},
-				{Name: "location", Description: "Deployment region: us, ca, au or eu. Leave empty to pick one interactively."},
+				{Name: "location", Description: "Deployment region: us (US East), us-west (US West), ca, au or eu. Leave empty to pick one interactively."},
 				{Name: "realm", Description: "Realm to create in the new cluster."},
 				{Name: "identity_provider", Description: "Identity provider to wire up, for example microsoft-entra or google."},
 			},

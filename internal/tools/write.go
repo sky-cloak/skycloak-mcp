@@ -227,7 +227,7 @@ type CreateClusterInput struct {
 	Type               string  `json:"type,omitempty" jsonschema:"cluster type: keycloak or tidecloak (case-insensitive); defaults to keycloak"`
 	Size               string  `json:"size" jsonschema:"instance size: small, medium, or large (case-insensitive)"`
 	Version            string  `json:"version" jsonschema:"Keycloak version, e.g. 26.1"`
-	Location           string  `json:"location" jsonschema:"region: us, ca, au, or eu (case-insensitive)"`
+	Location           string  `json:"location" jsonschema:"region: us (US East), us-west (US West, only for workspaces granted access), ca, au, or eu (case-insensitive); skycloak_list_cluster_locations shows which ones this workspace can use"`
 	AutoUpgradeEnabled *bool   `json:"auto_upgrade_enabled,omitempty" jsonschema:"enable automatic patch upgrades"`
 	MWEnabled          bool    `json:"maintenance_window_enabled,omitempty" jsonschema:"whether the creation maintenance window is active"`
 	MWDaysOfWeek       []int32 `json:"maintenance_window_days_of_week,omitempty" jsonschema:"maintenance-window days, 0=Sunday through 6=Saturday"`
