@@ -116,7 +116,7 @@ var (
 	enumGrantType           = apiEnum{schema: "GrantType", values: []string{"authorization_code", "implicit", "password", "client_credentials", "refresh_token"}}
 	enumClusterType         = apiEnum{schema: "ClusterType", values: []string{"keycloak", "tidecloak"}}
 	enumClusterSize         = apiEnum{schema: "ClusterSize", values: []string{"small", "medium", "large"}}
-	enumClusterLocation     = apiEnum{schema: "ClusterLocation", values: []string{"us", "ca", "au", "eu"}}
+	enumClusterLocation     = apiEnum{schema: "ClusterLocation", values: []string{"us", "us-west", "ca", "au", "eu"}}
 	enumSMTPEncryption      = apiEnum{schema: "SmtpEncryption", values: []string{"none", "ssl", "starttls"}}
 	enumWebhookSource       = apiEnum{schema: "WebhookSource", values: []string{"keycloak", "platform"}}
 	enumSIEMDestinationType = apiEnum{schema: "SIEMDestinationType", values: []string{"syslog", "s3", "http"}}
