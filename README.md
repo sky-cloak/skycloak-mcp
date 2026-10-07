@@ -219,6 +219,8 @@ The client in `internal/apiclient` is generated from `internal/apiclient/openapi
 
 Released as GitHub binaries and a `ghcr.io/sky-cloak/skycloak-mcp` container image on each tag, and published to the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.skycloak/skycloak-mcp`. Most people do not need either: the hosted server needs no install.
 
+The Claude plugin bundle lives in [`plugins/skycloak/`](plugins/skycloak/): the connector manifest plus the four skills, in the layout Anthropic's plugin directory expects. It is a subfolder rather than the repository root because the generated API client and the OpenAPI description at the root are larger than the directory accepts.
+
 ## Security
 
 Please report vulnerabilities privately. See [SECURITY.md](./SECURITY.md).
