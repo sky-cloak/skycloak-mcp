@@ -7,6 +7,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- A Claude plugin bundle at `plugins/skycloak/`, in the layout Anthropic's
+  plugin directory expects: `.claude-plugin/plugin.json`, an `.mcp.json`
+  declaring the hosted server at `https://mcp.skycloak.io` as a single remote
+  connector, a README, a copy of the license, and the four skills. It is a
+  subfolder rather than the repository root because the directory caps a plugin
+  file at 256 KiB and the generated API client and vendored OpenAPI description
+  at the root are far past that. The bundled skills are byte-for-byte copies of
+  the embedded sources rather than symlinks, since an installer receives only
+  the plugin folder; a test fails if the two drift.
 - `us-west` (US West) as a cluster location of its own. `create_cluster`
   accepts it in any case, and `list_clusters`, `get_cluster` and
   `list_cluster_locations` report it instead of folding West Coast clusters
