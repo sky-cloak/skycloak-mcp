@@ -13,7 +13,9 @@ permissions:
   contents: read
   actions: read
   issues: write
-  pull-requests: read
+  # Assigning and commenting on a pull request goes through the issues API, but
+  # some paths are refused without pull-requests: write as well.
+  pull-requests: write
 
 concurrency:
   group: sync-watch
@@ -40,19 +42,26 @@ jobs:
           ASSIGNEE: gmolaire
         run: |
           set -euo pipefail
-          pulls=$(gh api "repos/$REPO/commits/$SHA/pulls")
+          api() { # api <label> <args...>
+            local label=$1; shift
+            gh api "$@" || { echo "::error::$label failed (see HTTP status above)"; return 1; }
+          }
+          pulls=$(api "list PRs for the commit" "repos/$REPO/commits/$SHA/pulls") || exit 1
           pr=$(jq -r --arg bot "$BOT" '[.[] | select(.state == "open" and .head.ref == "chore/openapi-sync" and .user.login == $bot)][0].number // empty' <<< "$pulls")
           if [ -z "$pr" ]; then
             echo "No open bot sync PR for $SHA."
             exit 0
           fi
-          issue=$(gh api "repos/$REPO/issues/$pr")
+          issue=$(api "read PR #$pr" "repos/$REPO/issues/$pr") || exit 1
           if jq -e --arg who "$ASSIGNEE" 'any(.assignees[]; .login == $who)' <<< "$issue" >/dev/null; then
             echo "#$pr is already assigned to $ASSIGNEE."
             exit 0
           fi
           # Assign before anything optional, so a person is told even if the rest fails.
-          gh api -X POST "repos/$REPO/issues/$pr/assignees" -f "assignees[]=$ASSIGNEE" >/dev/null
+          assigned=0
+          if api "assign $ASSIGNEE to #$pr" -X POST "repos/$REPO/issues/$pr/assignees" -f "assignees[]=$ASSIGNEE" >/dev/null; then
+            assigned=1
+          fi
           jobs=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs") || jobs='{"jobs":[]}'
           failed=$(jq -r '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")' <<< "$jobs")
           armed=$(jq -r --argjson n "$pr" '[.[] | select(.number == $n)][0].auto_merge != null' <<< "$pulls")
@@ -61,6 +70,15 @@ jobs:
           else
             next="Auto-merge is off: push the fix to this branch, then merge it by hand; it releases once merged. A new sync overwrites this branch."
           fi
-          gh api -X POST "repos/$REPO/issues/$pr/comments" \
-            -f "body=Spec sync is stuck: ${failed:-a check} failed. $next $RUN_URL" >/dev/null
-          echo "Assigned #$pr to $ASSIGNEE (failed: ${failed:-unknown}, auto-merge armed: $armed)."
+          commented=0
+          if api "comment on #$pr" -X POST "repos/$REPO/issues/$pr/comments" \
+            -f "body=Spec sync is stuck: ${failed:-a check} failed. $next $RUN_URL" >/dev/null; then
+            commented=1
+          fi
+          echo "#$pr: assigned=$assigned commented=$commented (failed: ${failed:-unknown}, auto-merge armed: $armed)"
+          # Still fail the run if neither landed: a silent watchdog is why this sat
+          # red for twelve days.
+          [ "$assigned" = 1 ] || [ "$commented" = 1 ] || {
+            echo "::error::could not assign or comment on #$pr; nobody was told"
+            exit 1
+          }
