@@ -1,7 +1,7 @@
 {
   "name": "skycloak",
   "version": "0.14.1",
-  "description": "Managed Keycloak from Gemini CLI: clusters, realms, apps, SSO, users, domains, audit events.",
+  "description": "Skycloak identity-as-a-service (managed Keycloak) from Gemini CLI: clusters, realms, apps, SSO, users, domains, audit events.",
   "mcpServers": {
     "skycloak": {
       "httpUrl": "https://mcp.skycloak.io"
