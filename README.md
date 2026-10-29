@@ -127,6 +127,12 @@ This adds the following to `.claude.json`:
 }
 ```
 
+**Gemini CLI** installs the hosted server as an extension, from the manifest in this repository:
+
+```bash
+gemini extensions install https://github.com/sky-cloak/skycloak-mcp
+```
+
 For local stdio, sign in once, then point your client at `skycloak-mcp run`:
 
 ```bash
