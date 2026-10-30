@@ -133,6 +133,12 @@ This adds the following to `.claude.json`:
 gemini extensions install https://github.com/sky-cloak/skycloak-mcp
 ```
 
+**Antigravity** installs the hosted server as a plugin, from the bundle in [`plugins/skycloak/`](plugins/skycloak/):
+
+```bash
+agy plugin install ./plugins/skycloak
+```
+
 For local stdio, sign in once, then point your client at `skycloak-mcp run`:
 
 ```bash

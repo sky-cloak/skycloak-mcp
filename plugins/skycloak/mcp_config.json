@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "skycloak": {
+      "url": "https://mcp.skycloak.io"
+    }
+  }
+}
