@@ -1,0 +1,20 @@
+{
+  "name": "skycloak",
+  "displayName": "Skycloak",
+  "version": "0.9.0",
+  "description": "Skycloak is an identity-as-a-service provider whose main managed option today is managed Keycloak. This plugin manages Skycloak clusters, realms, applications, SSO and users through the hosted Skycloak MCP server at https://mcp.skycloak.io.",
+  "author": {
+    "name": "Skycloak",
+    "url": "https://skycloak.io"
+  },
+  "homepage": "https://skycloak.io",
+  "repository": "https://github.com/sky-cloak/skycloak-mcp",
+  "license": "Apache-2.0",
+  "keywords": [
+    "skycloak",
+    "identity",
+    "keycloak",
+    "managed keycloak",
+    "sso"
+  ]
+}
