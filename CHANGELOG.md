@@ -7,6 +7,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- An Antigravity plugin bundle at `plugins/skycloak/`, in the layout Google's
+  plugin marketplace expects: `.antigravity-plugin/plugin.json`, an
+  `mcp_config.json` declaring the hosted server at `https://mcp.skycloak.io` as
+  a single remote MCP server, a README shown before install, and the square
+  logo. The manifest sits under `.antigravity-plugin/` rather than at the
+  plugin root because that is the location the build guide reserves for a
+  directory shared with other providers. The plugin declares no OAuth client:
+  `mcp.skycloak.io` advertises its authorization server through the protected
+  resource metadata the MCP spec defines, so the client discovers the sign-in
+  flow on the first `401`. `agy plugin validate --strict ./plugins/skycloak`
+  passes with no errors and no warnings.
 - `us-west` (US West) as a cluster location of its own. `create_cluster`
   accepts it in any case, and `list_clusters`, `get_cluster` and
   `list_cluster_locations` report it instead of folding West Coast clusters
