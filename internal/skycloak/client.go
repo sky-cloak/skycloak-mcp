@@ -85,6 +85,7 @@ func New(endpoint, apiKey, apiVersion string, opts ...Option) *Client {
 	gen, err := apiclient.NewClientWithResponses(endpoint,
 		apiclient.WithHTTPClient(cfg.httpClient),
 		apiclient.WithRequestEditorFn(editor),
+		apiclient.WithRequestEditorFn(invocationEditor),
 	)
 	if err != nil {
 		panic(fmt.Sprintf("skycloak: invalid endpoint %q: %v", endpoint, err))

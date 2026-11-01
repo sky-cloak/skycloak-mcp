@@ -182,6 +182,20 @@ the route is not registered and the path 404s.
 
 Startup logs one line with the wiring it resolved (`oauth=`, `issuer=`, `dashboard=`, `public_url=`, `endpoint=`, `allow_writes=`), so a misconfigured deployment can be spotted without a redeploy. Every request refused on the OAuth path logs one line naming the stage that failed (`verify`, `exchange` or `scopes`), the status the caller got, and the underlying error. A verification failure adds the check that rejected the token (`expired`, `wrong_issuer`, `bad_signature`, `unknown_key_id`, `wrong_token_type`, `no_openid_scope`, and so on); an exchange failure adds the dashboard's status and the host called. The caller appears as the token's subject once it is verified, and never as a credential: the access token, the `Authorization` header and the minted API key are never logged.
 
+## What the server sends to the Skycloak API
+
+The hosted server and the local binary send the same headers to the Skycloak API (`SKYCLOAK_ENDPOINT`):
+
+| Header | Value | Why |
+|---|---|---|
+| `API-Key` | your API key or the session's minted key | authenticates the request |
+| `API-Version` | `SKYCLOAK_API_VERSION` | pins the API contract the server was built against |
+| `User-Agent` | `skycloak-mcp/<version>` | identifies the client |
+| `X-MCP-Tool` | the tool's registered name, for example `skycloak_list_realms` | says which tool made the request |
+| `X-MCP-Call-Id` | a random UUID made once per tool call | groups every request of one call |
+
+`X-MCP-Tool` and `X-MCP-Call-Id` are sent only on requests made while serving a tool call. One call can make several requests, once per cluster when `cluster_id` is omitted and again when a `429` or `5xx` is retried, and they all share the call's ID. Skycloak uses the pair to count how often each tool is used, which tells us which tools to improve, document or retire. They carry no arguments, results or anything about you beyond what the API key already identifies, and they go only to the Skycloak API, never to your Keycloak clusters or anywhere else. Requests made outside a tool call, such as signing in and minting API keys, carry neither.
+
 ## Configuration
 
 | Env var | Default |

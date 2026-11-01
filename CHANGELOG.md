@@ -48,6 +48,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or `env_var_limit`), which the tool now translates into a plain-language
   hint instead of a bare code. Requires `confirm=true` like the other
   destructive tools.
+- Every request the server makes to the Skycloak API while serving a tool call
+  now carries `X-MCP-Tool`, the tool's registered name, and `X-MCP-Call-Id`, a
+  random UUID made once per call. The gateway logs requests by route, and a
+  route does not say which tool asked: one call can reach the API once per
+  cluster when `cluster_id` is omitted, and a request is retried after a `429`
+  or `5xx`. All requests of one call, retries included, share its call ID, so
+  usage can be counted per tool and per call. Requests made outside a tool call
+  (signing in, minting API keys) carry neither header, and `API-Key`,
+  `API-Version` and `User-Agent` are unchanged. The README lists what is sent.
 
 ### Changed
 - `internal/apiclient` regenerated from the app's current spec (`make generate`)

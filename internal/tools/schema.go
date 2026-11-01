@@ -1,10 +1,13 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/sky-cloak/skycloak-mcp/internal/skycloak"
 )
 
 // addTool registers a tool whose output schema tolerates properties the client
@@ -24,6 +27,10 @@ import (
 // inferred here and relaxed before registration. Inference failure falls back
 // to the SDK's own, which is strict but correct: a tool that registers is
 // better than one that does not.
+//
+// Every call is also served under an invocation context of its own, so each
+// API request the handler makes carries the tool's registered name and a call
+// ID shared by all of that call's requests (see skycloak.WithInvocation).
 func addTool[In, Out any](s *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
 	if t.OutputSchema == nil {
 		if schema, err := jsonschema.For[Out](nil); err == nil && schema != nil {
@@ -31,7 +38,10 @@ func addTool[In, Out any](s *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, O
 			t.OutputSchema = schema
 		}
 	}
-	mcp.AddTool(s, t, h)
+	name := t.Name
+	mcp.AddTool(s, t, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		return h(skycloak.WithInvocation(ctx, name), req, in)
+	})
 }
 
 // isFalseSchema reports whether a schema rejects everything, which is how
