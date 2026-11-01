@@ -79,6 +79,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - The tool counts in the README, which had drifted from what the server
   registers.
+- `skycloak_create_domain_route` and the `set_up_custom_domain` prompt now tell
+  agents never to route a custom domain to the master realm. Doing so sets
+  master's Frontend URL and cuts Skycloak off from managing the cluster, and the
+  API now refuses it with a `400`, but `skycloak_list_realms` lists master like
+  any other realm, so an agent could still pick it. The prompt excludes master
+  when choosing a realm, and when master is the only realm it asks the user to
+  create or name an app realm instead.
 
 ## [0.9.0] - 2026-08-18
 

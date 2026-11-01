@@ -310,9 +310,15 @@ func setUpCustomDomainText(args map[string]string) string {
 	if id := args["cluster_id"]; id != "" {
 		first = fmt.Sprintf("1. Work against cluster %s.", id)
 	}
-	routeStep := "4. If the user wants the domain to serve a realm, confirm and call skycloak_create_domain_route after verification, using skycloak_list_realms to pick the realm."
+	// Routing a domain to master sets master's Frontend URL, which cuts
+	// Skycloak off from managing the cluster: admin calls fail with 401, realms
+	// stop loading and console SSO breaks. The API refuses it with a 400, but
+	// skycloak_list_realms lists master like any other realm, so an agent
+	// picking "the realm" can land on it and waste a call on the refusal.
+	const noMaster = " Never use the master realm: it is reserved for cluster management and the API rejects it. If master is the only realm on the cluster, ask the user to create or name an app realm instead."
+	routeStep := "4. If the user wants the domain to serve a realm, confirm and call skycloak_create_domain_route after verification, using skycloak_list_realms to pick the realm and excluding master from the choices." + noMaster
 	if r := args["realm"]; r != "" {
-		routeStep = fmt.Sprintf("4. After verification, confirm and call skycloak_create_domain_route to point the domain at realm %q.", r)
+		routeStep = fmt.Sprintf("4. After verification, confirm and call skycloak_create_domain_route to point the domain at realm %q.", r) + noMaster
 	}
 	return fmt.Sprintf(`Set up %q as a custom domain. This workflow mutates the cluster: confirm with the user before each create call.
 
