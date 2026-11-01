@@ -69,7 +69,7 @@ func registerParityWriteTools(s *mcp.Server, api API) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_create_domain_route",
-		Description: "Add a realm route to a custom domain.",
+		Description: "Add a realm route to a custom domain. Never use the master realm; it is reserved for cluster management and the API rejects it.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create domain route"},
 	}, createDomainRouteHandler(api))
 
