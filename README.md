@@ -139,6 +139,12 @@ gemini extensions install https://github.com/sky-cloak/skycloak-mcp
 agy plugin install ./plugins/skycloak
 ```
 
+**Copilot CLI** installs it from the Agent Plugins manifest at the repository root, once the listing is approved:
+
+```bash
+copilot plugin install skycloak@awesome-copilot
+```
+
 For local stdio, sign in once, then point your client at `skycloak-mcp run`:
 
 ```bash
@@ -244,6 +250,12 @@ The client in `internal/apiclient` is generated from `internal/apiclient/openapi
 ## Distribution
 
 Released as GitHub binaries and a `ghcr.io/sky-cloak/skycloak-mcp` container image on each tag, and published to the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.skycloak/skycloak-mcp`. Most people do not need either: the hosted server needs no install.
+
+### Plugin bundles
+
+[`plugins/skycloak/`](plugins/skycloak/) is one folder that serves two clients: `.antigravity-plugin/plugin.json` with `mcp_config.json` for Antigravity, and `.claude-plugin/plugin.json` for Claude. Both point at the hosted server and ship the four skills, which are byte-for-byte copies of `internal/tools/skills/` because an installer receives only that folder.
+
+The [`plugin.json`](plugin.json) and [`mcp.json`](mcp.json) at the repository root are the [Agent Plugins v1.0.0](https://agent-plugins.org) manifest that GitHub's [awesome-copilot](https://github.com/github/awesome-copilot) marketplace reads. That format allows no logo field, so the listing logo is carried under `extensions["com.github.copilot"]`.
 
 ## Security
 
