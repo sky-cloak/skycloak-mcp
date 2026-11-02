@@ -4,8 +4,9 @@ Skycloak is an identity-as-a-service provider. Its main managed option today is 
 production Keycloak clusters, realms, applications and enterprise single sign-on without running the
 infrastructure yourself.
 
-This plugin connects Antigravity to the hosted Skycloak MCP server at `https://mcp.skycloak.io`, so you can run
-your Skycloak workspace from a conversation.
+This plugin connects your agent to the hosted Skycloak MCP server at `https://mcp.skycloak.io`, so you can run
+your Skycloak workspace from a conversation. The same folder is the plugin bundle for Antigravity
+(`.antigravity-plugin/plugin.json` plus `mcp_config.json`) and for Claude (`.claude-plugin/plugin.json`).
 
 ## What you can do with it
 
@@ -29,12 +30,28 @@ Read-only tools are always available. Write tools are bounded by your workspace 
 session, so a read-only member cannot change anything whatever the tool list shows. Destructive tools such as
 deleting a realm require an explicit confirmation argument.
 
+## Bundled skills
+
+Four skills ship with the plugin and load when the situation fits:
+
+- `auth-incident-triage`: work out why users cannot log in, separating a platform problem from an attack and
+  from a configuration change. Read-only.
+- `enterprise-sso-rollout`: wire an enterprise identity provider into a realm end to end and verify it against
+  real login events.
+- `keycloak-migration-doctor`: preflight an export, import or migration, and diagnose a job that already failed.
+- `keycloak-upgrade-readiness`: assess version drift, work out what a new Keycloak version breaks, and sequence
+  the rollout with a rollback plan.
+
+They are byte-for-byte copies of the skills the server itself serves from `internal/tools/skills/`, because an
+installer receives only this folder. A test in the repository fails if the two sides drift.
+
 ## Setup
 
-1. Install the plugin from the Antigravity Marketplace, or point the CLI at this folder:
+1. Install the plugin from your client's marketplace, or point your CLI at this folder:
 
    ```bash
-   agy plugin install ./plugins/skycloak
+   agy plugin install ./plugins/skycloak          # Antigravity
+   claude plugin validate ./plugins/skycloak      # Claude, before submitting
    ```
 
 2. Sign in when your browser opens. Authentication is OAuth 2.1 against the Skycloak login realm, so there is no
@@ -69,5 +86,5 @@ to [support@skycloak.io](mailto:support@skycloak.io).
 
 ## License
 
-[Apache-2.0](https://github.com/sky-cloak/skycloak-mcp/blob/main/LICENSE), the same license as the
+[Apache-2.0](./LICENSE), the same license as the
 [skycloak-mcp](https://github.com/sky-cloak/skycloak-mcp) repository this plugin lives in.

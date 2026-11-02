@@ -22,7 +22,7 @@
     "identity",
     "idaas",
     "keycloak",
-    "managed keycloak",
+    "managed-keycloak",
     "sso",
     "oidc",
     "saml"
