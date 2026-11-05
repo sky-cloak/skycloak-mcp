@@ -7,6 +7,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- A plugin bundle at `plugins/skycloak/` that serves two clients from one
+  folder. Antigravity reads `.antigravity-plugin/plugin.json` and
+  `mcp_config.json`; Claude reads `.claude-plugin/plugin.json`, which carries
+  its MCP server inline rather than in a `.mcp.json`, because that file name
+  makes the Antigravity loader warn that it is never loaded. Both declare the
+  hosted server at `https://mcp.skycloak.io` as a single remote MCP server, and
+  both ship the README, the square logo and the four skills. The Antigravity
+  manifest sits under `.antigravity-plugin/` rather than at the plugin root
+  because that is the location its build guide reserves for a directory shared
+  with other providers. Neither declares an OAuth client: `mcp.skycloak.io`
+  advertises its authorization server through the protected resource metadata
+  the MCP spec defines, so the client discovers the sign-in flow on the first
+  `401`. `agy plugin validate --strict ./plugins/skycloak` and
+  `claude plugin validate ./plugins/skycloak` both pass with nothing to report.
+- A `plugin.json` and `mcp.json` at the repository root, in the Agent Plugins
+  v1.0.0 format GitHub's awesome-copilot marketplace validates external
+  submissions against. The bundled skills are byte-for-byte copies of
+  `internal/tools/skills/`, because an installer receives only the plugin
+  folder; a test fails if the two sides drift.
 - `us-west` (US West) as a cluster location of its own. `create_cluster`
   accepts it in any case, and `list_clusters`, `get_cluster` and
   `list_cluster_locations` report it instead of folding West Coast clusters

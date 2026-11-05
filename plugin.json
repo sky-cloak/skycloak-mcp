@@ -1,0 +1,28 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "skycloak",
+  "version": "0.14.1",
+  "description": "Skycloak is identity-as-a-service, delivered today as managed Keycloak. Run clusters, realms, applications, SSO, users, domains and audit events from the hosted Skycloak MCP server.",
+  "author": {
+    "name": "Skycloak",
+    "url": "https://skycloak.io"
+  },
+  "homepage": "https://skycloak.io/docs/mcp/",
+  "repository": "https://github.com/sky-cloak/skycloak-mcp",
+  "license": "Apache-2.0",
+  "keywords": [
+    "skycloak",
+    "identity",
+    "idaas",
+    "keycloak",
+    "managed-keycloak",
+    "sso",
+    "oidc",
+    "saml"
+  ],
+  "extensions": {
+    "com.github.copilot": {
+      "logo": "docs/assets/skycloak-logo-512-plated.png"
+    }
+  }
+}
