@@ -257,6 +257,8 @@ Released as GitHub binaries and a `ghcr.io/sky-cloak/skycloak-mcp` container ima
 
 The [`plugin.json`](plugin.json) and [`mcp.json`](mcp.json) at the repository root are the [Agent Plugins v1.0.0](https://agent-plugins.org) manifest that GitHub's [awesome-copilot](https://github.com/github/awesome-copilot) marketplace reads. That format allows no logo field, so the listing logo is carried under `extensions["com.github.copilot"]`.
 
+Maintainers shipping plugin, manifest or skill changes should read the [directory updates section](plugins/skycloak/README.md#directory-updates) of the plugin README, which covers bumping the `version` field in all three manifests in lockstep.
+
 ## Security
 
 Please report vulnerabilities privately. See [SECURITY.md](./SECURITY.md).

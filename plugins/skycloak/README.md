@@ -79,6 +79,22 @@ runs on. The plugin itself stores no data and contacts no other service.
 Skycloak's handling of that data is described in its [privacy policy](https://skycloak.io/pp/). The server, its
 authentication and its tool surface are documented at [skycloak.io/docs/mcp](https://skycloak.io/docs/mcp/).
 
+## Directory updates
+
+When you ship a change to the plugin, one of its manifests or a bundled skill and you want it to reach the
+Claude directory, and the Antigravity and Copilot listings with it, bump `version` in all three manifests:
+
+- [`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json)
+- [`.antigravity-plugin/plugin.json`](./.antigravity-plugin/plugin.json)
+- the [`plugin.json`](../../plugin.json) at the repository root, which is the Copilot and Agent Plugins manifest
+
+Those three `version` strings must stay identical. Bump them in the same commit, or at least in the same pull
+request, so no listing is left describing a different release than the others.
+
+Then merge to main. The Claude directory tracks `main/plugins/skycloak` and rescans new commits there, so a
+version bump landed on main is what keeps the listings correct. Nothing else is required for the directory: no
+release script, no tag, and no change to the Go binary's own version.
+
 ## Support
 
 Open an issue on [github.com/sky-cloak/skycloak-mcp](https://github.com/sky-cloak/skycloak-mcp/issues), or write
