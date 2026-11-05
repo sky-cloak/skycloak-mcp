@@ -65,3 +65,62 @@ jobs:
 
       - name: Publish
         run: ./mcp-publisher publish
+
+  # The plugin directories read the manifests from main rather than from the tag,
+  # so pinning them in the job like server.json above would reach nobody. The bump
+  # lands as a commit on main, after the tag, which also covers the releases a
+  # human cuts by hand instead of through auto-release.
+  sync-plugin-manifests:
+    name: sync the plugin manifests to the tag
+    runs-on: ubuntu-latest
+    needs: goreleaser
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set the manifest versions to the tag
+        id: bump
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          for f in plugins/skycloak/.claude-plugin/plugin.json \
+                   plugins/skycloak/.antigravity-plugin/plugin.json \
+                   plugin.json \
+                   .grok-plugin/plugin.json; do
+            jq --arg v "$VERSION" '.version = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+          done
+          if git diff --quiet; then
+            echo "The manifests are already at $VERSION."
+          else
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The same app as auto-release: a push with GITHUB_TOKEN cannot reach a
+      # protected main.
+      - name: Mint the releaser app token
+        if: steps.bump.outputs.version != ''
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASER_APP_ID }}
+          private-key: ${{ secrets.RELEASER_PRIVATE_KEY }}
+
+      - name: Commit the bump to main
+        if: steps.bump.outputs.version != ''
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "skycloak-releaser-bot[bot]"
+          git config user.email "skycloak-releaser-bot[bot]@users.noreply.github.com"
+          git commit -am "chore(plugins): sync manifest versions to $VERSION"
+          remote="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # main can move while the release runs, so rebase onto it once rather
+          # than losing the bump to a non-fast-forward.
+          git push "$remote" HEAD:refs/heads/main || {
+            git pull --rebase "$remote" main
+            git push "$remote" HEAD:refs/heads/main
+          }
