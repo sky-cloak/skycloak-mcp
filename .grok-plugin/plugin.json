@@ -1,6 +1,6 @@
 {
   "name": "skycloak",
-  "version": "0.9.0",
+  "version": "0.15.0",
   "description": "Official MCP server for Skycloak managed Keycloak. Manage clusters, realms, applications, SSO, and users from Grok via https://mcp.skycloak.io.",
   "author": {
     "name": "Skycloak",

@@ -79,6 +79,24 @@ runs on. The plugin itself stores no data and contacts no other service.
 Skycloak's handling of that data is described in its [privacy policy](https://skycloak.io/pp/). The server, its
 authentication and its tool surface are documented at [skycloak.io/docs/mcp](https://skycloak.io/docs/mcp/).
 
+## Directory updates
+
+The Claude and Antigravity listings track `main` and rescan the commits on it, so every release has to leave a
+new `version` on main for the directories to pick the change up. Four manifests carry that version:
+
+- [`.claude-plugin/plugin.json`](./.claude-plugin/plugin.json)
+- [`.antigravity-plugin/plugin.json`](./.antigravity-plugin/plugin.json)
+- the [`plugin.json`](../../plugin.json) at the repository root, for Copilot and Agent Plugins
+- the [`.grok-plugin/plugin.json`](../../.grok-plugin/plugin.json) at the repository root, for Grok
+
+CI does the bump. When a `v*` tag is pushed, the `sync-plugin-manifests` job in
+[`release.yml`](../../.github/workflows/release.yml) sets all four `version` fields to the tag without its
+leading `v` and commits the result to main. So releasing is enough, and a pull request that changes the plugin,
+a manifest or a skill does not need to touch a version field.
+
+Edit a `version` by hand only to repair a lag, when main is behind the newest release tag. Keep the four values
+identical when you do, and use the version of the existing tag rather than inventing a bump.
+
 ## Support
 
 Open an issue on [github.com/sky-cloak/skycloak-mcp](https://github.com/sky-cloak/skycloak-mcp/issues), or write
