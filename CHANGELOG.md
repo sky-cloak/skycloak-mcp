@@ -7,6 +7,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `skycloak_list_openfga_instances`, `skycloak_get_openfga_instance`,
+  `skycloak_create_openfga_instance` and `skycloak_delete_openfga_instance`,
+  covering `GET`/`POST /openfga-instances` and `GET`/`DELETE
+  /openfga-instances/{instance_id}`. An instance is a dedicated OpenFGA bound to
+  one realm of a cluster, and it accepts only tokens from that realm. Creating
+  one is asynchronous (poll the get tool until `status` is `ready`), is refused
+  with `403` when the workspace has no access to OpenFGA and with `409` when
+  the realm already has an instance. The get tool returns the `api_url`,
+  `issuer` and `audience` to call it with. Deleting removes the deployment,
+  route and database for good, so the tool requires `confirm=true`. The
+  `openfga:read` and `openfga:write` scopes are part of the scopes requested at
+  sign-in, and the vendored OpenAPI spec and generated client carry the new
+  operations.
 - A plugin bundle at `plugins/skycloak/` that serves two clients from one
   folder. Antigravity reads `.antigravity-plugin/plugin.json` and
   `mcp_config.json`; Claude reads `.claude-plugin/plugin.json`, which carries

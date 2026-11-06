@@ -97,6 +97,7 @@ var writeScopes = []string{
 	"smtp:read", "smtp:write",
 	"siem:read", "siem:write",
 	"webhooks:read", "webhooks:write",
+	"openfga:read", "openfga:write",
 }
 
 // mintCLIKey exchanges the device-flow Bearer token for a workspace-scoped API
