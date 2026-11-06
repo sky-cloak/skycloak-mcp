@@ -36,6 +36,7 @@ tags:
   - name: Exports
   - name: Cluster Backups
   - name: Imports
+  - name: OpenFGA
   - name: SIEM
   - name: Webhooks
 paths:
@@ -17926,6 +17927,480 @@ paths:
         - ApiKeyAuth: []
       x-scopes:
         - identity-providers:read
+  /openfga-instances:
+    get:
+      operationId: listOpenFGAInstances
+      summary: List OpenFGA instances
+      description: |-
+        Returns the OpenFGA instances in the workspace, each bound to one realm of one cluster.
+
+        Required scope: `openfga:read`
+      parameters:
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OpenFGAInstance'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - OpenFGA
+      security:
+        - ApiKeyAuth: []
+      x-scopes:
+        - openfga:read
+    post:
+      operationId: createOpenFGAInstance
+      summary: Create an OpenFGA instance
+      description: |-
+        Provisions a dedicated OpenFGA instance bound to one realm of a cluster. Provisioning is
+        asynchronous: poll `GET /openfga-instances/{instance_id}` until `status` is `ready`.
+
+        Returns `403` when the workspace does not have access to OpenFGA, and `409` when the
+        realm already has an instance.
+
+        Required scope: `openfga:write`
+      parameters:
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '202':
+          description: Returned when the instance has been accepted for provisioning. Poll the `Location` URL until `status` is `ready` or `failed`.
+          headers:
+            Location:
+              required: true
+              description: URL of the resource being created or modified. Poll this endpoint to track completion.
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenFGAInstance'
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '422':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOpenFGAInstanceRequest'
+      tags:
+        - OpenFGA
+      security:
+        - ApiKeyAuth: []
+      x-scopes:
+        - openfga:write
+  /openfga-instances/{instance_id}:
+    get:
+      operationId: getOpenFGAInstance
+      summary: Get an OpenFGA instance
+      description: |-
+        Returns one OpenFGA instance, including its status and the API URL, issuer and audience to call it with.
+
+        Required scope: `openfga:read`
+      parameters:
+        - name: instance_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/OpenFGAInstanceId'
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenFGAInstance'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - OpenFGA
+      security:
+        - ApiKeyAuth: []
+      x-scopes:
+        - openfga:read
+    delete:
+      operationId: deleteOpenFGAInstance
+      summary: Delete an OpenFGA instance
+      description: |-
+        Deletes the instance, its deployment, route and database. The authorization data in it is
+        lost and cannot be recovered.
+
+        Required scope: `openfga:write`
+      parameters:
+        - name: instance_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/OpenFGAInstanceId'
+        - $ref: '#/components/parameters/CommonParameters'
+      responses:
+        '204':
+          description: There is no content to send for this request, but the headers may be useful.
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: Client error
+          headers:
+            Retry-After:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Limit:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Remaining:
+              required: false
+              schema:
+                type: integer
+            RateLimit-Reset:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Second:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Minute:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Hour:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Limit-Day:
+              required: false
+              schema:
+                type: integer
+            X-RateLimit-Remaining-Day:
+              required: false
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '501':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      tags:
+        - OpenFGA
+      security:
+        - ApiKeyAuth: []
+      x-scopes:
+        - openfga:write
   /realm-exports/{export_id}:
     get:
       operationId: getRealmExport
@@ -21572,6 +22047,18 @@ components:
         source_kind: upload
         upload_s3_key: realm-imports/uploads/ws/abc.zip.enc
         password: a-strong-passphrase
+    CreateOpenFGAInstanceRequest:
+      type: object
+      required:
+        - cluster_id
+        - realm_name
+      properties:
+        cluster_id:
+          $ref: '#/components/schemas/ClusterId'
+        realm_name:
+          type: string
+          minLength: 1
+          description: The realm to bind the instance to. A realm has at most one instance.
     CreateRealmRequest:
       type: object
       required:
@@ -23247,6 +23734,59 @@ components:
         - urn:oasis:names:tc:SAML:2.0:nameid-format:persistent
         - urn:oasis:names:tc:SAML:2.0:nameid-format:transient
       description: SAML NameID format.
+    OpenFGAInstance:
+      type: object
+      required:
+        - id
+        - cluster_id
+        - realm_name
+        - status
+        - api_url
+        - issuer
+        - audience
+        - created_at
+        - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/OpenFGAInstanceId'
+        cluster_id:
+          $ref: '#/components/schemas/ClusterId'
+        realm_name:
+          type: string
+          description: The realm whose tokens the instance accepts.
+        status:
+          $ref: '#/components/schemas/OpenFGAInstanceStatus'
+        status_message:
+          type: string
+          description: Why the instance is `failed`, when the operator reported a reason.
+        api_url:
+          type: string
+          format: uri
+          description: The URL to call the OpenFGA API on.
+        issuer:
+          type: string
+          format: uri
+          description: The token issuer the instance accepts.
+        audience:
+          type: string
+          description: The audience a token must carry. Add it with an audience mapper in Keycloak.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      description: A dedicated OpenFGA instance bound to one realm.
+    OpenFGAInstanceId:
+      type: string
+      format: uuid
+    OpenFGAInstanceStatus:
+      type: string
+      enum:
+        - provisioning
+        - ready
+        - failed
+        - deleting
     OIDCConfig:
       type: object
       properties:
