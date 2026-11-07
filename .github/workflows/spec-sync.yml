@@ -4,16 +4,31 @@ name: spec-sync
 # sync that builds and tests cleanly merges itself once its checks pass, and
 # auto-release.yml tags it. Runs when app releases or rolls back
 # (repository_dispatch: openapi-updated, carrying the tag), or by hand with a
-# tag. No schedule: guessing the latest release would sync past a rollback.
+# tag. No schedule for the app spec: guessing the latest release would sync past
+# a rollback.
+#
+# A second job keeps the second spec (internal/platformclient) current. It
+# follows commits on main of the repository that owns it, not release tags: it
+# runs every six hours or by hand with source=second, pins the fetch to the
+# commit main is at, records that commit, and opens a pull request when it
+# moved.
 on:
   workflow_dispatch:
     inputs:
+      source:
+        description: "Which spec to sync: app (needs a ref) or second (follows main)"
+        required: false
+        default: app
+        type: choice
+        options: [app, second]
       ref:
-        description: 'App release tag prod serves, e.g. v3.5.17'
-        required: true
+        description: "App release tag prod serves, e.g. v3.5.17 (source=app only)"
+        required: false
         type: string
   repository_dispatch:
     types: [openapi-updated]
+  schedule:
+    - cron: "17 */6 * * *"
 
 permissions:
   contents: read
@@ -26,6 +41,7 @@ concurrency:
 
 jobs:
   sync:
+    if: github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_dispatch' && inputs.source != 'second')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -116,6 +132,110 @@ jobs:
       # Merges only when regeneration built and tested, and only once the PR's
       # required checks pass; an earlier auto-merge is withdrawn if this update broke.
       # Gated on the PR existing, not on this run pushing, so a re-run re-arms it.
+      - name: Merge automatically once checks pass
+        if: steps.pr.outputs.pull-request-number != '' && steps.verify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APPROVER_TOKEN: ${{ github.token }}
+          PR: ${{ steps.pr.outputs.pull-request-number }}
+        run: |
+          set -euo pipefail
+          GH_TOKEN="$APPROVER_TOKEN" gh pr review "$PR" --approve --body "Regenerated client builds and tests; merging once checks pass."
+          gh pr merge "$PR" --auto --squash
+
+      - name: Withdraw auto-merge when the regenerated client is broken
+        if: steps.pr.outputs.pull-request-number != '' && steps.verify.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ steps.pr.outputs.pull-request-number }}
+        run: gh pr merge "$PR" --disable-auto || true
+
+      - name: Fail the run when the regenerated client breaks the build
+        if: steps.verify.outcome == 'failure'
+        run: |
+          echo "::error::Spec sync broke build/test; fix the generated-code consumers on the sync PR, then merge it by hand; it releases once merged."
+          exit 1
+
+  # The second spec follows main by commit. Main is not a release, so nothing
+  # here claims a released API: the copy is the public one, staff paths are
+  # refused by the script that installs it, and a sync that builds and tests
+  # still waits for the pull request's required checks like the app sync does.
+  sync-second:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.source == 'second')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      # Main is read once, as a hash, and every later step uses that hash: a
+      # push to main in between cannot make the recorded commit differ from the
+      # bytes that were fetched.
+      - name: Resolve the commit main is at
+        id: ref
+        env:
+          GH_TOKEN: ${{ secrets.SECOND_SPEC_SOURCE_TOKEN }}
+          SPEC_REPO: ${{ vars.SECOND_SPEC_REPO }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ] || [ -z "$SPEC_REPO" ]; then
+            echo "::error::SECOND_SPEC_SOURCE_TOKEN (a fine-grained token with Contents:Read) and the SECOND_SPEC_REPO variable must be set"
+            exit 1
+          fi
+          # Assignments, not echo "$(...)", so a refusal stops the step.
+          head_sha=$(gh api "repos/$SPEC_REPO/commits/main" --jq .sha)
+          sha=$(scripts/release/resolve-platform-ref.sh "$head_sha")
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "short=${sha:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch the public copy of the spec at that commit
+        env:
+          GH_TOKEN: ${{ secrets.SECOND_SPEC_SOURCE_TOKEN }}
+          SPEC_REPO: ${{ vars.SECOND_SPEC_REPO }}
+          SPEC_PATH: ${{ vars.SECOND_SPEC_PATH }}
+          SHA: ${{ steps.ref.outputs.sha }}
+        run: |
+          set -euo pipefail
+          : "${SHA:?no commit resolved}"
+          : "${SPEC_PATH:?the SECOND_SPEC_PATH variable is not set}"
+          fetched="$RUNNER_TEMP/second-openapi.yaml"
+          gh api "repos/$SPEC_REPO/contents/$SPEC_PATH?ref=$SHA" \
+            -H "Accept: application/vnd.github.raw" > "$fetched"
+          # Refuses a non-OpenAPI file and any /v1/staff/ path, then records the commit.
+          scripts/release/sync-platform-spec.sh "$SHA" "$fetched"
+
+      - name: Regenerate the API client
+        run: go generate ./internal/platformclient/...
+
+      - name: Build & test against the new client
+        id: verify
+        continue-on-error: true
+        run: |
+          go build ./... && go test ./...
+
+      - name: Mint the releaser app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASER_APP_ID }}
+          private-key: ${{ secrets.RELEASER_PRIVATE_KEY }}
+
+      - name: Open PR if the spec moved
+        id: pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: chore/second-spec-sync
+          title: "chore: sync second OpenAPI spec from commit ${{ steps.ref.outputs.short }}"
+          commit-message: "chore: sync second OpenAPI spec from commit ${{ steps.ref.outputs.short }}"
+          delete-branch: true
+          body: |
+            Automated sync from commit `${{ steps.ref.outputs.sha }}` on main.
+
+            - Build & tests after regeneration: **${{ steps.verify.outcome }}**
+              (if `failure`, the spec changed in a way that needs the generated-code consumers updated).
+
       - name: Merge automatically once checks pass
         if: steps.pr.outputs.pull-request-number != '' && steps.verify.outcome == 'success'
         env:

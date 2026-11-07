@@ -7,7 +7,7 @@ on:
   workflow_run:
     workflows: [test]
     types: [completed]
-    branches: [chore/openapi-sync]
+    branches: [chore/openapi-sync, chore/second-spec-sync]
 
 permissions:
   contents: read
@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   assign:
-    # Runs from this repo only: a fork PR can name its branch chore/openapi-sync
+    # Runs from this repo only: a fork PR can name its branch chore/openapi-sync or chore/second-spec-sync
     # and even point at the bot PR's commit.
     if: >-
       github.event.workflow_run.conclusion == 'failure' &&
@@ -47,7 +47,7 @@ jobs:
             gh api "$@" || { echo "::error::$label failed (see HTTP status above)"; return 1; }
           }
           pulls=$(api "list PRs for the commit" "repos/$REPO/commits/$SHA/pulls") || exit 1
-          pr=$(jq -r --arg bot "$BOT" '[.[] | select(.state == "open" and .head.ref == "chore/openapi-sync" and .user.login == $bot)][0].number // empty' <<< "$pulls")
+          pr=$(jq -r --arg bot "$BOT" '[.[] | select(.state == "open" and (.head.ref == "chore/openapi-sync" or .head.ref == "chore/second-spec-sync") and .user.login == $bot)][0].number // empty' <<< "$pulls")
           if [ -z "$pr" ]; then
             echo "No open bot sync PR for $SHA."
             exit 0
