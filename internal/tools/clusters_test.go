@@ -467,28 +467,31 @@ func (s stubAPI) DeleteTheme(context.Context, string, string) error  { return s.
 func (s stubAPI) DeleteExtension(context.Context, string) error      { return s.err }
 func (s stubAPI) DeleteExport(context.Context, string, string) error { return s.err }
 
-func (s stubAPI) ListOpenFGAInstances(context.Context) ([]skycloak.OpenFGAInstance, error) {
+func (s stubAPI) ListOpenFGAInstances(context.Context, string) ([]skycloak.OpenFGAInstance, error) {
 	return s.fgaInstances, s.err
 }
 
-func (s stubAPI) GetOpenFGAInstance(_ context.Context, id string) (*skycloak.OpenFGAInstance, error) {
+func (s stubAPI) GetOpenFGAInstance(_ context.Context, clusterID, id string) (*skycloak.OpenFGAInstance, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
 	if s.fgaInstance != nil {
 		return s.fgaInstance, nil
 	}
-	return &skycloak.OpenFGAInstance{ID: id, ClusterID: "c1", RealmName: "acme", Status: "ready", APIURL: "https://fga.example.test", Issuer: "https://kc.example.test/realms/acme", Audience: "https://fga.example.test"}, nil
+	return &skycloak.OpenFGAInstance{ID: id, ClusterID: clusterID, Realm: "acme", Status: "ready", APIURL: "https://fga.example.test", Issuer: "https://kc.example.test/realms/acme", Audience: "https://fga.example.test"}, nil
 }
 
 func (s stubAPI) CreateOpenFGAInstance(_ context.Context, clusterID, realm string) (*skycloak.OpenFGAInstance, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &skycloak.OpenFGAInstance{ID: "f1", ClusterID: clusterID, RealmName: realm, Status: "provisioning"}, nil
+	return &skycloak.OpenFGAInstance{ID: "f1", ClusterID: clusterID, Realm: realm, Status: "provisioning"}, nil
 }
 
-func (s stubAPI) DeleteOpenFGAInstance(context.Context, string) error { return s.err }
+// fgaInstance nil means the API answered 204 (already gone).
+func (s stubAPI) DeleteOpenFGAInstance(context.Context, string, string) (*skycloak.OpenFGAInstance, error) {
+	return s.fgaInstance, s.err
+}
 func (s stubAPI) DeleteDomainRoute(context.Context, string, string, string) error {
 	return s.err
 }

@@ -86,10 +86,10 @@ type API interface {
 	DeleteTheme(ctx context.Context, clusterID, themeID string) error
 	DeleteExtension(ctx context.Context, extensionID string) error
 	DeleteExport(ctx context.Context, clusterID, exportID string) error
-	ListOpenFGAInstances(ctx context.Context) ([]skycloak.OpenFGAInstance, error)
-	GetOpenFGAInstance(ctx context.Context, instanceID string) (*skycloak.OpenFGAInstance, error)
+	ListOpenFGAInstances(ctx context.Context, clusterID string) ([]skycloak.OpenFGAInstance, error)
+	GetOpenFGAInstance(ctx context.Context, clusterID, instanceID string) (*skycloak.OpenFGAInstance, error)
 	CreateOpenFGAInstance(ctx context.Context, clusterID, realm string) (*skycloak.OpenFGAInstance, error)
-	DeleteOpenFGAInstance(ctx context.Context, instanceID string) error
+	DeleteOpenFGAInstance(ctx context.Context, clusterID, instanceID string) (*skycloak.OpenFGAInstance, error)
 	GetDomainRoute(ctx context.Context, clusterID, domainID, routeID string) (*skycloak.DomainRoute, error)
 	CreateDomainRoute(ctx context.Context, clusterID, domainID, realm string, allowAdminAccess, hideRealmPath bool) (*skycloak.DomainRoute, error)
 	DeleteDomainRoute(ctx context.Context, clusterID, domainID, routeID string) error

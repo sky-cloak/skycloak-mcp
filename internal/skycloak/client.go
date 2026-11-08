@@ -3059,11 +3059,11 @@ func (c *Client) DeleteClientRole(ctx context.Context, clusterID, realm, clientI
 
 // ---- OpenFGA instances ----
 
-// OpenFGAInstance is a dedicated OpenFGA instance bound to one realm.
+// OpenFGAInstance is a hosted OpenFGA instance bound to one realm of a cluster.
 type OpenFGAInstance struct {
 	ID            string `json:"id"`
 	ClusterID     string `json:"cluster_id"`
-	RealmName     string `json:"realm_name"`
+	Realm         string `json:"realm"`
 	Status        string `json:"status"`
 	StatusMessage string `json:"status_message,omitempty"`
 	APIURL        string `json:"api_url"`
@@ -3075,7 +3075,7 @@ type OpenFGAInstance struct {
 
 func openFGAInstanceFromAPI(i *apiclient.OpenFGAInstance) OpenFGAInstance {
 	out := OpenFGAInstance{
-		ID: uuidString(i.Id), ClusterID: uuidString(i.ClusterId), RealmName: i.RealmName,
+		ID: uuidString(i.Id), ClusterID: uuidString(i.ClusterId), Realm: i.Realm,
 		Status: string(i.Status), APIURL: i.ApiUrl, Issuer: i.Issuer, Audience: i.Audience,
 		CreatedAt: i.CreatedAt.Format(time.RFC3339), UpdatedAt: i.UpdatedAt.Format(time.RFC3339),
 	}
@@ -3085,25 +3085,25 @@ func openFGAInstanceFromAPI(i *apiclient.OpenFGAInstance) OpenFGAInstance {
 	return out
 }
 
-// ListOpenFGAInstances returns the workspace's OpenFGA instances.
-func (c *Client) ListOpenFGAInstances(ctx context.Context) ([]OpenFGAInstance, error) {
-	resp, err := c.gen.ListOpenFGAInstancesWithResponse(ctx, nil)
+// ListOpenFGAInstances returns the OpenFGA instances bound to a cluster's realms.
+func (c *Client) ListOpenFGAInstances(ctx context.Context, clusterID string) ([]OpenFGAInstance, error) {
+	resp, err := c.gen.ListOpenFGAInstancesWithResponse(ctx, cid(clusterID), nil)
 	if err != nil {
 		return nil, err
 	}
 	if resp.JSON200 == nil {
 		return nil, statusError(resp.HTTPResponse, resp.Body)
 	}
-	out := make([]OpenFGAInstance, 0, len(*resp.JSON200))
-	for i := range *resp.JSON200 {
-		out = append(out, openFGAInstanceFromAPI(&(*resp.JSON200)[i]))
+	out := make([]OpenFGAInstance, 0, len(resp.JSON200.Instances))
+	for i := range resp.JSON200.Instances {
+		out = append(out, openFGAInstanceFromAPI(&resp.JSON200.Instances[i]))
 	}
 	return out, nil
 }
 
-// GetOpenFGAInstance returns a single OpenFGA instance by ID.
-func (c *Client) GetOpenFGAInstance(ctx context.Context, instanceID string) (*OpenFGAInstance, error) {
-	resp, err := c.gen.GetOpenFGAInstanceWithResponse(ctx, uid(instanceID), nil)
+// GetOpenFGAInstance returns one OpenFGA instance of a cluster.
+func (c *Client) GetOpenFGAInstance(ctx context.Context, clusterID, instanceID string) (*OpenFGAInstance, error) {
+	resp, err := c.gen.GetOpenFGAInstanceWithResponse(ctx, cid(clusterID), uid(instanceID), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -3114,12 +3114,10 @@ func (c *Client) GetOpenFGAInstance(ctx context.Context, instanceID string) (*Op
 	return &i, nil
 }
 
-// CreateOpenFGAInstance provisions an OpenFGA instance bound to a realm
-// (asynchronous).
+// CreateOpenFGAInstance starts provisioning an OpenFGA instance bound to a
+// realm. The API answers 202 with the instance in `provisioning`.
 func (c *Client) CreateOpenFGAInstance(ctx context.Context, clusterID, realm string) (*OpenFGAInstance, error) {
-	resp, err := c.gen.CreateOpenFGAInstanceWithResponse(ctx, nil, apiclient.CreateOpenFGAInstanceJSONRequestBody{
-		ClusterId: cid(clusterID), RealmName: realm,
-	})
+	resp, err := c.gen.CreateOpenFGAInstanceWithResponse(ctx, cid(clusterID), nil, apiclient.CreateOpenFGAInstanceJSONRequestBody{Realm: realm})
 	if err != nil {
 		return nil, err
 	}
@@ -3130,14 +3128,19 @@ func (c *Client) CreateOpenFGAInstance(ctx context.Context, clusterID, realm str
 	return &i, nil
 }
 
-// DeleteOpenFGAInstance deletes an OpenFGA instance and its data.
-func (c *Client) DeleteOpenFGAInstance(ctx context.Context, instanceID string) error {
-	resp, err := c.gen.DeleteOpenFGAInstanceWithResponse(ctx, uid(instanceID), nil)
+// DeleteOpenFGAInstance removes an OpenFGA instance and its data. It returns
+// the instance in `deleting` on 202, and nil on 204 when it was already gone.
+func (c *Client) DeleteOpenFGAInstance(ctx context.Context, clusterID, instanceID string) (*OpenFGAInstance, error) {
+	resp, err := c.gen.DeleteOpenFGAInstanceWithResponse(ctx, cid(clusterID), uid(instanceID), nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if sc := resp.StatusCode(); sc < 200 || sc >= 300 {
-		return statusError(resp.HTTPResponse, resp.Body)
+	switch {
+	case resp.JSON202 != nil:
+		i := openFGAInstanceFromAPI(resp.JSON202)
+		return &i, nil
+	case resp.StatusCode() == http.StatusNoContent:
+		return nil, nil
 	}
-	return nil
+	return nil, statusError(resp.HTTPResponse, resp.Body)
 }
