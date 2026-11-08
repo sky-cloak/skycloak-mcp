@@ -16,6 +16,8 @@ jobs:
         run: |
           bash scripts/release/next-version_test.sh
           bash scripts/release/resolve-spec-ref_test.sh
+          bash scripts/release/resolve-platform-ref_test.sh
+          bash scripts/release/sync-platform-spec_test.sh
       - name: Shellcheck the release scripts
         run: shellcheck scripts/release/*.sh
   test:
@@ -54,10 +56,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
-      - name: Check the generated API client is in sync with openapi.yaml
+      - name: Check the generated API clients are in sync with their openapi.yaml
         run: |
-          go generate ./internal/apiclient/...
-          git diff --exit-code internal/apiclient
+          go generate ./internal/apiclient/... ./internal/platformclient/...
+          git diff --exit-code internal/apiclient internal/platformclient
 
   server-json:
     name: server.json

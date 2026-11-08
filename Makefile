@@ -28,5 +28,5 @@ tidy: ## Tidy modules
 docker: ## Build the container image
 	docker build -t ghcr.io/sky-cloak/skycloak-mcp:$(VERSION) .
 
-generate: ## Regenerate the API client from internal/apiclient/openapi.yaml
-	go generate ./internal/apiclient/...
+generate: ## Regenerate both API clients from their openapi.yaml
+	go generate ./internal/apiclient/... ./internal/platformclient/...
