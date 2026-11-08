@@ -272,6 +272,14 @@ const (
 	UrnOasisNamesTcSAML20NameidFormatTransient    NameIdFormat = "urn:oasis:names:tc:SAML:2.0:nameid-format:transient"
 )
 
+// Defines values for OpenFGAInstanceStatus.
+const (
+	OpenFGAInstanceStatusDeleting     OpenFGAInstanceStatus = "deleting"
+	OpenFGAInstanceStatusFailed       OpenFGAInstanceStatus = "failed"
+	OpenFGAInstanceStatusProvisioning OpenFGAInstanceStatus = "provisioning"
+	OpenFGAInstanceStatusReady        OpenFGAInstanceStatus = "ready"
+)
+
 // Defines values for ProviderType.
 const (
 	ProviderTypeLdap ProviderType = "ldap"
@@ -468,10 +476,10 @@ const (
 
 // Defines values for ThemeStatus.
 const (
-	ThemeStatusDeployed    ThemeStatus = "deployed"
-	ThemeStatusDeploying   ThemeStatus = "deploying"
-	ThemeStatusFailed      ThemeStatus = "failed"
-	ThemeStatusUndeploying ThemeStatus = "undeploying"
+	Deployed    ThemeStatus = "deployed"
+	Deploying   ThemeStatus = "deploying"
+	Failed      ThemeStatus = "failed"
+	Undeploying ThemeStatus = "undeploying"
 )
 
 // Defines values for ThemeType.
@@ -1347,6 +1355,12 @@ type CreateIdentityProviderRequest struct {
 	Type ProviderType `json:"type"`
 }
 
+// CreateOpenFGAInstanceRequest defines model for CreateOpenFGAInstanceRequest.
+type CreateOpenFGAInstanceRequest struct {
+	// Realm The realm to bind. It must exist and be enabled on the cluster, must not be `master`, and must not already have an instance.
+	Realm string `json:"realm" validate:"omitnil,max=500"`
+}
+
 // CreateRealmExportRequest defines model for CreateRealmExportRequest.
 type CreateRealmExportRequest struct {
 	// EncryptionPassword Password used to encrypt the archive (AES-256-CBC, PBKDF2). Required: every realm export contains credentials. Never stored; only a hash is retained for verification.
@@ -2215,6 +2229,43 @@ type OIDCDiscoveryDocument struct {
 	TokenEndpointAuthMethodsSupported *[]string `json:"token_endpoint_auth_methods_supported,omitempty"`
 	UserinfoEndpoint                  *string   `json:"userinfo_endpoint,omitempty"`
 }
+
+// OpenFGAInstance defines model for OpenFGAInstance.
+type OpenFGAInstance struct {
+	// ApiUrl Where the instance's OpenFGA API answers.
+	ApiUrl string `json:"api_url" validate:"omitnil,max=500"`
+
+	// Audience The audience a token must carry. Add an audience mapper for this value to the realm's client.
+	Audience  string    `json:"audience" validate:"omitnil,max=500"`
+	ClusterId ClusterId `json:"cluster_id"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Id OpenFGA instance identifier.
+	Id OpenFGAInstanceId `json:"id"`
+
+	// Issuer The issuer the instance trusts. Only tokens from this issuer are accepted.
+	Issuer string `json:"issuer" validate:"omitnil,max=500"`
+
+	// Realm The realm the instance is bound to. Chosen when the instance is created and never changed.
+	Realm  string                `json:"realm" validate:"omitnil,max=500"`
+	Status OpenFGAInstanceStatus `json:"status"`
+
+	// StatusMessage The reason the instance is `failed`.
+	StatusMessage *string   `json:"status_message,omitempty" validate:"omitnil,max=500"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// OpenFGAInstanceId OpenFGA instance identifier.
+type OpenFGAInstanceId = openapi_types.UUID
+
+// OpenFGAInstanceList defines model for OpenFGAInstanceList.
+type OpenFGAInstanceList struct {
+	// Instances The cluster's instances.
+	Instances []OpenFGAInstance `json:"instances"`
+}
+
+// OpenFGAInstanceStatus defines model for OpenFGAInstanceStatus.
+type OpenFGAInstanceStatus string
 
 // PageLimit defines model for PageLimit.
 type PageLimit = int
@@ -3868,6 +3919,26 @@ type SetClusterMaintenanceWindowParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
 }
 
+// ListOpenFGAInstancesParams defines parameters for ListOpenFGAInstances.
+type ListOpenFGAInstancesParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// CreateOpenFGAInstanceParams defines parameters for CreateOpenFGAInstance.
+type CreateOpenFGAInstanceParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// DeleteOpenFGAInstanceParams defines parameters for DeleteOpenFGAInstance.
+type DeleteOpenFGAInstanceParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// GetOpenFGAInstanceParams defines parameters for GetOpenFGAInstance.
+type GetOpenFGAInstanceParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
 // ListRealmsParams defines parameters for ListRealms.
 type ListRealmsParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
@@ -4510,6 +4581,9 @@ type InstallExtensionJSONRequestBody = InstallExtensionRequest
 // SetClusterMaintenanceWindowJSONRequestBody defines body for SetClusterMaintenanceWindow for application/json ContentType.
 type SetClusterMaintenanceWindowJSONRequestBody = MaintenanceWindow
 
+// CreateOpenFGAInstanceJSONRequestBody defines body for CreateOpenFGAInstance for application/json ContentType.
+type CreateOpenFGAInstanceJSONRequestBody = CreateOpenFGAInstanceRequest
+
 // CreateRealmJSONRequestBody defines body for CreateRealm for application/json ContentType.
 type CreateRealmJSONRequestBody = CreateRealmRequest
 
@@ -4862,6 +4936,20 @@ type ClientInterface interface {
 	SetClusterMaintenanceWindowWithBody(ctx context.Context, clusterId ClusterId, params *SetClusterMaintenanceWindowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	SetClusterMaintenanceWindow(ctx context.Context, clusterId ClusterId, params *SetClusterMaintenanceWindowParams, body SetClusterMaintenanceWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListOpenFGAInstances request
+	ListOpenFGAInstances(ctx context.Context, clusterId ClusterId, params *ListOpenFGAInstancesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateOpenFGAInstanceWithBody request with any body
+	CreateOpenFGAInstanceWithBody(ctx context.Context, clusterId ClusterId, params *CreateOpenFGAInstanceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateOpenFGAInstance(ctx context.Context, clusterId ClusterId, params *CreateOpenFGAInstanceParams, body CreateOpenFGAInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOpenFGAInstance request
+	DeleteOpenFGAInstance(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *DeleteOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOpenFGAInstance request
+	GetOpenFGAInstance(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *GetOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListRealms request
 	ListRealms(ctx context.Context, clusterId ClusterId, params *ListRealmsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5934,6 +6022,66 @@ func (c *Client) SetClusterMaintenanceWindowWithBody(ctx context.Context, cluste
 
 func (c *Client) SetClusterMaintenanceWindow(ctx context.Context, clusterId ClusterId, params *SetClusterMaintenanceWindowParams, body SetClusterMaintenanceWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetClusterMaintenanceWindowRequest(c.Server, clusterId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListOpenFGAInstances(ctx context.Context, clusterId ClusterId, params *ListOpenFGAInstancesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOpenFGAInstancesRequest(c.Server, clusterId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateOpenFGAInstanceWithBody(ctx context.Context, clusterId ClusterId, params *CreateOpenFGAInstanceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOpenFGAInstanceRequestWithBody(c.Server, clusterId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateOpenFGAInstance(ctx context.Context, clusterId ClusterId, params *CreateOpenFGAInstanceParams, body CreateOpenFGAInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOpenFGAInstanceRequest(c.Server, clusterId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteOpenFGAInstance(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *DeleteOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOpenFGAInstanceRequest(c.Server, clusterId, instanceId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetOpenFGAInstance(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *GetOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOpenFGAInstanceRequest(c.Server, clusterId, instanceId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -10996,6 +11144,221 @@ func NewSetClusterMaintenanceWindowRequestWithBody(server string, clusterId Clus
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewListOpenFGAInstancesRequest generates requests for ListOpenFGAInstances
+func NewListOpenFGAInstancesRequest(server string, clusterId ClusterId, params *ListOpenFGAInstancesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/openfga-instances", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewCreateOpenFGAInstanceRequest calls the generic CreateOpenFGAInstance builder with application/json body
+func NewCreateOpenFGAInstanceRequest(server string, clusterId ClusterId, params *CreateOpenFGAInstanceParams, body CreateOpenFGAInstanceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateOpenFGAInstanceRequestWithBody(server, clusterId, params, "application/json", bodyReader)
+}
+
+// NewCreateOpenFGAInstanceRequestWithBody generates requests for CreateOpenFGAInstance with any type of body
+func NewCreateOpenFGAInstanceRequestWithBody(server string, clusterId ClusterId, params *CreateOpenFGAInstanceParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/openfga-instances", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteOpenFGAInstanceRequest generates requests for DeleteOpenFGAInstance
+func NewDeleteOpenFGAInstanceRequest(server string, clusterId ClusterId, instanceId OpenFGAInstanceId, params *DeleteOpenFGAInstanceParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "instance_id", runtime.ParamLocationPath, instanceId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/openfga-instances/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewGetOpenFGAInstanceRequest generates requests for GetOpenFGAInstance
+func NewGetOpenFGAInstanceRequest(server string, clusterId ClusterId, instanceId OpenFGAInstanceId, params *GetOpenFGAInstanceParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "instance_id", runtime.ParamLocationPath, instanceId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/openfga-instances/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
 
@@ -17845,6 +18208,20 @@ type ClientWithResponsesInterface interface {
 
 	SetClusterMaintenanceWindowWithResponse(ctx context.Context, clusterId ClusterId, params *SetClusterMaintenanceWindowParams, body SetClusterMaintenanceWindowJSONRequestBody, reqEditors ...RequestEditorFn) (*SetClusterMaintenanceWindowResponse, error)
 
+	// ListOpenFGAInstancesWithResponse request
+	ListOpenFGAInstancesWithResponse(ctx context.Context, clusterId ClusterId, params *ListOpenFGAInstancesParams, reqEditors ...RequestEditorFn) (*ListOpenFGAInstancesResponse, error)
+
+	// CreateOpenFGAInstanceWithBodyWithResponse request with any body
+	CreateOpenFGAInstanceWithBodyWithResponse(ctx context.Context, clusterId ClusterId, params *CreateOpenFGAInstanceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOpenFGAInstanceResponse, error)
+
+	CreateOpenFGAInstanceWithResponse(ctx context.Context, clusterId ClusterId, params *CreateOpenFGAInstanceParams, body CreateOpenFGAInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOpenFGAInstanceResponse, error)
+
+	// DeleteOpenFGAInstanceWithResponse request
+	DeleteOpenFGAInstanceWithResponse(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *DeleteOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*DeleteOpenFGAInstanceResponse, error)
+
+	// GetOpenFGAInstanceWithResponse request
+	GetOpenFGAInstanceWithResponse(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *GetOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*GetOpenFGAInstanceResponse, error)
+
 	// ListRealmsWithResponse request
 	ListRealmsWithResponse(ctx context.Context, clusterId ClusterId, params *ListRealmsParams, reqEditors ...RequestEditorFn) (*ListRealmsResponse, error)
 
@@ -19554,6 +19931,120 @@ func (r SetClusterMaintenanceWindowResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r SetClusterMaintenanceWindowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListOpenFGAInstancesResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *OpenFGAInstanceList
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r ListOpenFGAInstancesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOpenFGAInstancesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateOpenFGAInstanceResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON202                   *OpenFGAInstance
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON409 *ErrorBody
+	ApplicationproblemJSON422 *ValidationErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateOpenFGAInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateOpenFGAInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteOpenFGAInstanceResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON202                   *OpenFGAInstance
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOpenFGAInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOpenFGAInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetOpenFGAInstanceResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *OpenFGAInstance
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOpenFGAInstanceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOpenFGAInstanceResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -23177,6 +23668,50 @@ func (c *ClientWithResponses) SetClusterMaintenanceWindowWithResponse(ctx contex
 		return nil, err
 	}
 	return ParseSetClusterMaintenanceWindowResponse(rsp)
+}
+
+// ListOpenFGAInstancesWithResponse request returning *ListOpenFGAInstancesResponse
+func (c *ClientWithResponses) ListOpenFGAInstancesWithResponse(ctx context.Context, clusterId ClusterId, params *ListOpenFGAInstancesParams, reqEditors ...RequestEditorFn) (*ListOpenFGAInstancesResponse, error) {
+	rsp, err := c.ListOpenFGAInstances(ctx, clusterId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListOpenFGAInstancesResponse(rsp)
+}
+
+// CreateOpenFGAInstanceWithBodyWithResponse request with arbitrary body returning *CreateOpenFGAInstanceResponse
+func (c *ClientWithResponses) CreateOpenFGAInstanceWithBodyWithResponse(ctx context.Context, clusterId ClusterId, params *CreateOpenFGAInstanceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOpenFGAInstanceResponse, error) {
+	rsp, err := c.CreateOpenFGAInstanceWithBody(ctx, clusterId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOpenFGAInstanceResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateOpenFGAInstanceWithResponse(ctx context.Context, clusterId ClusterId, params *CreateOpenFGAInstanceParams, body CreateOpenFGAInstanceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOpenFGAInstanceResponse, error) {
+	rsp, err := c.CreateOpenFGAInstance(ctx, clusterId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOpenFGAInstanceResponse(rsp)
+}
+
+// DeleteOpenFGAInstanceWithResponse request returning *DeleteOpenFGAInstanceResponse
+func (c *ClientWithResponses) DeleteOpenFGAInstanceWithResponse(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *DeleteOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*DeleteOpenFGAInstanceResponse, error) {
+	rsp, err := c.DeleteOpenFGAInstance(ctx, clusterId, instanceId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOpenFGAInstanceResponse(rsp)
+}
+
+// GetOpenFGAInstanceWithResponse request returning *GetOpenFGAInstanceResponse
+func (c *ClientWithResponses) GetOpenFGAInstanceWithResponse(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *GetOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*GetOpenFGAInstanceResponse, error) {
+	rsp, err := c.GetOpenFGAInstance(ctx, clusterId, instanceId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOpenFGAInstanceResponse(rsp)
 }
 
 // ListRealmsWithResponse request returning *ListRealmsResponse
@@ -27750,6 +28285,292 @@ func ParseSetClusterMaintenanceWindowResponse(rsp *http.Response) (*SetClusterMa
 			return nil, err
 		}
 		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListOpenFGAInstancesResponse parses an HTTP response from a ListOpenFGAInstancesWithResponse call
+func ParseListOpenFGAInstancesResponse(rsp *http.Response) (*ListOpenFGAInstancesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOpenFGAInstancesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OpenFGAInstanceList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateOpenFGAInstanceResponse parses an HTTP response from a CreateOpenFGAInstanceWithResponse call
+func ParseCreateOpenFGAInstanceResponse(rsp *http.Response) (*CreateOpenFGAInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateOpenFGAInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest OpenFGAInstance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ValidationErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOpenFGAInstanceResponse parses an HTTP response from a DeleteOpenFGAInstanceWithResponse call
+func ParseDeleteOpenFGAInstanceResponse(rsp *http.Response) (*DeleteOpenFGAInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOpenFGAInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest OpenFGAInstance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOpenFGAInstanceResponse parses an HTTP response from a GetOpenFGAInstanceWithResponse call
+func ParseGetOpenFGAInstanceResponse(rsp *http.Response) (*GetOpenFGAInstanceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOpenFGAInstanceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OpenFGAInstance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
 		var dest ErrorBody

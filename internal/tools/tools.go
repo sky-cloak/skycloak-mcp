@@ -86,6 +86,10 @@ type API interface {
 	DeleteTheme(ctx context.Context, clusterID, themeID string) error
 	DeleteExtension(ctx context.Context, extensionID string) error
 	DeleteExport(ctx context.Context, clusterID, exportID string) error
+	ListOpenFGAInstances(ctx context.Context, clusterID string) ([]skycloak.OpenFGAInstance, error)
+	GetOpenFGAInstance(ctx context.Context, clusterID, instanceID string) (*skycloak.OpenFGAInstance, error)
+	CreateOpenFGAInstance(ctx context.Context, clusterID, realm string) (*skycloak.OpenFGAInstance, error)
+	DeleteOpenFGAInstance(ctx context.Context, clusterID, instanceID string) (*skycloak.OpenFGAInstance, error)
 	GetDomainRoute(ctx context.Context, clusterID, domainID, routeID string) (*skycloak.DomainRoute, error)
 	CreateDomainRoute(ctx context.Context, clusterID, domainID, realm string, allowAdminAccess, hideRealmPath bool) (*skycloak.DomainRoute, error)
 	DeleteDomainRoute(ctx context.Context, clusterID, domainID, routeID string) error
@@ -228,6 +232,7 @@ var toolAreas = []toolArea{
 	{name: "branding", scopes: []string{"themes:read", "branding:read"}, register: registerBrandingReadTools},
 	{name: "extensions", scopes: []string{"extensions:read", "clusters:extensions:read"}, register: registerExtensionReadTools},
 	{name: "exports", scopes: []string{"clusters:exports:read"}, register: registerExportReadTools},
+	{name: "openfga", scopes: []string{"openfga:read"}, register: registerOpenFGAReadTools},
 	{name: "rbac", scopes: []string{"realm-roles:read", "realm-groups:read", "realm-users:read"}, register: registerRBACReadTools},
 	{name: "application roles", scopes: []string{"applications:read"}, register: registerApplicationRoleReadTools},
 	{name: "read parity", scopes: []string{"realms:read", "applications:read", "identity-providers:read", "clusters:read", "domains:read"}, register: registerReadParityTools},
@@ -245,6 +250,7 @@ var toolAreas = []toolArea{
 	{name: "branding writes", write: true, scopes: []string{"themes:write"}, register: registerBrandingWriteTools},
 	{name: "extension writes", write: true, scopes: []string{"clusters:extensions:write"}, register: registerExtensionWriteTools},
 	{name: "export writes", write: true, scopes: []string{"clusters:exports:write"}, register: registerExportWriteTools},
+	{name: "openfga writes", write: true, scopes: []string{"openfga:write"}, register: registerOpenFGAWriteTools},
 	{name: "client roles", scopes: []string{"client-roles:read"}, register: registerClientRoleReadTools},
 	{name: "client role writes", write: true, scopes: []string{"client-roles:write"}, register: registerClientRoleWriteTools},
 	{name: "rbac writes", write: true, scopes: []string{"realm-roles:write", "realm-groups:write", "realm-users:write"}, register: registerRBACWriteTools},
