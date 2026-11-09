@@ -67,11 +67,11 @@ jobs:
         run: ./mcp-publisher publish
 
   # The plugin directories read the manifests from main rather than from the tag,
-  # so pinning them in the job like server.json above would reach nobody. The bump
-  # lands on main after the tag, which also covers the releases a human cuts by
-  # hand instead of through auto-release. main requires status checks, which a
-  # direct push never has, so the bump goes through a pull request that merges
-  # itself once its checks pass.
+  # so pinning them in the job like server.json above would reach nobody. main
+  # requires status checks, which a direct push never has, so the bump goes
+  # through a pull request and lands on main once its checks pass, after the tag.
+  # That also covers the releases a human cuts by hand instead of through
+  # auto-release.
   sync-plugin-manifests:
     name: sync the plugin manifests to the tag
     runs-on: ubuntu-latest
