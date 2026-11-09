@@ -2,7 +2,7 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "skycloak",
   "displayName": "Skycloak",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Skycloak is identity-as-a-service, delivered today as managed Keycloak. Run clusters, realms, applications, SSO, users, domains and audit events.",
   "logo": "assets/logo.png",
   "suggestedPrompts": [
