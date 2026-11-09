@@ -32,7 +32,7 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Assign a maintainer to the stuck sync PR
+      - name: Assign a maintainer to the stuck bot PR
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -66,10 +66,17 @@ jobs:
           jobs=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs") || jobs='{"jobs":[]}'
           failed=$(jq -r '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")' <<< "$jobs")
           armed=$(jq -r --argjson n "$pr" '[.[] | select(.number == $n)][0].auto_merge != null' <<< "$pulls")
-          if [ "$armed" = true ]; then
-            next="Auto-merge is armed: push the fix to this branch, and approve it again if the branch needs a review (a push dismisses the earlier approval); it then merges itself. The next run of the bot overwrites this branch."
+          ref=$(jq -r --argjson n "$pr" '[.[] | select(.number == $n)][0].head.ref' <<< "$pulls")
+          # A merged spec sync is what auto-release tags; a manifest bump releases nothing.
+          if [ "$ref" = chore/openapi-sync ]; then
+            after="it releases once merged. A new sync overwrites this branch."
           else
-            next="Auto-merge is off: push the fix to this branch, then merge it by hand. The next run of the bot overwrites this branch."
+            after="the next release's bump overwrites this branch."
+          fi
+          if [ "$armed" = true ]; then
+            next="Auto-merge is armed: push the fix to this branch, and approve it again if the branch needs a review (a push dismisses the earlier approval); it then merges itself; $after"
+          else
+            next="Auto-merge is off: push the fix to this branch, then merge it by hand; $after"
           fi
           commented=0
           if api "comment on #$pr" -X POST "repos/$REPO/issues/$pr/comments" \
