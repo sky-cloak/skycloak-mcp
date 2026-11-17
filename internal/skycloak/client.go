@@ -22,6 +22,9 @@ import (
 
 const defaultEndpoint = "https://api.skycloak.io"
 
+// ErrNoAPIKey is returned by every call on a Client built without a key.
+var ErrNoAPIKey = errors.New("no Skycloak credential: run `skycloak-mcp init`, or set SKYCLOAK_API_KEY to a key from the Skycloak dashboard")
+
 // Client wraps the generated API client.
 type Client struct {
 	gen *apiclient.ClientWithResponses
@@ -71,6 +74,13 @@ func New(endpoint, apiKey, apiVersion string, opts ...Option) *Client {
 	cfg.httpClient = &hc
 
 	editor := func(_ context.Context, req *http.Request) error {
+		if apiKey == "" {
+			// A server started with no credential still registers and lists its
+			// tools, so that introspection works; the credential is only needed to
+			// call one. Fail here rather than sending an empty API-Key header,
+			// which the API answers with a bare 401 that says nothing useful.
+			return ErrNoAPIKey
+		}
 		req.Header.Set("API-Key", apiKey)
 		req.Header.Set("Accept", "application/json")
 		if apiVersion != "" {
