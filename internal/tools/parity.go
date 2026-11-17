@@ -65,9 +65,9 @@ func registerParityWriteTools(s *mcp.Server, api API) {
 
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_update_realm",
-		Description: "Update one realm's display name and enabled state. enabled is always sent, so omitting it disables the realm and stops every sign-in to it. " +
+		Description: "Update one realm's display name and enabled state. Fields you omit keep their current value, and enabled=false stops every sign-in to the realm. " +
 			"Only these two fields are editable here; a realm cannot be renamed, and skycloak_create_realm and skycloak_delete_realm handle the rest.",
-		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Update realm"},
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Update realm"},
 	}, updateRealmHandler(api))
 
 	addTool(s, &mcp.Tool{
@@ -401,7 +401,7 @@ type UpdateRealmInput struct {
 	ClusterID   string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm       string `json:"realm" jsonschema:"the Keycloak realm name"`
 	DisplayName string `json:"display_name,omitempty" jsonschema:"new display name"`
-	Enabled     bool   `json:"enabled,omitempty" jsonschema:"whether users can sign in to the realm"`
+	Enabled     *bool  `json:"enabled,omitempty" jsonschema:"whether users can sign in to the realm; omit to leave it unchanged"`
 }
 
 // RealmConfirmInput is a realm reference plus a deletion confirmation.

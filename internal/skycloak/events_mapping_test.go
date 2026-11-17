@@ -360,7 +360,8 @@ func TestRealmWritesReturnTheServersSettings(t *testing.T) {
 			return c.CreateRealm(context.Background(), cuid, Realm{Name: "alfred"})
 		}},
 		{"update", 200, func(c *Client) (*Realm, error) {
-			return c.UpdateRealm(context.Background(), cuid, "alfred", "Alfred", true)
+			enabled := true
+			return c.UpdateRealm(context.Background(), cuid, "alfred", "Alfred", &enabled)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

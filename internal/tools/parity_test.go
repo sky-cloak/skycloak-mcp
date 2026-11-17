@@ -33,7 +33,7 @@ func TestCreateDomainRouteHandler(t *testing.T) {
 }
 
 func TestUpdateRealmHandler(t *testing.T) {
-	res, out, err := updateRealmHandler(stubAPI{})(context.Background(), nil, UpdateRealmInput{ClusterID: "c1", Realm: "app", DisplayName: "App", Enabled: true})
+	res, out, err := updateRealmHandler(stubAPI{})(context.Background(), nil, UpdateRealmInput{ClusterID: "c1", Realm: "app", DisplayName: "App", Enabled: ptr(true)})
 	if err != nil || res.IsError || out.DisplayName != "App" {
 		t.Fatalf("updateRealm: err=%v res=%v out=%+v", err, res.IsError, out)
 	}
