@@ -114,6 +114,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `1.0.0`. The em-dashes in both summary lines are gone.
 
 ### Fixed
+- `skycloak_update_realm_user`, `skycloak_update_realm` and
+  `skycloak_update_domain_route` no longer disable what the caller did not
+  mention. They always sent `enabled`, `email_verified` and
+  `allow_admin_access`, so renaming a user or changing a realm's display name
+  turned sign-in or admin access off. All three endpoints are `PATCH` with
+  every property optional, so these arguments are now optional booleans: left
+  out they stay out of the request body and keep their stored value, and an
+  explicit `true` or `false` is sent as given. Sending one explicitly can still
+  lock people out, so the three tools now carry `destructiveHint: true`.
 - The tool counts in the README, which had drifted from what the server
   registers.
 - `skycloak_create_domain_route` and the `set_up_custom_domain` prompt now tell
