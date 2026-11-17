@@ -16,50 +16,58 @@ import (
 
 func registerBrandingReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_themes",
-		Description: "List the custom themes uploaded to a cluster, with their IDs, status, and theme types. restart_required is true on a theme whose replaced content is not live yet; see skycloak_get_theme_settings and skycloak_restart_cluster_instances.",
+		Name: "skycloak_list_themes",
+		Description: "List the custom themes uploaded to one cluster, each with its theme_id, name, status, theme types and restart_required. " +
+			"This is where theme_id comes from. restart_required is true on a theme whose replaced content is not live yet; see skycloak_get_theme_settings and skycloak_restart_cluster_instances. " +
+			"It does not say which theme a realm uses; that is skycloak_get_theme_assignment.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List themes"},
 	}, listThemesHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_theme_assignment",
-		Description: "Get the active custom theme per Keycloak theme type (login, account, admin, email) for a realm.",
+		Name: "skycloak_get_theme_assignment",
+		Description: "Get the custom theme active for each Keycloak theme type (login, account, admin, email) in one realm; an empty value means Keycloak's built-in default. " +
+			"Realm-wide. For a single application's login override, use skycloak_get_client_theme_assignment, and for the workspace naming policy use skycloak_get_theme_settings.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get theme assignment"},
 	}, getThemeAssignmentHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_login_branding",
-		Description: "Get the login-page branding (colors, logo, toggles) for a realm.",
+		Name: "skycloak_get_login_branding",
+		Description: "Get one realm's login-page branding: status, colors, logo and the registration and forgot-password toggles. " +
+			"This is the no-code branding layer, separate from custom themes (skycloak_get_theme_assignment) and from email branding (skycloak_get_email_branding).",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get login branding"},
 	}, getLoginBrandingHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_email_branding",
-		Description: "Get the email-template branding (colors, logo, footer) for a realm.",
+		Name: "skycloak_get_email_branding",
+		Description: "Get one realm's email-template branding: status, primary color, header logo and footer company name. " +
+			"Covers Keycloak's outgoing emails only; the login page is skycloak_get_login_branding and the SMTP server is skycloak_get_smtp.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get email branding"},
 	}, getEmailBrandingHandler(api))
 
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_get_theme_settings",
-		Description: "Get the workspace's theme naming policy: whether exact_theme_names is on. " +
-			"When on, every theme in the workspace is served from a folder named exactly like the theme, and that name never changes across content replaces. " +
-			"When off (the default), the served folder changes on each content replace, unless the theme was created by a platform migration.",
+		Description: "Get the workspace's theme naming policy, which is whether exact_theme_names is on. " +
+			"On, every theme is served from a folder named exactly like the theme and that name survives content replaces; off, the default, the served folder changes on each replace unless the theme came from a platform migration. " +
+			"Workspace-wide and takes no arguments. It says nothing about which theme a realm uses (skycloak_get_theme_assignment) or a theme's files (skycloak_download_theme_content).",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get theme settings"},
 	}, getThemeSettingsHandler(api))
 }
 
 func registerBrandingWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_set_theme_assignment",
-		Description: "Assign custom themes to a realm per Keycloak theme type. Pass a theme ID to activate it, or an empty string to reset that type to Keycloak's built-in default. Only the provided fields are changed.",
+		Name: "skycloak_set_theme_assignment",
+		Description: "Activate custom themes for one realm, one per Keycloak theme type: login, account, admin and email. " +
+			"Pass a theme ID from skycloak_list_themes to activate it, or an empty string to reset that type to Keycloak's built-in default; types you omit keep their current theme. " +
+			"The change is live for everyone in the realm. For a single application's login page, use skycloak_set_client_theme_assignment.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Set theme assignment"},
 	}, setThemeAssignmentHandler(api))
 
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_update_theme_content",
-		Description: "Replace an existing theme's archive with a new one, in place. The theme keeps its ID, its name and every realm and application assignment, and the new content deploys immediately, so this is the way to edit a theme: deleting and re-uploading detaches it and leaves the sign-in page unbranded in between. " +
-			"Pass the ZIP or Keycloakify JAR base64-encoded in content_base64. Set confirm=true to proceed: the archive being replaced is not recoverable afterwards. The replacement must still contain every theme type the theme provides today, or the API rejects it; a theme created by a platform migration has pinned content and answers 409. " +
-			"When the workspace has exact_theme_names on (see skycloak_get_theme_settings), this sets restart_required=true on the theme until skycloak_restart_cluster_instances applies it.",
+		Description: "Replace one theme's archive in place, keeping the theme's ID, name and every realm and application assignment, so a theme can be edited without deleting and re-uploading it. " +
+			"Pass the ZIP or Keycloakify JAR base64-encoded in content_base64, up to 50 MB. Set confirm=true to proceed: the archive it overwrites cannot be recovered. " +
+			"The replacement must still provide every theme type the theme has today, and a theme created by a platform migration is pinned and answers 409. " +
+			"With exact_theme_names on (see skycloak_get_theme_settings) the theme reports restart_required=true until skycloak_restart_cluster_instances applies it. Name, description and version alone go through skycloak_update_theme.",
 		// Destructive because the archive it overwrites is not recoverable
 		// afterwards, the way rotate_application_secret discards the old secret.
 		// The theme's identity and assignments survive, which is the point.
@@ -68,10 +76,9 @@ func registerBrandingWriteTools(s *mcp.Server, api API) {
 
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_update_theme_settings",
-		Description: "Turn the workspace's exact_theme_names policy on or off. The caller's API key must have been minted for a workspace owner or admin; any other role, including a cluster admin, gets 403 even with themes:write. " +
-			"Turning it on moves every existing theme in the workspace to its exact served name in the background, not blocking this call; a theme that cannot move right away (its cluster is busy updating, say) moves on its next content replace instead. " +
-			"Turning it off changes nothing immediately: each theme keeps its current served folder until its next content replace, after which the folder changes on every replace again. " +
-			"A theme replaced under its exact name sets restart_required=true on skycloak_get_theme and skycloak_list_themes until Keycloak restarts; use skycloak_restart_cluster_instances to apply it. Set confirm=true to proceed.",
+		Description: "Turn the workspace-wide exact_theme_names policy on or off. The API key must belong to a workspace owner or admin; any other role gets 403 even with themes:write. " +
+			"Turning it on renames every theme to its exact served name in the background; a theme that cannot move waits for its next content replace. Turning it off takes effect on each theme's next replace. " +
+			"A renamed theme reports restart_required=true until skycloak_restart_cluster_instances runs. Set confirm=true to proceed. Naming policy only, not a theme's files (skycloak_update_theme_content) or assignment (skycloak_set_theme_assignment).",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Update theme settings"},
 	}, updateThemeSettingsHandler(api))
 }

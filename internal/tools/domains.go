@@ -12,34 +12,39 @@ import (
 
 func registerDomainReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_domains",
-		Description: "List the custom domains configured on a cluster.",
+		Name: "skycloak_list_domains",
+		Description: "List the custom domains attached to one cluster, each with its domain_id, hostname, verification status, SSL status and active flag. " +
+			"Needs cluster_id from skycloak_list_clusters, and it is where domain_id comes from. Not the realm routes on a domain; use skycloak_list_domain_routes for those.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List domains"},
 	}, listDomainsHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_domain",
-		Description: "Get a custom domain by ID, including its DNS records and verification/SSL status.",
+		Name: "skycloak_get_domain",
+		Description: "Get one custom domain of a cluster by domain_id, with the DNS records to create and its verification and SSL status. " +
+			"Needs cluster_id and domain_id from skycloak_list_domains. For the realms served on it, use skycloak_list_domain_routes.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get domain"},
 	}, getDomainHandler(api))
 }
 
 func registerDomainWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_create_domain",
-		Description: "Add a custom domain to a cluster. Returns the DNS records the customer must create to verify and route the domain.",
+		Name: "skycloak_create_domain",
+		Description: "Attach a custom domain to a cluster and return its new domain_id with the DNS records the customer must create. " +
+			"The domain serves nothing yet: the records have to exist, skycloak_verify_domain has to pass, and a realm has to be routed onto it with skycloak_create_domain_route.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create domain"},
 	}, createDomainHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_verify_domain",
-		Description: "Trigger DNS verification for a custom domain and return its updated status.",
+		Name: "skycloak_verify_domain",
+		Description: "Run a DNS check against one custom domain and return its updated verification and SSL status. " +
+			"Safe to repeat: when the records are not in place it only reports that the domain is still unverified. Needs domain_id from skycloak_list_domains; skycloak_get_domain reads the status without rechecking.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Verify domain"},
 	}, verifyDomainHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_domain",
-		Description: "Remove a custom domain from a cluster. Set confirm=true to proceed.",
+		Name: "skycloak_delete_domain",
+		Description: "Remove one custom domain from a cluster, so the hostname stops serving Keycloak along with every realm route on it. " +
+			"Set confirm=true to proceed. To drop a single realm from the domain instead, use skycloak_delete_domain_route.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete domain"},
 	}, deleteDomainHandler(api))
 }

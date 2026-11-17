@@ -15,46 +15,53 @@ import (
 // OAuth session ever carries.
 func registerClusterCredentialsTool(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_cluster_credentials",
-		Description: "Get a cluster's Keycloak automation client credentials for OAuth2 client_credentials. Needs a key with the clusters:credentials:read scope, which is not granted by default.",
+		Name: "skycloak_get_cluster_credentials",
+		Description: "Get one cluster's Keycloak automation client credentials (client_id, client_secret and token URL) for an OAuth2 client_credentials flow against that cluster. " +
+			"Needs an API key carrying clusters:credentials:read, which signing in does not grant by default, so without it the call answers 403 and explains how to get a key that has it.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get cluster credentials"},
 	}, getClusterCredentialsHandler(api))
 }
 
 func registerReads2Tools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_cluster_maintenance_window",
-		Description: "Get a cluster-specific maintenance window. A 404 means the cluster follows the workspace default.",
+		Name: "skycloak_get_cluster_maintenance_window",
+		Description: "Get the maintenance window set on one cluster: enabled, days of week, local start and end, and timezone. " +
+			"A 404 means the cluster has no window of its own and follows the workspace default. Disruptive changes the workspace defers are applied in this window.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get maintenance window"},
 	}, getClusterMaintenanceWindowHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_cluster_upgrade_path",
-		Description: "Get the recommended version-upgrade path for a cluster.",
+		Name: "skycloak_get_cluster_upgrade_path",
+		Description: "Get the recommended version-upgrade steps for one cluster, in the order they should be applied from its current version. " +
+			"This is the plan; skycloak_list_cluster_upgrades is the history of upgrades already recorded. Apply a step with skycloak_update_cluster.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get upgrade path"},
 	}, getClusterUpgradePathHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_cluster_insights",
-		Description: "Get cluster analytics as a JSON document. type is one of: overview, authentication, events, performance, security.",
+		Name: "skycloak_get_cluster_insights",
+		Description: "Get one aggregated analytics document for a cluster as raw JSON. type selects it: overview (the default), authentication, events, performance or security. " +
+			"These are rollups, not individual records; use skycloak_query_events for single events and skycloak_get_logs for log lines.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get cluster insights"},
 	}, getClusterInsightsHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_realm_role",
-		Description: "Get a realm role by name.",
+		Name: "skycloak_get_realm_role",
+		Description: "Get one realm-scoped role by name, with its description. " +
+			"Not a role defined on an application; use skycloak_get_application_role for that. To see who holds it, use skycloak_list_user_roles per user.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get realm role"},
 	}, getRealmRoleHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_realm_group",
-		Description: "Get a realm group by ID.",
+		Name: "skycloak_get_realm_group",
+		Description: "Get one realm group by group_id, with its name and path. Needs group_id from skycloak_list_realm_groups. " +
+			"For the users in it, use skycloak_list_realm_group_members.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get realm group"},
 	}, getRealmGroupHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_realm_group_members",
-		Description: "List the users that belong to a realm group.",
+		Name: "skycloak_list_realm_group_members",
+		Description: "List the users belonging to one realm group, each with username, user_id and email. " +
+			"Needs group_id from skycloak_list_realm_groups. For one user's groups, use skycloak_list_user_groups.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List group members"},
 	}, listRealmGroupMembersHandler(api))
 }

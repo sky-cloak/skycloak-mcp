@@ -12,88 +12,102 @@ import (
 
 func registerRBACReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_realm_roles",
-		Description: "List the realm-scoped roles in a realm.",
+		Name: "skycloak_list_realm_roles",
+		Description: "List every realm-scoped role defined in one realm, with each role's name and description. " +
+			"These are definitions, not assignments: use skycloak_list_user_roles for the roles one user holds and skycloak_list_application_roles for what a service account holds. Roles defined on a client are separate; see skycloak_get_application_role.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List realm roles"},
 	}, listRealmRolesHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_realm_groups",
-		Description: "List the top-level groups in a realm.",
+		Name: "skycloak_list_realm_groups",
+		Description: "List the top-level groups of one realm, each with its group_id, name and path; child groups are not expanded. " +
+			"This is where group_id comes from. For a group's users use skycloak_list_realm_group_members, and for one user's groups use skycloak_list_user_groups.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List realm groups"},
 	}, listRealmGroupsHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_realm_users",
-		Description: "List the users in a realm.",
+		Name: "skycloak_list_realm_users",
+		Description: "List the users of one realm, each with username, user_id, email and enabled state. " +
+			"Needs cluster_id from skycloak_list_clusters and a realm from skycloak_list_realms, and it is where the user_id the user tools take comes from.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List realm users"},
 	}, listRealmUsersHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_realm_user",
-		Description: "Get a realm user by ID.",
+		Name: "skycloak_get_realm_user",
+		Description: "Get one realm user by user_id, with username, email, enabled and email_verified. " +
+			"Needs user_id from skycloak_list_realm_users. It carries no roles or groups; use skycloak_list_user_roles and skycloak_list_user_groups for those.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get realm user"},
 	}, getRealmUserHandler(api))
 }
 
 func registerRBACWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_create_realm_role",
-		Description: "Create a realm-scoped role.",
+		Name: "skycloak_create_realm_role",
+		Description: "Create a realm-scoped role in one realm, with an optional description. " +
+			"The role is defined but held by nobody until skycloak_assign_realm_user_role grants it to a user. For a role that belongs to one application, use skycloak_create_application_role.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create realm role"},
 	}, createRealmRoleHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_realm_role",
-		Description: "Delete a realm role. Set confirm=true to proceed.",
+		Name: "skycloak_delete_realm_role",
+		Description: "Delete one realm role by name. Every user and group holding it loses it, and the role cannot be recovered. " +
+			"Set confirm=true to proceed. To revoke it from a single user instead, use skycloak_remove_realm_user_role.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete realm role"},
 	}, deleteRealmRoleHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_create_realm_group",
-		Description: "Create a realm group, optionally nested under a parent group.",
+		Name: "skycloak_create_realm_group",
+		Description: "Create a group in one realm, nested under parent_id when given, and return its new group_id and path. " +
+			"The group starts empty; add users with skycloak_add_realm_user_to_group.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create realm group"},
 	}, createRealmGroupHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_realm_group",
-		Description: "Delete a realm group. Set confirm=true to proceed.",
+		Name: "skycloak_delete_realm_group",
+		Description: "Delete one realm group by group_id. Its members lose the membership and anything they inherited through it, and the group cannot be recovered. " +
+			"Set confirm=true to proceed. To remove one user instead, use skycloak_remove_realm_user_from_group.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete realm group"},
 	}, deleteRealmGroupHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_create_realm_user",
-		Description: "Create a realm user with an initial temporary password.",
+		Name: "skycloak_create_realm_user",
+		Description: "Create a user in one realm with an initial password of at least 8 characters, which the realm's Keycloak password policy also has to accept. " +
+			"The user is always created enabled, whatever the enabled argument says; use skycloak_update_realm_user to disable one. Returns the new user_id. Roles and group membership are separate calls.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create realm user"},
 	}, createRealmUserHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_realm_user",
-		Description: "Delete a realm user. Set confirm=true to proceed.",
+		Name: "skycloak_delete_realm_user",
+		Description: "Delete one user from a realm, with their credentials and role and group memberships. This cannot be undone. " +
+			"Set confirm=true to proceed. To block sign-in reversibly instead, call skycloak_update_realm_user with enabled=false.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete realm user"},
 	}, deleteRealmUserHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_assign_realm_user_role",
-		Description: "Assign a realm role to a user.",
+		Name: "skycloak_assign_realm_user_role",
+		Description: "Grant a realm role to a realm user, identified by user_id from skycloak_list_realm_users. " +
+			"The principal is a user and the role is realm-scoped: a client role cannot be granted here, and for an application's service account use skycloak_assign_application_role. Granting an existing role again changes nothing.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Assign user role"},
 	}, assignRealmUserRoleHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_remove_realm_user_role",
-		Description: "Remove a realm role from a user.",
+		Name: "skycloak_remove_realm_user_role",
+		Description: "Revoke a realm role from a realm user, who loses whatever that role granted. The role itself stays defined in the realm. " +
+			"For an application's service account use skycloak_remove_application_role; to delete the role everywhere use skycloak_delete_realm_role.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Remove user role"},
 	}, removeRealmUserRoleHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_add_realm_user_to_group",
-		Description: "Add a user to a realm group.",
+		Name: "skycloak_add_realm_user_to_group",
+		Description: "Add one realm user to one realm group, so the user picks up whatever the group carries. " +
+			"Needs user_id from skycloak_list_realm_users and group_id from skycloak_list_realm_groups. Adding an existing member changes nothing.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Add user to group"},
 	}, addRealmUserToGroupHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_remove_realm_user_from_group",
-		Description: "Remove a user from a realm group.",
+		Name: "skycloak_remove_realm_user_from_group",
+		Description: "Remove one realm user from one realm group, so the user loses what the group carried. Both the user and the group remain. " +
+			"To delete the group itself use skycloak_delete_realm_group.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Remove user from group"},
 	}, removeRealmUserFromGroupHandler(api))
 }

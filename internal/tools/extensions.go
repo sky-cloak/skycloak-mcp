@@ -12,34 +12,39 @@ import (
 
 func registerExtensionReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_extensions",
-		Description: "List the extension catalog available to the workspace (marketplace extensions that can be installed on a cluster).",
+		Name: "skycloak_list_extensions",
+		Description: "List the workspace's extension catalog: the extensions available to install, with each one's extension_id, version, source and supported Keycloak versions. " +
+			"Workspace-wide and takes no arguments. Not what a cluster is running; use skycloak_list_cluster_extensions for that.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List extension catalog"},
 	}, listExtensionsHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_cluster_extensions",
-		Description: "List the extensions currently installed on a cluster, with their installed version, the version available for the cluster's Keycloak, and upgrade status.",
+		Name: "skycloak_list_cluster_extensions",
+		Description: "List the extensions installed on one cluster, each with its installed version, the version available for that cluster's Keycloak, its status and upgrade_available. " +
+			"This is the installed set, while skycloak_list_extensions is the catalog to install from. Poll it after installing, upgrading or uninstalling, since those are asynchronous.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List installed extensions"},
 	}, listClusterExtensionsHandler(api))
 }
 
 func registerExtensionWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_install_extension",
-		Description: "Install a catalog extension on a cluster. Installation is asynchronous; poll skycloak_list_cluster_extensions until the status settles. Provide required parameters keyed by parameter name.",
+		Name: "skycloak_install_extension",
+		Description: "Install one catalog extension on a cluster, passing any required parameters keyed by parameter name. " +
+			"Asynchronous: poll skycloak_list_cluster_extensions until the status settles. extension_id comes from skycloak_list_extensions.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Install extension"},
 	}, installExtensionHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_upgrade_extension",
-		Description: "Upgrade an installed extension to the latest available version. Asynchronous.",
+		Name: "skycloak_upgrade_extension",
+		Description: "Upgrade an extension already installed on a cluster to the version available for that cluster's Keycloak, replacing the running artifact. " +
+			"Asynchronous: poll skycloak_list_cluster_extensions. Not for catalog metadata, which skycloak_update_extension edits without touching any cluster.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Upgrade extension"},
 	}, upgradeExtensionHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_uninstall_extension",
-		Description: "Uninstall an extension from a cluster. Set confirm=true to proceed.",
+		Name: "skycloak_uninstall_extension",
+		Description: "Remove one installed extension from a cluster, so that cluster stops loading it. Set confirm=true to proceed. " +
+			"The extension stays in the workspace catalog and can be installed again; skycloak_delete_extension is what removes it from the catalog.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Uninstall extension"},
 	}, uninstallExtensionHandler(api))
 }

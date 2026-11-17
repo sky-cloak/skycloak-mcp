@@ -12,36 +12,41 @@ import (
 
 func registerActionReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_discover_oidc",
-		Description: "Resolve an OIDC issuer's discovery document to obtain its authorization, token, and userinfo endpoints. Use the result when creating an identity provider.",
+		Name: "skycloak_discover_oidc",
+		Description: "Fetch an external OIDC issuer's discovery document and return its authorization, token and userinfo endpoints with the scopes it supports. " +
+			"Reaches the issuer over the network and changes nothing in Skycloak. Use the result to fill skycloak_create_identity_provider.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), ReadOnlyHint: true, Title: "Discover OIDC endpoints"},
 	}, discoverOIDCHandler(api))
 }
 
 func registerActionWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_test_smtp",
-		Description: "Send a test email through a realm's configured SMTP server to verify delivery.",
+		Name: "skycloak_test_smtp",
+		Description: "Send a test email through one realm's configured SMTP server to the address given, and report success with the server's message. " +
+			"It really sends mail, but changes no configuration; skycloak_upsert_smtp is what edits the settings.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Test SMTP"},
 	}, testSMTPHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_test_identity_provider",
-		Description: "Test connectivity to an identity provider, optionally overriding the client credentials for this test only.",
+		Name: "skycloak_test_identity_provider",
+		Description: "Check connectivity from one realm to one of its identity providers and report success with the message. " +
+			"client_id and client_secret, when given, are used for this test only and are not saved; skycloak_update_identity_provider is what changes the stored provider.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Test identity provider"},
 	}, testIdentityProviderHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_cancel_cluster_upgrade",
-		Description: "Cancel an in-progress cluster version upgrade. Set confirm=true to proceed.",
+		Name: "skycloak_cancel_cluster_upgrade",
+		Description: "Cancel the Keycloak version upgrade currently running on one cluster. Stopping an upgrade part-way can leave the cluster mid-migration, so check skycloak_get_cluster for the version it ended on and skycloak_list_cluster_upgrades for the recorded phase. " +
+			"Set confirm=true to proceed. There is nothing to cancel when no upgrade is in flight.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Cancel cluster upgrade"},
 	}, cancelClusterUpgradeHandler(api))
 
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_restart_cluster_instances",
-		Description: "Restart a cluster's Keycloak instances, disrupting live traffic on it. Use this after skycloak_update_theme_settings turns exact_theme_names on: a theme whose content was replaced under its exact name only serves the new content once Keycloak restarts (see restart_required on skycloak_get_theme / skycloak_list_themes). " +
-			"Applies immediately unless the workspace latches disruptive changes to the maintenance window, in which case the result reports deferred=true and, when known, next_window (RFC3339). " +
-			"Returns a conflict when the cluster cannot restart right now: already busy with a restart or other update, not in an available state, or the operator has no environment variable slot left. Set confirm=true to proceed.",
+		Description: "Restart one cluster's Keycloak instances, disrupting live traffic on that cluster. " +
+			"Mainly needed after skycloak_update_theme_settings turns exact_theme_names on: a theme replaced under its exact name serves its new content only once Keycloak restarts, which is what restart_required on skycloak_get_theme and skycloak_list_themes reports. " +
+			"Applies immediately unless the workspace defers disruptive changes to the maintenance window, reported as deferred=true with next_window (RFC3339) when known. " +
+			"Conflicts when the cluster is already busy with a restart or update, is not in an available state, or its operator has no environment variable slot left. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Restart cluster instances"},
 	}, restartClusterInstancesHandler(api))
 }

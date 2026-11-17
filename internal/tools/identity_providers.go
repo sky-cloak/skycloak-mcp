@@ -40,8 +40,10 @@ type ListIdentityProvidersOutput struct {
 
 func registerIdentityProviderReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_identity_providers",
-		Description: "List the identity providers (SSO connections) in a realm. Omit realm to cover every realm, and cluster_id to cover every cluster, so one call can answer an SSO question across the whole fleet.",
+		Name: "skycloak_list_identity_providers",
+		Description: "List the identity providers (SSO connections) of a realm, each with its alias (provider_id), type, display name, enabled state, realm and cluster. " +
+			"Omit realm to cover every realm and cluster_id to cover every cluster, so one call answers an SSO question across the whole fleet; clusters that could not be read come back under unreachable. " +
+			"These are configured providers, not the catalog to create from, which is skycloak_list_identity_provider_templates.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List identity providers"},
 	}, listIdentityProvidersHandler(api))
 }

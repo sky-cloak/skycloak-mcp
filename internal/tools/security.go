@@ -13,12 +13,12 @@ import (
 func registerSecurityReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_cluster_security",
-		Description: "Get a cluster's edge-security configuration: IP allow-listing, rate limiting, WAF, geo-blocking, and bot management.",
+		Description: "Get one cluster's edge-security configuration: IP allow-listing, rate limiting, WAF, geo-blocking and bot management, with the sections that are configured. CAPTCHA hostnames are listed separately by skycloak_list_cluster_captcha_domains, and the requests these rules acted on are in skycloak_get_security_logs.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get cluster security"},
 	}, getClusterSecurityHandler(api))
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_cluster_captcha_domains",
-		Description: "List hostnames registered for CAPTCHA protection on a cluster.",
+		Description: "List the hostnames registered for CAPTCHA protection on one cluster, with the maximum the workspace allows. Needs cluster_id from skycloak_list_clusters. The rest of the edge-security configuration is skycloak_get_cluster_security.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List CAPTCHA domains"},
 	}, listClusterCAPTCHADomainsHandler(api))
 }
@@ -26,17 +26,17 @@ func registerSecurityReadTools(s *mcp.Server, api API) {
 func registerSecurityWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_update_cluster_security",
-		Description: "Update a cluster's edge-security configuration. Only the sections you provide are changed; CAPTCHA settings are preserved. Supports IP allow-listing, rate limiting, WAF, geo-blocking, and bot management.",
+		Description: "Update one cluster's edge-security configuration: IP allow-listing, rate limiting, WAF, geo-blocking and bot management. Only the sections you send are changed and CAPTCHA settings are left as they are. The rules apply at the edge straight away, so a wrong allow-list or geo rule can lock legitimate users out of the cluster.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Update cluster security"},
 	}, updateClusterSecurityHandler(api))
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_add_cluster_captcha_domain",
-		Description: "Register a hostname for CAPTCHA protection on a cluster.",
+		Description: "Register one hostname for CAPTCHA protection on a cluster, so sign-in requests to it can be challenged. There is a per-workspace maximum, reported by skycloak_list_cluster_captcha_domains. The rest of the edge-security configuration is untouched.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Add CAPTCHA domain"},
 	}, addClusterCAPTCHADomainHandler(api))
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_remove_cluster_captcha_domain",
-		Description: "Remove a hostname from CAPTCHA protection on a cluster. Set confirm=true to proceed.",
+		Description: "Remove one hostname from CAPTCHA protection on a cluster, so requests to it stop being challenged. Set confirm=true to proceed. It does not remove a custom domain, which is skycloak_delete_domain.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Remove CAPTCHA domain"},
 	}, removeClusterCAPTCHADomainHandler(api))
 }
