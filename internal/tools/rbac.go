@@ -71,7 +71,8 @@ func registerRBACWriteTools(s *mcp.Server, api API) {
 
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_create_realm_user",
-		Description: "Create a user in one realm with an initial password of at least 8 characters, which the realm's Keycloak password policy also has to accept. " +
+		Description: "Create a user in one realm. temporary_password is the required initial password, at least 8 characters and also subject to the realm's Keycloak password policy. " +
+			"Despite the field name the API documents it as the initial password and does not mark the credential temporary, so do not promise the user a forced reset at first sign-in. " +
 			"The user is always created enabled, whatever the enabled argument says; use skycloak_update_realm_user to disable one. Returns the new user_id. Roles and group membership are separate calls.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create realm user"},
 	}, createRealmUserHandler(api))
@@ -313,8 +314,8 @@ type CreateRealmUserInput struct {
 	Email             string `json:"email" jsonschema:"the email address"`
 	FirstName         string `json:"first_name,omitempty" jsonschema:"optional first name"`
 	LastName          string `json:"last_name,omitempty" jsonschema:"optional last name"`
-	TemporaryPassword string `json:"temporary_password" jsonschema:"initial password (min 8 characters)"`
-	Enabled           bool   `json:"enabled,omitempty" jsonschema:"whether the user can sign in (defaults to true when omitted)"`
+	TemporaryPassword string `json:"temporary_password" jsonschema:"initial password (min 8 characters); the API does not mark the credential temporary"`
+	Enabled           bool   `json:"enabled,omitempty" jsonschema:"accepted but ignored: the user is always created enabled, so enabled=false does not work; use skycloak_update_realm_user to disable one"`
 }
 
 func createRealmUserHandler(api API) mcp.ToolHandlerFor[CreateRealmUserInput, skycloak.RealmUser] {
