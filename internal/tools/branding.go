@@ -76,9 +76,11 @@ func registerBrandingWriteTools(s *mcp.Server, api API) {
 
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_update_theme_settings",
-		Description: "Turn the workspace-wide exact_theme_names policy on or off. The API key must belong to a workspace owner or admin; any other role gets 403 even with themes:write. " +
-			"Turning it on renames every theme to its exact served name in the background; a theme that cannot move waits for its next content replace. Turning it off takes effect on each theme's next replace. " +
-			"A renamed theme reports restart_required=true until skycloak_restart_cluster_instances runs. Set confirm=true to proceed. Naming policy only, not a theme's files (skycloak_update_theme_content) or assignment (skycloak_set_theme_assignment).",
+		Description: "Turn the workspace-wide exact_theme_names policy on or off, choosing whether a theme is served from a folder named exactly like the theme or from a folder that changes on each content replace. " +
+			"The API key must belong to a workspace owner or admin; any other role gets 403 even with themes:write. " +
+			"Turning it on moves existing themes to their exact folders in the background, and a theme that cannot move right away completes the move on its next content replace; turning it off takes effect on each theme's next replace. " +
+			"Under this policy a theme whose content is replaced under its exact name reports restart_required=true from skycloak_get_theme and skycloak_list_themes until skycloak_restart_cluster_instances runs. " +
+			"Set confirm=true to proceed. Naming policy only, not a theme's files (skycloak_update_theme_content) or its assignment (skycloak_set_theme_assignment).",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Update theme settings"},
 	}, updateThemeSettingsHandler(api))
 }
