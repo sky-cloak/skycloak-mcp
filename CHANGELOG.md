@@ -7,6 +7,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `skycloak_get_cluster_private_link` and `skycloak_update_cluster_private_link`,
+  covering `GET`/`PUT /clusters/{cluster_id}/private-link`. The read tool returns
+  whether Azure private link is on, the Azure subscription IDs allowed to
+  connect, the Private Link Service `alias`, the `dns_name`, the `status` and
+  the connection state per subscription. The write tool sets the allowed
+  subscription IDs and returns the new state: the list replaces the stored one,
+  an empty list clears it, and leaving it out keeps it. It also takes `enabled`
+  to turn private link on or off; when `enabled` is omitted the current state is
+  read first and kept, and a refused read stops the update. The API's refusals
+  come back as tool errors with its status and message: `403` when the plan has
+  no private networking, `422` when the cluster's site has no Azure private link
+  or an ID is not a valid GUID, and `409` when turning private link off while
+  public access is off. The `clusters:private-link:read` and
+  `clusters:private-link:write` scopes were already part of the scopes requested
+  at sign-in. The generated client already carried these operations and is
+  unchanged by a regeneration.
 - `skycloak_list_openfga_instances`, `skycloak_get_openfga_instance`,
   `skycloak_create_openfga_instance` and `skycloak_delete_openfga_instance`,
   covering `GET`/`POST /clusters/{cluster_id}/openfga-instances` and

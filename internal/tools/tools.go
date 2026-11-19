@@ -107,6 +107,8 @@ type API interface {
 	ListClusterCAPTCHADomains(ctx context.Context, clusterID string) (*skycloak.CAPTCHADomainsInfo, error)
 	AddClusterCAPTCHADomain(ctx context.Context, clusterID, hostname string) (*skycloak.CAPTCHADomain, error)
 	RemoveClusterCAPTCHADomain(ctx context.Context, clusterID, hostname string) error
+	GetClusterPrivateLink(ctx context.Context, clusterID string) (*skycloak.PrivateLink, error)
+	UpdateClusterPrivateLink(ctx context.Context, clusterID string, subscriptionIDs *[]string, enabled *bool) (*skycloak.PrivateLink, error)
 	GetClusterCredentials(ctx context.Context, clusterID string) (*skycloak.ClusterCredentials, error)
 	GetClusterUpgradePath(ctx context.Context, clusterID string) ([]skycloak.UpgradePathStep, error)
 	ClusterInsights(ctx context.Context, clusterID, kind string) ([]byte, error)
@@ -239,6 +241,7 @@ var toolAreas = []toolArea{
 	{name: "parity reads", scopes: []string{"smtp:read", "themes:read", "domains:read", "realm-roles:read", "realm-groups:read"}, register: registerParityReadTools},
 	{name: "actions", scopes: []string{"identity-providers:read"}, register: registerActionReadTools},
 	{name: "edge security", scopes: []string{"clusters:security:read"}, register: registerSecurityReadTools},
+	{name: "private link", scopes: []string{"clusters:private-link:read"}, register: registerPrivateLinkReadTools},
 	{name: "siem", scopes: []string{"siem:read"}, register: registerSIEMReadTools},
 	{name: "webhooks", scopes: []string{"webhooks:read"}, register: registerWebhookReadTools},
 	{name: "cluster detail reads", scopes: []string{"clusters:read", "clusters:insights:read", "realm-roles:read", "realm-groups:read"}, register: registerReads2Tools},
@@ -260,6 +263,9 @@ var toolAreas = []toolArea{
 	// update_cluster_security is a read-modify-write: it reads the current
 	// config so the sections it does not manage survive the update.
 	{name: "edge security writes", write: true, scopes: []string{"clusters:security:write", "clusters:security:read"}, register: registerSecurityWriteTools},
+	// update_cluster_private_link reads the current state when enabled is
+	// omitted, so the read scope is a requirement of writing too.
+	{name: "private link writes", write: true, scopes: []string{"clusters:private-link:write", "clusters:private-link:read"}, register: registerPrivateLinkWriteTools},
 	{name: "siem writes", write: true, scopes: []string{"siem:write"}, register: registerSIEMWriteTools},
 	{name: "webhook writes", write: true, scopes: []string{"webhooks:write"}, register: registerWebhookWriteTools},
 	{name: "detail writes", write: true, scopes: []string{"realm-roles:write", "realm-groups:write", "realm-users:write", "domains:write", "applications:write", "identity-providers:write", "clusters:write", "extensions:write", "themes:write", "smtp:write", "branding:write", "clusters:events:read"}, register: registerWrites2Tools},
