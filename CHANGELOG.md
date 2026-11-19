@@ -7,6 +7,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `skycloak_get_cluster_public_access` and `skycloak_set_cluster_public_access`,
+  covering the `public_access` field of `GET`/`PATCH /clusters/{cluster_id}`.
+  The read tool reports whether the cluster's public hostname is served or the
+  cluster is reachable only through its private link hostname. The write tool
+  turns it on or off and sends nothing else, so the cluster's other settings
+  are untouched; turning it off needs `confirm=true`. The API's refusals come
+  back as tool errors with its status and message: `403` when the plan has no
+  private networking, `422` when the cluster's site has no Azure private link,
+  and `409` unless private link is enabled and ready on the cluster. The tools
+  use the `clusters:read` and `clusters:write` scopes.
 - `skycloak_get_cluster_private_link` and `skycloak_update_cluster_private_link`,
   covering `GET`/`PUT /clusters/{cluster_id}/private-link`. The read tool returns
   whether Azure private link is on, the Azure subscription IDs allowed to
