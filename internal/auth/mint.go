@@ -83,6 +83,7 @@ var writeScopes = []string{
 	"clusters:imports:read", "clusters:imports:write",
 	"clusters:extensions:read", "clusters:extensions:write",
 	"clusters:backups:read", "clusters:backups:write",
+	"clusters:private-link:read", "clusters:private-link:write",
 	"realms:read", "realms:write",
 	"realm-users:read", "realm-users:write",
 	"realm-roles:read", "realm-roles:write",
