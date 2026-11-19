@@ -361,7 +361,7 @@ func TestRealmWritesReturnTheServersSettings(t *testing.T) {
 		}},
 		{"update", 200, func(c *Client) (*Realm, error) {
 			enabled := true
-			return c.UpdateRealm(context.Background(), cuid, "alfred", "Alfred", &enabled)
+			return c.UpdateRealm(context.Background(), cuid, "alfred", "Alfred", &enabled, nil)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

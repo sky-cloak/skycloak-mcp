@@ -65,8 +65,10 @@ func registerParityWriteTools(s *mcp.Server, api API) {
 
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_update_realm",
-		Description: "Update one realm's display name and enabled state. Fields you omit keep their current value, and enabled=false stops every sign-in to the realm. " +
-			"Only these two fields are editable here; a realm cannot be renamed, and skycloak_create_realm and skycloak_delete_realm handle the rest.",
+		Description: "Update one realm's display name, enabled state and frontend_url. Fields you omit keep their current value, and enabled=false stops every sign-in to the realm. " +
+			"frontend_url is the public https URL the realm serves on behind your own proxy; setting it changes the realm's issuer, its links and its passkey origin, and an empty string clears it so the issuer follows the request host again. " +
+			"The API refuses frontend_url with 403 on a cluster that is not dedicated, 422 for the master realm or an invalid URL, and 409 for a realm that serves on a custom domain. " +
+			"Only these fields are editable here; a realm cannot be renamed, and skycloak_create_realm and skycloak_delete_realm handle the rest.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Update realm"},
 	}, updateRealmHandler(api))
 
@@ -230,7 +232,7 @@ func updateRealmHandler(api API) mcp.ToolHandlerFor[UpdateRealmInput, skycloak.R
 		if in.ClusterID == "" || in.Realm == "" {
 			return errResult("cluster_id and realm are required"), skycloak.Realm{}, nil
 		}
-		r, err := api.UpdateRealm(ctx, in.ClusterID, in.Realm, in.DisplayName, in.Enabled)
+		r, err := api.UpdateRealm(ctx, in.ClusterID, in.Realm, in.DisplayName, in.Enabled, in.FrontendURL)
 		if err != nil {
 			return toolError(err), skycloak.Realm{}, nil
 		}
@@ -398,10 +400,11 @@ type RotateSecretOutput struct {
 
 // UpdateRealmInput is the input for skycloak_update_realm.
 type UpdateRealmInput struct {
-	ClusterID   string `json:"cluster_id" jsonschema:"the cluster ID"`
-	Realm       string `json:"realm" jsonschema:"the Keycloak realm name"`
-	DisplayName string `json:"display_name,omitempty" jsonschema:"new display name"`
-	Enabled     *bool  `json:"enabled,omitempty" jsonschema:"whether users can sign in to the realm; omit to leave it unchanged"`
+	ClusterID   string  `json:"cluster_id" jsonschema:"the cluster ID"`
+	Realm       string  `json:"realm" jsonschema:"the Keycloak realm name"`
+	DisplayName string  `json:"display_name,omitempty" jsonschema:"new display name"`
+	Enabled     *bool   `json:"enabled,omitempty" jsonschema:"whether users can sign in to the realm; omit to leave it unchanged"`
+	FrontendURL *string `json:"frontend_url,omitempty" jsonschema:"the public https URL the realm serves on behind your own proxy: a host and optional port, no path, query or credentials; an empty string clears it, omit to leave it unchanged"`
 }
 
 // RealmConfirmInput is a realm reference plus a deletion confirmation.

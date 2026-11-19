@@ -2,7 +2,10 @@ package tools
 
 import (
 	"context"
+	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/sky-cloak/skycloak-mcp/internal/skycloak"
 )
@@ -18,6 +21,7 @@ type recordingAPI struct {
 	userEnabled       *bool
 	userEmailVerified *bool
 	realmEnabled      *bool
+	realmFrontendURL  *string
 	routeAdminAccess  *bool
 }
 
@@ -26,9 +30,9 @@ func (r *recordingAPI) UpdateRealmUser(ctx context.Context, clusterID, realm, us
 	return r.stubAPI.UpdateRealmUser(ctx, clusterID, realm, userID, email, firstName, lastName, enabled, emailVerified)
 }
 
-func (r *recordingAPI) UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled *bool) (*skycloak.Realm, error) {
-	r.realmEnabled = enabled
-	return r.stubAPI.UpdateRealm(ctx, clusterID, realm, displayName, enabled)
+func (r *recordingAPI) UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled *bool, frontendURL *string) (*skycloak.Realm, error) {
+	r.realmEnabled, r.realmFrontendURL = enabled, frontendURL
+	return r.stubAPI.UpdateRealm(ctx, clusterID, realm, displayName, enabled, frontendURL)
 }
 
 func (r *recordingAPI) UpdateDomainRoute(ctx context.Context, clusterID, domainID, routeID string, allowAdminAccess *bool, cors []string) (*skycloak.DomainRoute, error) {
@@ -112,5 +116,52 @@ func TestUpdateDomainRouteForwardsOnlyTheBooleanTheCallerSent(t *testing.T) {
 			}
 			checkBool(t, "allow_admin_access", api.routeAdminAccess, tc.wantArg)
 		})
+	}
+}
+
+func TestUpdateRealmForwardsFrontendURLStates(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		url  *string
+	}{
+		{name: "omitted"},
+		{name: "set", url: ptr("https://login.example.com")},
+		{name: "cleared", url: ptr("")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &recordingAPI{}
+			in := UpdateRealmInput{ClusterID: "c1", Realm: "app", FrontendURL: tc.url}
+			res, out, err := updateRealmHandler(api)(context.Background(), nil, in)
+			if err != nil || res.IsError {
+				t.Fatalf("update realm: err=%v res=%v", err, res.IsError)
+			}
+			if (api.realmFrontendURL == nil) != (tc.url == nil) || (tc.url != nil && *api.realmFrontendURL != *tc.url) {
+				t.Errorf("forwarded frontend_url = %v, want %v", api.realmFrontendURL, tc.url)
+			}
+			if tc.url != nil && *tc.url != "" && (out.FrontendURL == nil || *out.FrontendURL != *tc.url) {
+				t.Errorf("returned frontend_url = %v, want %v", out.FrontendURL, *tc.url)
+			}
+		})
+	}
+}
+
+func TestUpdateRealmPassesFrontendURLRefusalsThrough(t *testing.T) {
+	for _, status := range []int{403, 409, 422} {
+		api := stubAPI{err: &skycloak.APIError{StatusCode: status, Problem: skycloak.Problem{Detail: "frontend_url refused"}}}
+		res, _, err := updateRealmHandler(api)(context.Background(), nil, UpdateRealmInput{ClusterID: "c1", Realm: "app", FrontendURL: ptr("https://x.example.com")})
+		if err != nil || !res.IsError {
+			t.Fatalf("status %d: err=%v isError=%v, want a tool error", status, err, res != nil && res.IsError)
+		}
+	}
+}
+
+func TestGetRealmShowsFrontendURL(t *testing.T) {
+	u := "https://login.example.com"
+	res, out, err := getRealmHandler(stubAPI{realm: &skycloak.Realm{Name: "app", Enabled: true, FrontendURL: &u}})(context.Background(), nil, RealmScopeInput{ClusterID: "c1", Realm: "app"})
+	if err != nil || res.IsError || out.FrontendURL == nil || *out.FrontendURL != u {
+		t.Fatalf("get realm: err=%v res=%v out=%+v", err, res.IsError, out)
+	}
+	if text := res.Content[0].(*mcp.TextContent).Text; !strings.Contains(text, "frontend_url="+u) {
+		t.Errorf("text %q does not show the frontend URL", text)
 	}
 }

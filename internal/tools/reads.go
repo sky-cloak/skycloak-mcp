@@ -13,7 +13,7 @@ import (
 func registerReadParityTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_get_realm",
-		Description: "Get one Keycloak realm of a cluster by name, with its display name, enabled state and the security settings registration_allowed, login_with_email and ssl_required. " +
+		Description: "Get one Keycloak realm of a cluster by name, with its display name, enabled state, frontend_url (the public URL it serves on behind your own proxy, absent when none is set) and the security settings registration_allowed, login_with_email and ssl_required. " +
 			"Needs cluster_id from skycloak_list_clusters; skycloak_list_realms gives the realm names and answers the same question for many realms at once.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get realm"},
 	}, getRealmHandler(api))
@@ -97,6 +97,9 @@ func getRealmHandler(api API) mcp.ToolHandlerFor[RealmScopeInput, skycloak.Realm
 		// a model reads first.
 		text := fmt.Sprintf("%s (%s) enabled=%t registration_allowed=%t login_with_email=%t ssl_required=%s",
 			r.Name, r.DisplayName, r.Enabled, r.RegistrationAllowed, r.LoginWithEmailAllowed, r.SSLRequired)
+		if r.FrontendURL != nil {
+			text += " frontend_url=" + *r.FrontendURL
+		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}, *r, nil
 	}
 }

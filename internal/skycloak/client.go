@@ -332,6 +332,11 @@ type Realm struct {
 	LoginWithEmailAllowed       bool   `json:"login_with_email_allowed"`
 	DuplicateEmailsAllowed      bool   `json:"duplicate_emails_allowed"`
 
+	// FrontendURL is the public URL the realm serves on behind the caller's own
+	// proxy. It is a pointer so a realm with none set leaves the field out
+	// instead of reporting an empty URL.
+	FrontendURL *string `json:"frontend_url,omitempty"`
+
 	// DefaultBrandingApplied reports whether creation also applied Skycloak's
 	// default login branding. Only creation answers this, so it is a pointer:
 	// a realm that was merely read has nothing to say, and false would claim
@@ -776,7 +781,17 @@ func realmFromAPI(r *apiclient.Realm) Realm {
 		RegistrationEmailAsUsername: r.RegistrationEmailAsUsername,
 		LoginWithEmailAllowed:       r.LoginWithEmailAllowed,
 		DuplicateEmailsAllowed:      r.DuplicateEmailsAllowed,
+		FrontendURL:                 nullableStrPtr(r.FrontendUrl),
 	}
+}
+
+// nullableStrPtr maps a nullable wire string to a pointer: nil for both null
+// and absent, so "no URL set" has one representation.
+func nullableStrPtr(n nullable.Nullable[string]) *string {
+	if v, err := n.Get(); err == nil {
+		return &v
+	}
+	return nil
 }
 
 // createdRealmFromAPI maps the create response, which the API models as its own
@@ -2223,9 +2238,19 @@ func (c *Client) ListRealmUserGroups(ctx context.Context, clusterID, realm, user
 	return out, nil
 }
 
-// UpdateRealm updates a realm's mutable settings.
-func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled *bool) (*Realm, error) {
+// UpdateRealm updates a realm's mutable settings. A nil frontendURL leaves the
+// realm's frontend URL as it is, an empty one clears it (sent as null) and any
+// other value sets it. The body carries only what was asked for, so the realm's
+// other settings keep their stored values.
+func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled *bool, frontendURL *string) (*Realm, error) {
 	body := apiclient.UpdateRealmJSONRequestBody{Enabled: enabled}
+	if frontendURL != nil {
+		if *frontendURL == "" {
+			body.FrontendUrl = nullable.NewNullNullable[string]()
+		} else {
+			body.FrontendUrl = nullable.NewNullableWithValue(*frontendURL)
+		}
+	}
 	if displayName != "" {
 		dn := apiclient.RealmDisplayName(displayName)
 		body.DisplayName = &dn
