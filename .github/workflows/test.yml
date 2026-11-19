@@ -37,6 +37,19 @@ jobs:
       - name: Build
         run: go build ./...
 
+  docker-stdio:
+    name: container speaks stdio uncredentialed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t skycloak-mcp:ci .
+      # Server directories (Glama and the ones that follow it) build this image
+      # and introspect it with no credentials. A build that cannot answer
+      # tools/list there is listed with no tools and no quality score.
+      - name: initialize + tools/list with no credentials
+        run: scripts/docker-stdio-smoke.sh skycloak-mcp:ci
+
   lint:
     runs-on: ubuntu-latest
     steps:

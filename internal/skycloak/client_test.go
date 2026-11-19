@@ -2,8 +2,10 @@ package skycloak
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -81,5 +83,26 @@ func TestWithHTTPClientLeavesCallersClientUntouched(t *testing.T) {
 	_ = New("https://example.invalid", "k", "v", WithHTTPClient(caller))
 	if caller.Transport != nil {
 		t.Fatalf("New mutated the caller's client: Transport = %T", caller.Transport)
+	}
+}
+
+// A server started with no credential registers its tools so that a directory
+// can introspect it, which means a Client can exist with no key. Calling one
+// has to fail before the request goes out, with an error that says how to fix
+// it, rather than sending an empty API-Key header for a bare 401.
+func TestCallWithoutAPIKeyExplainsHowToSupplyOne(t *testing.T) {
+	reached := false
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { reached = true }))
+	defer srv.Close()
+
+	_, err := New(srv.URL, "", "2026-03-01").ListClusters(context.Background(), ListClustersParams{})
+	if !errors.Is(err, ErrNoAPIKey) {
+		t.Fatalf("err = %v, want ErrNoAPIKey", err)
+	}
+	if !strings.Contains(err.Error(), "SKYCLOAK_API_KEY") {
+		t.Errorf("error %q does not name the environment variable that fixes it", err)
+	}
+	if reached {
+		t.Error("an uncredentialed call reached the API; it must fail locally")
 	}
 }
