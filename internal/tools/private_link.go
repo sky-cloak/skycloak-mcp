@@ -21,8 +21,8 @@ func registerPrivateLinkReadTools(s *mcp.Server, api API) {
 func registerPrivateLinkWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_update_cluster_private_link",
-		Description: "Set the Azure subscription IDs allowed to connect a private endpoint to one cluster, and return the new private link. azure_subscription_ids replaces the stored list: an empty list clears it and leaving it out keeps it, and at least one is needed to turn private link on. enabled turns private link on or off and is left as it is when omitted. The API refuses with 403 when the plan has no private networking, 422 when the site has no Azure private link or an ID is not a valid GUID, and 409 when turning it off while public access is off. Removing a subscription or turning private link off cuts the connections it carried. Read the current state first with skycloak_get_cluster_private_link.",
-		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Update cluster private link"},
+		Description: "Set the Azure subscription IDs allowed to connect a private endpoint to one cluster, and return the new private link. azure_subscription_ids replaces the stored list: an empty list clears it and leaving it out keeps it, and at least one is needed to turn private link on. enabled turns private link on or off; when omitted the current on or off state is read first and sent back unchanged, so a change made by someone else between that read and the update can be overwritten. The API refuses with 403 when the plan has no private networking, 422 when the site has no Azure private link or an ID is not a valid GUID, and 409 when turning it off while public access is off. Removing a subscription or turning private link off cuts the connections it carried. Read the current state first with skycloak_get_cluster_private_link.",
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Update cluster private link"},
 	}, updateClusterPrivateLinkHandler(api))
 }
 
