@@ -109,6 +109,8 @@ type API interface {
 	RemoveClusterCAPTCHADomain(ctx context.Context, clusterID, hostname string) error
 	GetClusterPrivateLink(ctx context.Context, clusterID string) (*skycloak.PrivateLink, error)
 	UpdateClusterPrivateLink(ctx context.Context, clusterID string, subscriptionIDs *[]string, enabled *bool) (*skycloak.PrivateLink, error)
+	GetClusterPublicAccess(ctx context.Context, clusterID string) (*skycloak.PublicAccess, error)
+	SetClusterPublicAccess(ctx context.Context, clusterID string, enabled bool) (*skycloak.PublicAccess, error)
 	GetClusterCredentials(ctx context.Context, clusterID string) (*skycloak.ClusterCredentials, error)
 	GetClusterUpgradePath(ctx context.Context, clusterID string) ([]skycloak.UpgradePathStep, error)
 	ClusterInsights(ctx context.Context, clusterID, kind string) ([]byte, error)
@@ -242,6 +244,7 @@ var toolAreas = []toolArea{
 	{name: "actions", scopes: []string{"identity-providers:read"}, register: registerActionReadTools},
 	{name: "edge security", scopes: []string{"clusters:security:read"}, register: registerSecurityReadTools},
 	{name: "private link", scopes: []string{"clusters:private-link:read"}, register: registerPrivateLinkReadTools},
+	{name: "public access", scopes: []string{"clusters:read"}, register: registerPublicAccessReadTools},
 	{name: "siem", scopes: []string{"siem:read"}, register: registerSIEMReadTools},
 	{name: "webhooks", scopes: []string{"webhooks:read"}, register: registerWebhookReadTools},
 	{name: "cluster detail reads", scopes: []string{"clusters:read", "clusters:insights:read", "realm-roles:read", "realm-groups:read"}, register: registerReads2Tools},
@@ -266,6 +269,9 @@ var toolAreas = []toolArea{
 	// update_cluster_private_link reads the current state when enabled is
 	// omitted, so the read scope is a requirement of writing too.
 	{name: "private link writes", write: true, scopes: []string{"clusters:private-link:write", "clusters:private-link:read"}, register: registerPrivateLinkWriteTools},
+	// Public access is the public_access field of the cluster, so it is read
+	// and written with the cluster scopes.
+	{name: "public access writes", write: true, scopes: []string{"clusters:write"}, register: registerPublicAccessWriteTools},
 	{name: "siem writes", write: true, scopes: []string{"siem:write"}, register: registerSIEMWriteTools},
 	{name: "webhook writes", write: true, scopes: []string{"webhooks:write"}, register: registerWebhookWriteTools},
 	{name: "detail writes", write: true, scopes: []string{"realm-roles:write", "realm-groups:write", "realm-users:write", "domains:write", "applications:write", "identity-providers:write", "clusters:write", "extensions:write", "themes:write", "smtp:write", "branding:write", "clusters:events:read"}, register: registerWrites2Tools},
