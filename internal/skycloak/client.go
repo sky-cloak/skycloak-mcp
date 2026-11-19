@@ -2224,9 +2224,8 @@ func (c *Client) ListRealmUserGroups(ctx context.Context, clusterID, realm, user
 }
 
 // UpdateRealm updates a realm's mutable settings.
-func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled bool) (*Realm, error) {
-	en := enabled
-	body := apiclient.UpdateRealmJSONRequestBody{Enabled: &en}
+func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled *bool) (*Realm, error) {
+	body := apiclient.UpdateRealmJSONRequestBody{Enabled: enabled}
 	if displayName != "" {
 		dn := apiclient.RealmDisplayName(displayName)
 		body.DisplayName = &dn
@@ -2591,9 +2590,8 @@ func (c *Client) UpdateRealmGroup(ctx context.Context, clusterID, realm, groupID
 }
 
 // UpdateRealmUser updates a realm user's profile fields.
-func (c *Client) UpdateRealmUser(ctx context.Context, clusterID, realm, userID, email, firstName, lastName string, enabled, emailVerified bool) (*RealmUser, error) {
-	en, ev := enabled, emailVerified
-	body := apiclient.UpdateRealmUserJSONRequestBody{Enabled: &en, EmailVerified: &ev}
+func (c *Client) UpdateRealmUser(ctx context.Context, clusterID, realm, userID, email, firstName, lastName string, enabled, emailVerified *bool) (*RealmUser, error) {
+	body := apiclient.UpdateRealmUserJSONRequestBody{Enabled: enabled, EmailVerified: emailVerified}
 	if email != "" {
 		e := openapitypes.Email(email)
 		body.Email = &e
@@ -2616,9 +2614,8 @@ func (c *Client) UpdateRealmUser(ctx context.Context, clusterID, realm, userID, 
 }
 
 // UpdateDomainRoute updates a route's mutable fields.
-func (c *Client) UpdateDomainRoute(ctx context.Context, clusterID, domainID, routeID string, allowAdminAccess bool, cors []string) (*DomainRoute, error) {
-	admin := allowAdminAccess
-	body := apiclient.UpdateDomainRouteJSONRequestBody{AllowAdminAccess: &admin}
+func (c *Client) UpdateDomainRoute(ctx context.Context, clusterID, domainID, routeID string, allowAdminAccess *bool, cors []string) (*DomainRoute, error) {
+	body := apiclient.UpdateDomainRouteJSONRequestBody{AllowAdminAccess: allowAdminAccess}
 	if len(cors) > 0 {
 		body.CorsAllowedOrigins = &cors
 	}

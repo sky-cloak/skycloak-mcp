@@ -529,11 +529,11 @@ func (s stubAPI) ListRealmUserGroups(context.Context, string, string, string) ([
 	return s.rgroups, s.err
 }
 
-func (s stubAPI) UpdateRealm(_ context.Context, _, realm, displayName string, enabled bool) (*skycloak.Realm, error) {
+func (s stubAPI) UpdateRealm(_ context.Context, _, realm, displayName string, enabled *bool) (*skycloak.Realm, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &skycloak.Realm{Name: realm, DisplayName: displayName, Enabled: enabled}, nil
+	return &skycloak.Realm{Name: realm, DisplayName: displayName, Enabled: enabled == nil || *enabled}, nil
 }
 
 func (s stubAPI) DiscoverOIDC(context.Context, string) (*skycloak.OIDCDiscovery, error) {
@@ -645,18 +645,18 @@ func (s stubAPI) UpdateRealmGroup(_ context.Context, _, _, _, name string) (*sky
 	return &skycloak.RealmGroup{ID: "g1", Name: name}, nil
 }
 
-func (s stubAPI) UpdateRealmUser(_ context.Context, _, _, _, email string, _, _ string, _, _ bool) (*skycloak.RealmUser, error) {
+func (s stubAPI) UpdateRealmUser(_ context.Context, _, _, _, email string, _, _ string, _, _ *bool) (*skycloak.RealmUser, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
 	return &skycloak.RealmUser{ID: "u1", Username: "jdoe", Email: email}, nil
 }
 
-func (s stubAPI) UpdateDomainRoute(_ context.Context, _, _, _ string, admin bool, _ []string) (*skycloak.DomainRoute, error) {
+func (s stubAPI) UpdateDomainRoute(_ context.Context, _, _, _ string, admin *bool, _ []string) (*skycloak.DomainRoute, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &skycloak.DomainRoute{ID: "r1", Realm: "app", AllowAdminAccess: admin}, nil
+	return &skycloak.DomainRoute{ID: "r1", Realm: "app", AllowAdminAccess: admin != nil && *admin}, nil
 }
 
 func (s stubAPI) UpdateApplication(_ context.Context, _, _, clientID, _, _ string, _ []string) (*skycloak.Application, error) {
