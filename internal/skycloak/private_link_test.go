@@ -32,7 +32,7 @@ func TestGetClusterPrivateLink(t *testing.T) {
 }
 
 func TestGetClusterPrivateLinkKeepsTheRefusal(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 422, `{"detail":"site has no Azure private link"}`)
 	}))
 	defer srv.Close()
@@ -132,7 +132,7 @@ func TestUpdateClusterPrivateLinkRefusesToWriteWhenTheReadFails(t *testing.T) {
 }
 
 func TestUpdateClusterPrivateLinkKeepsTheRefusal(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, 409, `{"detail":"turn public access back on first"}`)
 	}))
 	defer srv.Close()
