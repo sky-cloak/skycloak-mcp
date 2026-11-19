@@ -56,14 +56,16 @@ type GetClusterInput struct {
 
 func registerClusterReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_clusters",
-		Description: "List the Keycloak clusters in your Skycloak workspace, with their status, type, size, version and location.",
+		Name: "skycloak_list_clusters",
+		Description: "List the Keycloak clusters in the Skycloak workspace, each with its cluster_id, name, status, type, size, version, location and auto-upgrade flag. " +
+			"Start here: the cluster_id nearly every other tool needs comes from this list. Omit limit and offset to list the whole workspace; either one returns a single page and the result says so.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List clusters"},
 	}, listClustersHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_cluster",
-		Description: "Get full details for a single Keycloak cluster by its ID.",
+		Name: "skycloak_get_cluster",
+		Description: "Get one Keycloak cluster by its ID, with status, type, size, version, location, URL, timestamps and auto-upgrade flag. " +
+			"Use skycloak_list_clusters to find the ID. Poll this after skycloak_create_cluster or skycloak_update_cluster to watch the status settle.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get cluster"},
 	}, getClusterHandler(api))
 }

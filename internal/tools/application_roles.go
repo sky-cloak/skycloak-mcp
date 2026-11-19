@@ -12,28 +12,32 @@ import (
 
 func registerApplicationRoleReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_application_roles",
-		Description: "List the roles assigned to an application's service account.",
+		Name: "skycloak_list_application_roles",
+		Description: "List the realm and client roles granted to one application's service account, each with its name, client_role flag and description. " +
+			"These are grants held by the client itself, not the roles the client defines: use skycloak_get_application_role for a role it defines, skycloak_list_realm_roles for the realm's definitions, and skycloak_list_user_roles for a human user's roles. Needs client_id from skycloak_list_applications.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List application roles"},
 	}, listApplicationRolesHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_application_sessions",
-		Description: "List active user sessions for an application.",
+		Name: "skycloak_list_application_sessions",
+		Description: "List the active user sessions on one application, each with its session ID, username, IP address and last access time. " +
+			"Read-only: it reports sessions and cannot end them. Needs client_id from skycloak_list_applications.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List application sessions"},
 	}, listApplicationSessionsHandler(api))
 }
 
 func registerApplicationRoleWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_assign_application_role",
-		Description: "Grant a role to an application's service account. Provide role_client_id for a client role, or omit it for a realm role.",
+		Name: "skycloak_assign_application_role",
+		Description: "Grant a role to one application's service account, so the client itself holds it when it uses client_credentials. " +
+			"The principal is the application, not a person: for a human user use skycloak_assign_realm_user_role. Pass role_client_id for a role defined on a client, or omit it for a realm role. The application must have the client_credentials grant enabled.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Assign application role"},
 	}, assignApplicationRoleHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_remove_application_role",
-		Description: "Remove a role from an application's service account.",
+		Name: "skycloak_remove_application_role",
+		Description: "Revoke a role from one application's service account, which loses that access on its next token. " +
+			"Pass the same role_client_id that granted a client role. The role itself is not deleted; skycloak_delete_application_role does that, and skycloak_remove_realm_user_role is the equivalent for a user.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Remove application role"},
 	}, removeApplicationRoleHandler(api))
 }
