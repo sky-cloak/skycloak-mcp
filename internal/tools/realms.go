@@ -48,8 +48,10 @@ type ListRealmsOutput struct {
 
 func registerRealmReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_realms",
-		Description: "List the Keycloak realms in a Skycloak cluster.",
+		Name: "skycloak_list_realms",
+		Description: "List Keycloak realms with their enabled state, registration_allowed, login_with_email, ssl_required and the cluster each belongs to. " +
+			"Omit cluster_id to cover every cluster in the workspace; clusters that could not be read come back under unreachable, so a partial answer is visible rather than silent. " +
+			"Use it to get the realm names other tools take; skycloak_get_realm reads one realm.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List realms"},
 	}, listRealmsHandler(api))
 }

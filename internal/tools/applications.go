@@ -31,8 +31,9 @@ type ListApplicationsOutput struct {
 
 func registerApplicationReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_applications",
-		Description: "List the OIDC/SAML clients (applications) in a realm.",
+		Name: "skycloak_list_applications",
+		Description: "List the applications (OIDC and SAML clients) of one realm, each with its client_id, name, type, protocol and status. " +
+			"Needs cluster_id from skycloak_list_clusters and a realm name from skycloak_list_realms, and it is where the client_id other application tools take comes from.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List applications"},
 	}, listApplicationsHandler(api))
 }

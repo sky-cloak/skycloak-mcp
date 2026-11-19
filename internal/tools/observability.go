@@ -17,14 +17,16 @@ const maxEventLimit = 100
 
 func registerObservabilityReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_logs",
-		Description: "Read recent Keycloak server logs for a cluster, optionally filtered by level and a search string.",
+		Name: "skycloak_get_logs",
+		Description: "Read one cluster's recent Keycloak server process logs, each entry with timestamp, level, category and message, optionally narrowed by level and a free-text search (limit defaults to 50). " +
+			"Not edge or WAF traffic; use skycloak_get_security_logs for that. Not Keycloak user or admin events either; use skycloak_query_events for logins and admin operations.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get logs"},
 	}, getLogsHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_security_logs",
-		Description: "Read recent security (WAF) logs for a cluster — blocked requests, attack types, source IPs.",
+		Name: "skycloak_get_security_logs",
+		Description: "Read one cluster's recent WAF and edge-security log entries: the action taken, attack type, source IP, HTTP method and message for requests the edge inspected or blocked (limit defaults to 50). " +
+			"Not Keycloak's own server logs; use skycloak_get_logs. Not login or admin events; use skycloak_query_events. For the rules producing these entries, see skycloak_get_cluster_security.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get security logs"},
 	}, getSecurityLogsHandler(api))
 
@@ -114,10 +116,10 @@ func getSecurityLogsHandler(api API) mcp.ToolHandlerFor[GetSecurityLogsInput, Se
 // as "free-text search" before, which invites the assumption that it matches the
 // event type; it never has, so a caller filtering for LOGIN_ERROR that way gets
 // zero results for a realm that has them, and reads that as "no failed logins".
-const queryEventsDescription = "Query Keycloak user and admin events for a cluster (logins, token grants, admin operations). " +
-	"Filter user events with types/error, admin events with operation_types, and either with realm, start_time/end_time, and offset. " +
-	"Note search only matches username, client_id, realm_name and ip_address; it does not match the event type, so use types or operation_types for that. " +
-	"Limit is capped at 100 per call, so page with offset for anything larger."
+const queryEventsDescription = "Query one cluster's Keycloak user and admin events (logins, token grants, admin operations) and return the matching rows. " +
+	"Filter user events with types and error, admin events with operation_types, and either kind with realm, username, start_time/end_time and order; without start_time the API covers only the last 24 hours. " +
+	"search only matches username, client_id, realm_name and ip_address: it does not match the event type, so use types or operation_types for that. " +
+	"limit is capped at 100 per call, so page with offset. For the same events as a CSV document use skycloak_export_cluster_events, and for Keycloak's process logs use skycloak_get_logs."
 
 // QueryEventsInput is the input schema for skycloak_query_events.
 type QueryEventsInput struct {

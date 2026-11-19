@@ -13,13 +13,13 @@ import (
 func registerOpenFGAReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_list_openfga_instances",
-		Description: "List the OpenFGA instances bound to a cluster's realms, with each one's status (provisioning, ready, failed or deleting). Works on every plan, so a workspace that lost OpenFGA access still sees what it has.",
+		Description: "List the OpenFGA instances bound to one cluster's realms, each with its instance_id, realm and status (provisioning, ready, failed or deleting). Works on every plan, so a workspace that lost OpenFGA access still sees what it has. For the URLs to call an instance with, use skycloak_get_openfga_instance.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List OpenFGA instances"},
 	}, listOpenFGAInstancesHandler(api))
 
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_get_openfga_instance",
-		Description: "Get one OpenFGA instance of a cluster, including its status and the API URL, token issuer and audience to call it with.",
+		Description: "Get one OpenFGA instance of a cluster by instance_id, with its realm, status and the api_url, issuer and audience needed to call it. Needs instance_id from skycloak_list_openfga_instances. Poll it after skycloak_create_openfga_instance until the status is ready or failed.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get OpenFGA instance"},
 	}, getOpenFGAInstanceHandler(api))
 }
@@ -27,13 +27,13 @@ func registerOpenFGAReadTools(s *mcp.Server, api API) {
 func registerOpenFGAWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_create_openfga_instance",
-		Description: "Create an OpenFGA instance bound to one realm of a cluster; a realm has at most one. Asynchronous: it starts in 'provisioning', so poll skycloak_get_openfga_instance until the status is 'ready' or 'failed'. The instance accepts only tokens from that realm that carry the instance's audience. Fails with 403 when the workspace's plan does not include OpenFGA or the workspace reached its instance limit, 409 when the realm already has an instance, and 422 when the realm is 'master', does not exist or is disabled.",
+		Description: "Create an OpenFGA authorization instance bound to one realm of a cluster; a realm has at most one. Asynchronous: it starts in 'provisioning', so poll skycloak_get_openfga_instance until the status is 'ready' or 'failed'. The instance accepts only tokens from that realm carrying its audience. It answers 403 when the plan does not include OpenFGA or the workspace hit its instance limit, 409 when the realm already has one, and 422 when the realm is 'master', missing or disabled.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create OpenFGA instance"},
 	}, createOpenFGAInstanceHandler(api))
 
 	addTool(s, &mcp.Tool{
 		Name:        "skycloak_delete_openfga_instance",
-		Description: "Permanently delete an OpenFGA instance with its deployment, route and database. The authorization data in it cannot be recovered. Works without OpenFGA access. Removal is asynchronous: the instance shows 'deleting' until it leaves the list. Set confirm=true to proceed.",
+		Description: "Permanently delete one OpenFGA instance with its deployment, route and database; the authorization data in it cannot be recovered. Removal is asynchronous, so the instance shows 'deleting' until it leaves skycloak_list_openfga_instances. Works even without OpenFGA access on the plan. Set confirm=true to proceed.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete OpenFGA instance"},
 	}, deleteOpenFGAInstanceHandler(api))
 }

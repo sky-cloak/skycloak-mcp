@@ -135,13 +135,23 @@ func runServer(ctx context.Context, args []string) {
 			apiKey, err = auth.LoadAPIKey(cfg)
 		}
 		if err != nil {
-			log.Fatalf("%v", err)
+			// Not fatal. A directory that introspects MCP servers (Glama, and the
+			// registries that follow it) builds the image and runs it with no
+			// credentials and no keychain, so exiting here means the server is
+			// never seen to have any tools at all. Serve the tool list anyway and
+			// let the credential be the API's problem: every call then fails with
+			// errNoAPIKey, which says exactly what to do about it.
+			log.Printf("warning: %v; serving the tool list, but every tool call will fail until a credential is configured", err)
+			apiKey = ""
 		}
 		client := skycloak.New(endpoint, apiKey, apiVersion, skycloak.WithUserAgent(userAgent))
 		// Stdio holds one key whose scopes are not enumerable from here, so no
 		// filtering: nil scopes register the whole surface.
 		server := newMCPServer(client, *allowWrites, nil)
-		if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
+		// A client that has finished with us closes the pipe, which arrives as
+		// EOF. That is how a stdio session ends, not a failure, and exiting
+		// nonzero on it makes a clean introspection run look like a crash.
+		if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil && !errors.Is(err, io.EOF) {
 			log.Fatalf("server error: %v", err)
 		}
 	case "http":
