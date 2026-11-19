@@ -79,7 +79,7 @@ func TestUpdateRealmSendsOnlyTheBooleanGiven(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv, body := patchRecorder(t, realmResponse)
-			if _, err := newTestClient(srv.URL).UpdateRealm(context.Background(), cuid, "app", "App", tc.enabled); err != nil {
+			if _, err := newTestClient(srv.URL).UpdateRealm(context.Background(), cuid, "app", "App", tc.enabled, nil); err != nil {
 				t.Fatalf("UpdateRealm: %v", err)
 			}
 			checkPatchedBool(t, *body, "enabled", tc.enabled)
@@ -110,3 +110,59 @@ func TestUpdateDomainRouteSendsOnlyTheBooleanGiven(t *testing.T) {
 }
 
 func ptrTo[T any](v T) *T { return &v }
+
+// frontend_url is nullable on the wire, so three states have to stay apart: a
+// nil argument leaves the key out, an empty one sends null to clear it, and a
+// value sets it. Nothing else may travel with it, or a frontend URL change
+// would overwrite the realm's other settings.
+func TestUpdateRealmFrontendURLStates(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		url     *string
+		present bool
+		want    any
+	}{
+		{name: "omitted"},
+		{name: "set", url: ptrTo("https://login.example.com"), present: true, want: "https://login.example.com"},
+		{name: "cleared", url: ptrTo(""), present: true, want: nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, body := patchRecorder(t, realmResponse)
+			if _, err := newTestClient(srv.URL).UpdateRealm(context.Background(), cuid, "app", "", nil, tc.url); err != nil {
+				t.Fatalf("UpdateRealm: %v", err)
+			}
+			got, present := (*body)["frontend_url"]
+			if present != tc.present || got != tc.want {
+				t.Errorf("frontend_url = %v (present=%v), want %v (present=%v)", got, present, tc.want, tc.present)
+			}
+			if len(*body) != map[bool]int{true: 1, false: 0}[tc.present] {
+				t.Errorf("body = %v, want only frontend_url and nothing else", *body)
+			}
+		})
+	}
+}
+
+func TestRealmReadsFrontendURL(t *testing.T) {
+	const base = `{"id":"55555555-5555-5555-5555-555555555555","name":"app","display_name":"App","enabled":true,"ssl_required":"external","registration_allowed":false,"registration_email_as_username":false,"login_with_email_allowed":true,"duplicate_emails_allowed":false`
+	for _, tc := range []struct {
+		name string
+		body string
+		want *string
+	}{
+		{name: "set", body: base + `,"frontend_url":"https://login.example.com"}`, want: ptrTo("https://login.example.com")},
+		{name: "null", body: base + `,"frontend_url":null}`},
+		{name: "absent", body: base + `}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, tc.body) }))
+			defer srv.Close()
+			r, err := newTestClient(srv.URL).GetRealm(context.Background(), cuid, "app")
+			if err != nil {
+				t.Fatalf("GetRealm: %v", err)
+			}
+			if (r.FrontendURL == nil) != (tc.want == nil) || (tc.want != nil && *r.FrontendURL != *tc.want) {
+				t.Errorf("FrontendURL = %v, want %v", r.FrontendURL, tc.want)
+			}
+		})
+	}
+}

@@ -97,7 +97,7 @@ type API interface {
 	SetClientThemeAssignment(ctx context.Context, clusterID, realm, clientID, login string) (string, error)
 	ListRealmUserRoles(ctx context.Context, clusterID, realm, userID string) ([]skycloak.RealmRole, error)
 	ListRealmUserGroups(ctx context.Context, clusterID, realm, userID string) ([]skycloak.RealmGroup, error)
-	UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled *bool) (*skycloak.Realm, error)
+	UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled *bool, frontendURL *string) (*skycloak.Realm, error)
 	DiscoverOIDC(ctx context.Context, issuerURL string) (*skycloak.OIDCDiscovery, error)
 	TestSMTP(ctx context.Context, clusterID, realm, email string) (*skycloak.TestResult, error)
 	TestIdentityProviderConnection(ctx context.Context, clusterID, realm, providerID, clientID, clientSecret string) (*skycloak.TestResult, error)

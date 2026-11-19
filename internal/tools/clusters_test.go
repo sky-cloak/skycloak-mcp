@@ -529,11 +529,15 @@ func (s stubAPI) ListRealmUserGroups(context.Context, string, string, string) ([
 	return s.rgroups, s.err
 }
 
-func (s stubAPI) UpdateRealm(_ context.Context, _, realm, displayName string, enabled *bool) (*skycloak.Realm, error) {
+func (s stubAPI) UpdateRealm(_ context.Context, _, realm, displayName string, enabled *bool, frontendURL *string) (*skycloak.Realm, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	return &skycloak.Realm{Name: realm, DisplayName: displayName, Enabled: enabled == nil || *enabled}, nil
+	out := &skycloak.Realm{Name: realm, DisplayName: displayName, Enabled: enabled == nil || *enabled}
+	if frontendURL != nil && *frontendURL != "" {
+		out.FrontendURL = frontendURL
+	}
+	return out, nil
 }
 
 func (s stubAPI) DiscoverOIDC(context.Context, string) (*skycloak.OIDCDiscovery, error) {
