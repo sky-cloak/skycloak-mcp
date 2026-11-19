@@ -573,6 +573,30 @@ func (s stubAPI) UpdateClusterSecurity(_ context.Context, _ string, sec *skycloa
 	return sec, nil
 }
 
+func (s stubAPI) GetClusterPrivateLink(context.Context, string) (*skycloak.PrivateLink, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.PrivateLink{
+		Enabled: true, AzureSubscriptionIDs: []string{"11111111-1111-1111-1111-111111111111"},
+		Alias: "pls.alias", DNSName: "c1.private.example", Status: "waiting",
+	}, nil
+}
+
+func (s stubAPI) UpdateClusterPrivateLink(_ context.Context, _ string, ids *[]string, enabled *bool) (*skycloak.PrivateLink, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	out := &skycloak.PrivateLink{Enabled: true, AzureSubscriptionIDs: []string{}, Status: "waiting"}
+	if ids != nil {
+		out.AzureSubscriptionIDs = *ids
+	}
+	if enabled != nil {
+		out.Enabled = *enabled
+	}
+	return out, nil
+}
+
 func (s stubAPI) ListClusterCAPTCHADomains(context.Context, string) (*skycloak.CAPTCHADomainsInfo, error) {
 	if s.err != nil {
 		return nil, s.err
