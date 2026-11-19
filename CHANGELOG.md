@@ -17,6 +17,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   private networking, `422` when the cluster's site has no Azure private link,
   and `409` unless private link is enabled and ready on the cluster. The tools
   use the `clusters:read` and `clusters:write` scopes.
+- `skycloak_get_realm` now returns the realm's `frontend_url`, the public URL it
+  serves on behind the caller's own proxy, and leaves it out when none is set.
+  `skycloak_update_realm` takes `frontend_url` to set it, or an empty string to
+  clear it so the issuer follows the request host again; leaving it out keeps
+  it, and the realm's other settings are not touched. Changing it changes the
+  realm's issuer, its links and its passkey origin. The API's refusals come
+  back as tool errors with its status and message: `403` on a cluster that is
+  not dedicated, `422` for the `master` realm or an invalid URL, and `409` for
+  a realm that serves on a custom domain.
 - `skycloak_get_cluster_private_link` and `skycloak_update_cluster_private_link`,
   covering `GET`/`PUT /clusters/{cluster_id}/private-link`. The read tool returns
   whether Azure private link is on, the Azure subscription IDs allowed to
