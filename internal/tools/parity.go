@@ -12,94 +12,110 @@ import (
 
 func registerParityReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_smtp",
-		Description: "Get a realm's SMTP configuration (secret values are never returned).",
+		Name: "skycloak_get_smtp",
+		Description: "Get one realm's SMTP configuration: host, port, from address, auth type and status. Passwords are never returned. " +
+			"Needs cluster_id from skycloak_list_clusters and a realm name. Use skycloak_test_smtp to check that it actually delivers.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get SMTP config"},
 	}, getSMTPHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_theme",
-		Description: "Get a custom theme by ID. restart_required is true when the theme's content was replaced under its exact name (see skycloak_get_theme_settings) and Keycloak has not restarted since, so the previous content may still be live; use skycloak_restart_cluster_instances to apply it.",
+		Name: "skycloak_get_theme",
+		Description: "Get one custom theme of a cluster by theme_id, with its name, status, theme types and restart_required. " +
+			"restart_required is true when the theme's content was replaced under its exact name (see skycloak_get_theme_settings) and Keycloak has not restarted since, so the previous content may still be live; skycloak_restart_cluster_instances applies it. " +
+			"Needs theme_id from skycloak_list_themes. This reads metadata, not the files, which skycloak_download_theme_content returns.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get theme"},
 	}, getThemeHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_domain_route",
-		Description: "Get a single realm route on a custom domain.",
+		Name: "skycloak_get_domain_route",
+		Description: "Get one realm route on a custom domain by route_id, with the realm it serves and its admin-access setting. " +
+			"Needs cluster_id, domain_id and route_id from skycloak_list_domain_routes.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get domain route"},
 	}, getDomainRouteHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_client_theme_assignment",
-		Description: "Get a client's login-theme override (empty means the realm default).",
+		Name: "skycloak_get_client_theme_assignment",
+		Description: "Get one application's login-theme override in a realm; an empty login means the client follows the realm's assignment. " +
+			"Covers this client and the login page only. For the realm-wide themes across login, account, admin and email, use skycloak_get_theme_assignment.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get client theme"},
 	}, getClientThemeHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_user_roles",
-		Description: "List the realm roles assigned to a user.",
+		Name: "skycloak_list_user_roles",
+		Description: "List the realm roles one user currently holds, by user_id from skycloak_list_realm_users. " +
+			"These are that user's grants, not the realm's catalogue of roles (skycloak_list_realm_roles) and not an application service account's roles (skycloak_list_application_roles).",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List user roles"},
 	}, listUserRolesHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_user_groups",
-		Description: "List the groups a user belongs to.",
+		Name: "skycloak_list_user_groups",
+		Description: "List the groups one user belongs to, each with its name and path. Needs user_id from skycloak_list_realm_users. " +
+			"For the other direction, the users in a group, use skycloak_list_realm_group_members.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List user groups"},
 	}, listUserGroupsHandler(api))
 }
 
 func registerParityWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_rotate_application_secret",
-		Description: "Regenerate an application's client secret and return the new value (shown only once).",
+		Name: "skycloak_rotate_application_secret",
+		Description: "Generate a new client secret for one confidential application and return it. " +
+			"The previous secret stops working at once, so every integration using it fails until updated, and the new value is not retrievable later. Needs client_id from skycloak_list_applications.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Rotate application secret"},
 	}, rotateApplicationSecretHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_update_realm",
-		Description: "Update a realm's display name and enabled state.",
-		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Update realm"},
+		Name: "skycloak_update_realm",
+		Description: "Update one realm's display name and enabled state. Fields you omit keep their current value, and enabled=false stops every sign-in to the realm. " +
+			"Only these two fields are editable here; a realm cannot be renamed, and skycloak_create_realm and skycloak_delete_realm handle the rest.",
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), IdempotentHint: true, Title: "Update realm"},
 	}, updateRealmHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_smtp",
-		Description: "Remove a realm's SMTP configuration. Set confirm=true to proceed.",
+		Name: "skycloak_delete_smtp",
+		Description: "Remove one realm's SMTP configuration, after which Keycloak cannot send email for that realm. " +
+			"Set confirm=true to proceed. To change the settings instead of removing them, use skycloak_upsert_smtp.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete SMTP config"},
 	}, deleteSMTPHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_create_domain_route",
-		Description: "Add a realm route to a custom domain. Never use the master realm; it is reserved for cluster management and the API rejects it.",
+		Name: "skycloak_create_domain_route",
+		Description: "Route one realm of a cluster onto a custom domain, optionally allowing admin-console access and hiding the /realms/{name} path segment. " +
+			"Never use the master realm; it is reserved for cluster management and the API rejects it. Needs domain_id from skycloak_list_domains, and returns the new route_id.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create domain route"},
 	}, createDomainRouteHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_domain_route",
-		Description: "Remove a realm route from a custom domain. Set confirm=true to proceed.",
+		Name: "skycloak_delete_domain_route",
+		Description: "Remove one realm route from a custom domain, so that hostname stops serving that realm. The domain itself stays. " +
+			"Set confirm=true to proceed, and use skycloak_delete_domain to remove the domain with all of its routes.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete domain route"},
 	}, deleteDomainRouteHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_set_client_theme_assignment",
-		Description: "Set a client's login-theme override. Pass a theme ID, or an empty string to reset to the realm default.",
+		Name: "skycloak_set_client_theme_assignment",
+		Description: "Set or clear one application's login-theme override in a realm. Pass a theme ID from skycloak_list_themes, or an empty string to fall back to the realm's assignment. " +
+			"Affects this client's login page only; skycloak_set_theme_assignment sets the realm-wide themes.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), IdempotentHint: true, Title: "Set client theme"},
 	}, setClientThemeHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_theme",
-		Description: "Delete a custom theme. Set confirm=true to proceed. To change an existing theme's files, use skycloak_update_theme_content instead: deleting a theme that is still assigned returns 409, and re-uploading it gives a new ID.",
+		Name: "skycloak_delete_theme",
+		Description: "Delete one custom theme from a cluster, discarding its archive for good. Set confirm=true to proceed. " +
+			"To change an existing theme's files, use skycloak_update_theme_content instead: deleting a theme that is still assigned returns 409, and re-uploading gives a new ID.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete theme"},
 	}, deleteThemeHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_extension",
-		Description: "Delete a custom extension from the workspace catalog. Set confirm=true to proceed.",
+		Name: "skycloak_delete_extension",
+		Description: "Delete a custom extension from the workspace catalog, so it can no longer be installed anywhere. Set confirm=true to proceed. " +
+			"This is the catalog entry; to remove an extension from one cluster use skycloak_uninstall_extension.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete extension"},
 	}, deleteExtensionHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_export",
-		Description: "Delete a database export archive. Set confirm=true to proceed.",
+		Name: "skycloak_delete_export",
+		Description: "Delete one whole-cluster database export archive, after which its download URL stops working. " +
+			"Set confirm=true to proceed, and take export_id from skycloak_list_exports. It covers the exports skycloak_create_export makes, not realm exports.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete export"},
 	}, deleteExportHandler(api))
 }
@@ -385,7 +401,7 @@ type UpdateRealmInput struct {
 	ClusterID   string `json:"cluster_id" jsonschema:"the cluster ID"`
 	Realm       string `json:"realm" jsonschema:"the Keycloak realm name"`
 	DisplayName string `json:"display_name,omitempty" jsonschema:"new display name"`
-	Enabled     bool   `json:"enabled,omitempty" jsonschema:"whether users can sign in to the realm"`
+	Enabled     *bool  `json:"enabled,omitempty" jsonschema:"whether users can sign in to the realm; omit to leave it unchanged"`
 }
 
 // RealmConfirmInput is a realm reference plus a deletion confirmation.

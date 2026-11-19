@@ -22,6 +22,9 @@ import (
 
 const defaultEndpoint = "https://api.skycloak.io"
 
+// ErrNoAPIKey is returned by every call on a Client built without a key.
+var ErrNoAPIKey = errors.New("no Skycloak credential: run `skycloak-mcp init`, or set SKYCLOAK_API_KEY to a key from the Skycloak dashboard")
+
 // Client wraps the generated API client.
 type Client struct {
 	gen *apiclient.ClientWithResponses
@@ -71,6 +74,13 @@ func New(endpoint, apiKey, apiVersion string, opts ...Option) *Client {
 	cfg.httpClient = &hc
 
 	editor := func(_ context.Context, req *http.Request) error {
+		if apiKey == "" {
+			// A server started with no credential still registers and lists its
+			// tools, so that introspection works; the credential is only needed to
+			// call one. Fail here rather than sending an empty API-Key header,
+			// which the API answers with a bare 401 that says nothing useful.
+			return ErrNoAPIKey
+		}
 		req.Header.Set("API-Key", apiKey)
 		req.Header.Set("Accept", "application/json")
 		if apiVersion != "" {
@@ -2214,9 +2224,8 @@ func (c *Client) ListRealmUserGroups(ctx context.Context, clusterID, realm, user
 }
 
 // UpdateRealm updates a realm's mutable settings.
-func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled bool) (*Realm, error) {
-	en := enabled
-	body := apiclient.UpdateRealmJSONRequestBody{Enabled: &en}
+func (c *Client) UpdateRealm(ctx context.Context, clusterID, realm, displayName string, enabled *bool) (*Realm, error) {
+	body := apiclient.UpdateRealmJSONRequestBody{Enabled: enabled}
 	if displayName != "" {
 		dn := apiclient.RealmDisplayName(displayName)
 		body.DisplayName = &dn
@@ -2581,9 +2590,8 @@ func (c *Client) UpdateRealmGroup(ctx context.Context, clusterID, realm, groupID
 }
 
 // UpdateRealmUser updates a realm user's profile fields.
-func (c *Client) UpdateRealmUser(ctx context.Context, clusterID, realm, userID, email, firstName, lastName string, enabled, emailVerified bool) (*RealmUser, error) {
-	en, ev := enabled, emailVerified
-	body := apiclient.UpdateRealmUserJSONRequestBody{Enabled: &en, EmailVerified: &ev}
+func (c *Client) UpdateRealmUser(ctx context.Context, clusterID, realm, userID, email, firstName, lastName string, enabled, emailVerified *bool) (*RealmUser, error) {
+	body := apiclient.UpdateRealmUserJSONRequestBody{Enabled: enabled, EmailVerified: emailVerified}
 	if email != "" {
 		e := openapitypes.Email(email)
 		body.Email = &e
@@ -2606,9 +2614,8 @@ func (c *Client) UpdateRealmUser(ctx context.Context, clusterID, realm, userID, 
 }
 
 // UpdateDomainRoute updates a route's mutable fields.
-func (c *Client) UpdateDomainRoute(ctx context.Context, clusterID, domainID, routeID string, allowAdminAccess bool, cors []string) (*DomainRoute, error) {
-	admin := allowAdminAccess
-	body := apiclient.UpdateDomainRouteJSONRequestBody{AllowAdminAccess: &admin}
+func (c *Client) UpdateDomainRoute(ctx context.Context, clusterID, domainID, routeID string, allowAdminAccess *bool, cors []string) (*DomainRoute, error) {
+	body := apiclient.UpdateDomainRouteJSONRequestBody{AllowAdminAccess: allowAdminAccess}
 	if len(cors) > 0 {
 		body.CorsAllowedOrigins = &cors
 	}
@@ -3055,4 +3062,92 @@ func (c *Client) DeleteClientRole(ctx context.Context, clusterID, realm, clientI
 		return nil
 	}
 	return statusError(resp.HTTPResponse, resp.Body)
+}
+
+// ---- OpenFGA instances ----
+
+// OpenFGAInstance is a hosted OpenFGA instance bound to one realm of a cluster.
+type OpenFGAInstance struct {
+	ID            string `json:"id"`
+	ClusterID     string `json:"cluster_id"`
+	Realm         string `json:"realm"`
+	Status        string `json:"status"`
+	StatusMessage string `json:"status_message,omitempty"`
+	APIURL        string `json:"api_url"`
+	Issuer        string `json:"issuer"`
+	Audience      string `json:"audience"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
+func openFGAInstanceFromAPI(i *apiclient.OpenFGAInstance) OpenFGAInstance {
+	out := OpenFGAInstance{
+		ID: uuidString(i.Id), ClusterID: uuidString(i.ClusterId), Realm: i.Realm,
+		Status: string(i.Status), APIURL: i.ApiUrl, Issuer: i.Issuer, Audience: i.Audience,
+		CreatedAt: i.CreatedAt.Format(time.RFC3339), UpdatedAt: i.UpdatedAt.Format(time.RFC3339),
+	}
+	if i.StatusMessage != nil {
+		out.StatusMessage = *i.StatusMessage
+	}
+	return out
+}
+
+// ListOpenFGAInstances returns the OpenFGA instances bound to a cluster's realms.
+func (c *Client) ListOpenFGAInstances(ctx context.Context, clusterID string) ([]OpenFGAInstance, error) {
+	resp, err := c.gen.ListOpenFGAInstancesWithResponse(ctx, cid(clusterID), nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	out := make([]OpenFGAInstance, 0, len(resp.JSON200.Instances))
+	for i := range resp.JSON200.Instances {
+		out = append(out, openFGAInstanceFromAPI(&resp.JSON200.Instances[i]))
+	}
+	return out, nil
+}
+
+// GetOpenFGAInstance returns one OpenFGA instance of a cluster.
+func (c *Client) GetOpenFGAInstance(ctx context.Context, clusterID, instanceID string) (*OpenFGAInstance, error) {
+	resp, err := c.gen.GetOpenFGAInstanceWithResponse(ctx, cid(clusterID), uid(instanceID), nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	i := openFGAInstanceFromAPI(resp.JSON200)
+	return &i, nil
+}
+
+// CreateOpenFGAInstance starts provisioning an OpenFGA instance bound to a
+// realm. The API answers 202 with the instance in `provisioning`.
+func (c *Client) CreateOpenFGAInstance(ctx context.Context, clusterID, realm string) (*OpenFGAInstance, error) {
+	resp, err := c.gen.CreateOpenFGAInstanceWithResponse(ctx, cid(clusterID), nil, apiclient.CreateOpenFGAInstanceJSONRequestBody{Realm: realm})
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON202 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	i := openFGAInstanceFromAPI(resp.JSON202)
+	return &i, nil
+}
+
+// DeleteOpenFGAInstance removes an OpenFGA instance and its data. It returns
+// the instance in `deleting` on 202, and nil on 204 when it was already gone.
+func (c *Client) DeleteOpenFGAInstance(ctx context.Context, clusterID, instanceID string) (*OpenFGAInstance, error) {
+	resp, err := c.gen.DeleteOpenFGAInstanceWithResponse(ctx, cid(clusterID), uid(instanceID), nil)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case resp.JSON202 != nil:
+		i := openFGAInstanceFromAPI(resp.JSON202)
+		return &i, nil
+	case resp.StatusCode() == http.StatusNoContent:
+		return nil, nil
+	}
+	return nil, statusError(resp.HTTPResponse, resp.Body)
 }

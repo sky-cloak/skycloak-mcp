@@ -12,22 +12,26 @@ import (
 
 func registerExportReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_exports",
-		Description: "List the database export jobs for a cluster, with their status and expiry.",
+		Name: "skycloak_list_exports",
+		Description: "List the whole-cluster database export jobs of one cluster, each with its export_id, format, status and expiry. " +
+			"Needs cluster_id from skycloak_list_clusters. Realm exports are a separate surface with no list; read one with skycloak_get_realm_export.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List exports"},
 	}, listExportsHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_export",
-		Description: "Get a database export job by ID, including its status, progress, and (once completed) the time-limited download URL.",
+		Name: "skycloak_get_export",
+		Description: "Get one whole-cluster database export job by export_id, with its status, progress, any error and, once completed, the time-limited download URL. " +
+			"Poll it after skycloak_create_export. For a single realm's archive, use skycloak_get_realm_export.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get export"},
 	}, getExportHandler(api))
 }
 
 func registerExportWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_create_export",
-		Description: "Start a database export for a cluster. Asynchronous: poll skycloak_get_export until the status is 'completed' to obtain the download URL. Including credentials requires an encryption_password.",
+		Name: "skycloak_create_export",
+		Description: "Start a whole-cluster database export (sql or pgdump) of one cluster and return the new export job. " +
+			"Asynchronous: poll skycloak_get_export until the status is 'completed' for the download URL. include_credentials requires an encryption_password, which encrypts the archive. " +
+			"For one realm's configuration instead of the whole database, use skycloak_create_realm_export.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(false), Title: "Create export"},
 	}, createExportHandler(api))
 }

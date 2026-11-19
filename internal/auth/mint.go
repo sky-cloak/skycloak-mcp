@@ -83,6 +83,7 @@ var writeScopes = []string{
 	"clusters:imports:read", "clusters:imports:write",
 	"clusters:extensions:read", "clusters:extensions:write",
 	"clusters:backups:read", "clusters:backups:write",
+	"clusters:private-link:read", "clusters:private-link:write",
 	"realms:read", "realms:write",
 	"realm-users:read", "realm-users:write",
 	"realm-roles:read", "realm-roles:write",
@@ -97,6 +98,7 @@ var writeScopes = []string{
 	"smtp:read", "smtp:write",
 	"siem:read", "siem:write",
 	"webhooks:read", "webhooks:write",
+	"openfga:read", "openfga:write",
 }
 
 // mintCLIKey exchanges the device-flow Bearer token for a workspace-scoped API

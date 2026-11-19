@@ -38,28 +38,32 @@ type UpdateClientRoleInput struct {
 
 func registerClientRoleReadTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_application_role",
-		Description: "Get one role defined on an application, with its description and Keycloak identifiers.",
+		Name: "skycloak_get_application_role",
+		Description: "Get one role defined on an application by name, with its description, composite flag and Keycloak identifiers. " +
+			"This reads the client's own role definition, not what its service account holds: use skycloak_list_application_roles for the grants. Needs client_id from skycloak_list_applications.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get application role"},
 	}, getClientRoleHandler(api))
 }
 
 func registerClientRoleWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_create_application_role",
-		Description: "Define a new role on an application. This creates the role itself; use skycloak_assign_application_role to grant it to a user.",
+		Name: "skycloak_create_application_role",
+		Description: "Define a new role on one application (a Keycloak client role), with an optional description. " +
+			"Defining it grants it to nobody: skycloak_assign_application_role grants it to a service account. For a role that belongs to the realm rather than a client, use skycloak_create_realm_role.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: false, DestructiveHint: ptr(false), Title: "Create application role"},
 	}, createClientRoleHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_update_application_role",
-		Description: "Rename an application role or change its description. Fields you omit keep their current value.",
+		Name: "skycloak_update_application_role",
+		Description: "Rename one role defined on an application or change its description; pass at least one of new_name and description, and the field you omit keeps its value. " +
+			"Existing grants survive the rename, but anything referring to the old name has to be updated. Not for granting or revoking; use skycloak_assign_application_role and skycloak_remove_application_role.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(false), Title: "Update application role"},
 	}, updateClientRoleHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_delete_application_role",
-		Description: "Delete a role from an application. Every user and group holding it loses it. Set confirm=true to proceed.",
+		Name: "skycloak_delete_application_role",
+		Description: "Delete one role defined on an application. Every user, group and service account holding it loses it, and the definition cannot be recovered. " +
+			"Set confirm=true to proceed. To revoke a single grant instead, use skycloak_remove_application_role.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, DestructiveHint: ptr(true), Title: "Delete application role"},
 	}, deleteClientRoleHandler(api))
 }

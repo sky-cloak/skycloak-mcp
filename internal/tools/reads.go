@@ -12,62 +12,72 @@ import (
 
 func registerReadParityTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_realm",
-		Description: "Get a realm by name.",
+		Name: "skycloak_get_realm",
+		Description: "Get one Keycloak realm of a cluster by name, with its display name, enabled state and the security settings registration_allowed, login_with_email and ssl_required. " +
+			"Needs cluster_id from skycloak_list_clusters; skycloak_list_realms gives the realm names and answers the same question for many realms at once.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get realm"},
 	}, getRealmHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_application",
-		Description: "Get an application (OIDC/SAML client) by client ID.",
+		Name: "skycloak_get_application",
+		Description: "Get one application (OIDC or SAML client) of a realm by its client ID, with name, type and protocol. " +
+			"Needs cluster_id from skycloak_list_clusters and client_id from skycloak_list_applications. Not for the client's roles; use skycloak_get_application_role for a role it defines and skycloak_list_application_roles for what its service account holds.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get application"},
 	}, getApplicationHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_get_identity_provider",
-		Description: "Get an identity provider by provider ID.",
+		Name: "skycloak_get_identity_provider",
+		Description: "Get one identity provider (SSO connection) of a realm by its alias, with display name, type and enabled state. " +
+			"provider_id is the alias exactly as skycloak_list_identity_providers reports it, and it is case-sensitive.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "Get identity provider"},
 	}, getIdentityProviderHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_cluster_locations",
-		Description: "List the deployment regions available to the workspace.",
+		Name: "skycloak_list_cluster_locations",
+		Description: "List the deployment regions, each with the name and an available flag for this workspace. " +
+			"Workspace-wide and takes no arguments. Call it before skycloak_create_cluster: creating a cluster in a location the workspace cannot use is rejected.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List cluster locations"},
 	}, listClusterLocationsHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_cluster_types",
-		Description: "List the cluster types the workspace can provision.",
+		Name: "skycloak_list_cluster_types",
+		Description: "List the cluster types the workspace can provision, each with an available flag. " +
+			"Workspace-wide and takes no arguments. For the versions offered within a type, use skycloak_list_cluster_versions.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List cluster types"},
 	}, listClusterTypesHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_cluster_features",
-		Description: "List the Keycloak feature flags available to tenant clusters.",
+		Name: "skycloak_list_cluster_features",
+		Description: "List the Keycloak feature flags available to tenant clusters, with each flag's name and display name. " +
+			"Workspace-wide and takes no arguments; it does not say which flags one cluster has on.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List cluster features"},
 	}, listClusterFeaturesHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_cluster_versions",
-		Description: "List the Keycloak versions available for a cluster type.",
+		Name: "skycloak_list_cluster_versions",
+		Description: "List the Keycloak versions on offer for one cluster type, flagging versions no longer offered, major version changes and breaking-change counts. " +
+			"Takes a type (keycloak or tidecloak), not a cluster_id. Not the plan for an existing cluster; use skycloak_get_cluster_upgrade_path for that.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List cluster versions"},
 	}, listClusterVersionsHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_cluster_upgrades",
-		Description: "List the version-upgrade history for a cluster.",
+		Name: "skycloak_list_cluster_upgrades",
+		Description: "List the version upgrades recorded for one cluster, each with its from_version, to_version and phase. " +
+			"This is history, including anything in flight; for the recommended next versions use skycloak_get_cluster_upgrade_path. Needs cluster_id from skycloak_list_clusters.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List cluster upgrades"},
 	}, listClusterUpgradesHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_identity_provider_templates",
-		Description: "List the pre-configured identity-provider templates. Use a template id when creating a provider.",
+		Name: "skycloak_list_identity_provider_templates",
+		Description: "List the pre-configured identity-provider templates of the workspace, with each one's id, name and type. " +
+			"Workspace-wide and takes no arguments. Pass a template id as provider_id to skycloak_create_identity_provider; for the providers a realm already has, use skycloak_list_identity_providers.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List IdP templates"},
 	}, listIdentityProviderTemplatesHandler(api))
 
 	addTool(s, &mcp.Tool{
-		Name:        "skycloak_list_domain_routes",
-		Description: "List the realm routes configured on a custom domain.",
+		Name: "skycloak_list_domain_routes",
+		Description: "List the realm routes configured on one custom domain, each with its route_id, realm, admin-access and hide_realm_path flags. " +
+			"A route maps one realm onto the hostname. Not for the domains themselves; use skycloak_list_domains, which is also where domain_id comes from.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: true, Title: "List domain routes"},
 	}, listDomainRoutesHandler(api))
 }
