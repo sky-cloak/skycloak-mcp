@@ -601,6 +601,20 @@ func (s stubAPI) UpdateClusterPrivateLink(_ context.Context, _ string, ids *[]st
 	return out, nil
 }
 
+func (s stubAPI) GetClusterPublicAccess(context.Context, string) (*skycloak.PublicAccess, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.PublicAccess{Enabled: true}, nil
+}
+
+func (s stubAPI) SetClusterPublicAccess(_ context.Context, _ string, enabled bool) (*skycloak.PublicAccess, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &skycloak.PublicAccess{Enabled: enabled}, nil
+}
+
 func (s stubAPI) ListClusterCAPTCHADomains(context.Context, string) (*skycloak.CAPTCHADomainsInfo, error) {
 	if s.err != nil {
 		return nil, s.err
