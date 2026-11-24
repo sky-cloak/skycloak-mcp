@@ -1170,6 +1170,9 @@ type ClusterPrivateLink struct {
 	// Enabled Whether private link is on.
 	Enabled bool `json:"enabled"`
 
+	// Hostnames Hostnames you reach the cluster on through your own proxy or DNS, as bare lowercase hosts. They stay stored while private link is off.
+	Hostnames *[]string `json:"hostnames,omitempty"`
+
 	// Status Status of a cluster's private link.
 	Status PrivateLinkStatus `json:"status"`
 }
@@ -3484,6 +3487,9 @@ type UpdateClusterPrivateLinkRequest struct {
 
 	// Enabled Turn private link on or off.
 	Enabled bool `json:"enabled"`
+
+	// Hostnames Hostnames (at most 5) you reach the cluster on, as bare hosts with no scheme, port, path, query or credentials. A host must be a DNS name with at least two labels: IP addresses, localhost and Skycloak domains are refused, and so is a host another workspace already uses. Values are lowercased, trimmed and deduplicated. Replaces the stored list; an empty list clears it. When omitted the stored list is kept.
+	Hostnames *[]string `json:"hostnames,omitempty"`
 }
 
 // UpdateClusterRequest Partial update request. At least one field must be provided. `location` and `type` cannot be changed after creation.
@@ -21882,6 +21888,7 @@ type UpdateClusterPrivateLinkResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
 	JSON200                   *ClusterPrivateLink
+	ApplicationproblemJSON400 *ErrorBody
 	ApplicationproblemJSON401 *ErrorBody
 	ApplicationproblemJSON403 *ErrorBody
 	ApplicationproblemJSON404 *ErrorBody
@@ -31406,6 +31413,13 @@ func ParseUpdateClusterPrivateLinkResponse(rsp *http.Response) (*UpdateClusterPr
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest ErrorBody
