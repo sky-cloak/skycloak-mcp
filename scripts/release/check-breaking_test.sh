@@ -68,13 +68,13 @@ got=$("$here/check-breaking.sh" "$tmp/body-base.json" "$tmp/required-prop.json" 
 if [[ $code -eq 3 && "$got" == *"new-required-request-property"* ]]; then echo "ok   a new required body property is breaking"; else echo "FAIL required body property: exit $code; $got"; fail=1; fi
 
 "$here/check-breaking.sh" "$tmp/base.json" >/dev/null 2>&1; code=$?
-[[ $code -eq 2 ]] && echo "ok   a missing argument is refused" || { echo "FAIL missing argument: exit $code, want 2"; fail=1; }
+if [[ $code -eq 2 ]]; then echo "ok   a missing argument is refused"; else { echo "FAIL missing argument: exit $code, want 2"; fail=1; }; fi
 
 "$here/check-breaking.sh" "$tmp/base.json" "$tmp/missing.json" >/dev/null 2>&1; code=$?
-[[ $code -eq 2 ]] && echo "ok   a missing file is refused" || { echo "FAIL missing file: exit $code, want 2"; fail=1; }
+if [[ $code -eq 2 ]]; then echo "ok   a missing file is refused"; else { echo "FAIL missing file: exit $code, want 2"; fail=1; }; fi
 
 echo 'not a spec' >"$tmp/junk.json"
 "$here/check-breaking.sh" "$tmp/base.json" "$tmp/junk.json" >/dev/null 2>&1; code=$?
-[[ $code -eq 2 ]] && echo "ok   an unreadable spec is an error, not a pass" || { echo "FAIL unreadable spec: exit $code, want 2"; fail=1; }
+if [[ $code -eq 2 ]]; then echo "ok   an unreadable spec is an error, not a pass"; else { echo "FAIL unreadable spec: exit $code, want 2"; fail=1; }; fi
 
 exit $fail
