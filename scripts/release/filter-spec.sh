@@ -3,8 +3,9 @@
 # Echoes the spec as JSON with the given path and every path under it removed
 # (for example "/v1/area" drops "/v1/area" and "/v1/area/..."), and nothing
 # else changed. Components and tags are kept as they are, even when only a
-# removed path used them. YAML input is converted with yq, which must be on
-# PATH for that case. The result is what gets compared or written.
+# removed path used them. YAML input is converted with yq (the Go one,
+# mikefarah/yq, which takes -o=json), which must be on PATH for that case.
+# The result is what gets compared or written.
 # Exit codes: 2 bad usage or a file that is not a JSON or YAML object.
 set -euo pipefail
 spec=${1:-}
@@ -17,7 +18,11 @@ fi
 json=$(mktemp)
 trap 'rm -f "$json"' EXIT
 if ! jq -e 'type == "object"' "$spec" >/dev/null 2>&1; then
-  if ! command -v yq >/dev/null 2>&1 || ! yq -o=json '.' "$spec" >"$json" 2>/dev/null; then
+  if ! command -v yq >/dev/null 2>&1; then
+    echo "yq (the Go one, mikefarah/yq) is needed to read a YAML spec" >&2
+    exit 2
+  fi
+  if ! yq -o=json '.' "$spec" >"$json" 2>/dev/null; then
     echo "'$spec' is not a JSON or YAML object" >&2
     exit 2
   fi

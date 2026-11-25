@@ -61,6 +61,11 @@ check "a removed response field is breaking" 3 "label" "$tmp/removed-response-fi
 check "a new required parameter is breaking" 3 "new-required-request-parameter" "$tmp/required-param.json"
 check "a new required request body is breaking" 3 "request-body-added-required" "$tmp/required-body.json"
 
+# Findings below error level are printed on a pass.
+jq '.paths["/v1/widgets"].get.deprecated = true' "$tmp/base.json" >"$tmp/deprecated.json"
+got=$("$here/check-breaking.sh" "$tmp/base.json" "$tmp/deprecated.json" 2>&1); code=$?
+if [[ $code -eq 0 && "$got" == *"no breaking changes"* && "$got" != "no breaking changes" ]]; then echo "ok   findings below error level are printed on a pass"; else { echo "FAIL below-error findings: exit $code; $got"; fail=1; }; fi
+
 # A new required property inside an existing body.
 jq '.paths["/v1/widgets"].post.requestBody = {"content":{"application/json":{"schema":{"type":"object","properties":{"n":{"type":"string"}}}}}}' "$tmp/base.json" >"$tmp/body-base.json"
 jq '.paths["/v1/widgets"].post.requestBody.content["application/json"].schema |= (.properties.m = {"type":"string"} | .required = ["m"])' "$tmp/body-base.json" >"$tmp/required-prop.json"
