@@ -147,7 +147,7 @@ func runServer(ctx context.Context, args []string) {
 		client := skycloak.New(endpoint, apiKey, apiVersion, skycloak.WithUserAgent(userAgent))
 		// Stdio holds one key whose scopes are not enumerable from here, so no
 		// filtering: nil scopes register the whole surface.
-		server := newMCPServer(client, *allowWrites, nil)
+		server := newMCPServer(client, *allowWrites, nil, tools.Workspace{})
 		// A client that has finished with us closes the pipe, which arrives as
 		// EOF. That is how a stdio session ends, not a failure, and exiting
 		// nonzero on it makes a clean introspection run look like a crash.
@@ -189,13 +189,17 @@ func runServer(ctx context.Context, args []string) {
 
 // newMCPServer builds a server for one credential. scopes may be nil, meaning
 // the credential's grant is not knowable and every tool is registered.
-func newMCPServer(api tools.API, allowWrites bool, scopes tools.Scopes) *mcp.Server {
+// ws is the workspace the session acts on, when it is known: it goes into the
+// connect instructions and behind skycloak_get_workspace.
+func newMCPServer(api tools.API, allowWrites bool, scopes tools.Scopes, ws tools.Workspace) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "skycloak-mcp", Version: version}, &mcp.ServerOptions{
 		// Declares the SEP-2640 skills extension; the skills themselves are
 		// registered by tools.Register under the session's gating.
 		Capabilities: tools.Capabilities(),
+		Instructions: ws.Instructions(),
 	})
 	tools.Register(server, api, allowWrites, scopes)
+	tools.RegisterWorkspace(server, ws)
 	return server
 }
 
@@ -251,9 +255,9 @@ func (c httpConfig) logf(format string, args ...any) {
 // without sticky sessions.
 func newHTTPHandler(cfg httpConfig) http.Handler {
 	cache := newServerCache(defaultServerCacheSize, defaultServerCacheTTL,
-		func(apiKey string, allowWrites bool, scopes tools.Scopes) *mcp.Server {
+		func(apiKey string, allowWrites bool, scopes tools.Scopes, ws tools.Workspace) *mcp.Server {
 			api := skycloak.New(cfg.endpoint, apiKey, cfg.apiVersion, skycloak.WithUserAgent(cfg.userAgent))
-			return newMCPServer(api, allowWrites, scopes)
+			return newMCPServer(api, allowWrites, scopes, ws)
 		})
 	bridge := newOAuthBridge(cfg)
 
@@ -268,7 +272,7 @@ func newHTTPHandler(cfg httpConfig) http.Handler {
 		if err != nil {
 			return nil
 		}
-		return cache.get(resolved.apiKey, httpAllowWrites(cfg.allowWrites, readonly), resolved.scopes)
+		return cache.get(resolved.apiKey, httpAllowWrites(cfg.allowWrites, readonly), resolved.scopes, resolved.workspace)
 	}, &mcp.StreamableHTTPOptions{Stateless: true})
 
 	authed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

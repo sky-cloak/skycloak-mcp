@@ -103,7 +103,7 @@ For hosted HTTP the simplest route is OAuth, which needs no credential at all:
 claude mcp add --transport http skycloak https://mcp.skycloak.io
 ```
 
-The first call opens your browser, you approve in the Skycloak login page, and the tools appear. If you belong to more than one workspace, name the one you want:
+The first call opens your browser, you approve in the Skycloak login page, and the tools appear. If you belong to more than one workspace, the one you own (else the one you joined first) is used; to act on another, name it:
 
 ```bash
 claude mcp add --transport http skycloak "https://mcp.skycloak.io?workspace=<workspace-id>"
@@ -180,7 +180,7 @@ Add `--allow-writes` only when you intend to make changes (sign in with `skycloa
 
 Add `?readonly=true` to a hosted HTTP URL to expose only read-only tools for that HTTP session, or `?readonly=false` to request the write-capable tool surface. The query parameter defaults to `false`, but write tools are registered only when the server was started with `--allow-writes`.
 
-Add `?workspace=<uuid>` to pick which workspace an OAuth session acts on. It is only needed when you belong to more than one; with a single workspace the server picks it for you, and if you belong to several and name none, the connection fails with a message listing them.
+Add `?workspace=<uuid>` to pick which workspace an OAuth session acts on. Without it the server picks one: your only workspace if you have one, otherwise the workspace you own, otherwise the one you joined first (when you own several, the oldest of them; on a tie, the lowest ID). The pick is the same on every connection while your memberships do not change. Name a workspace to override it; naming one you do not belong to is refused with `403`. The server's connect instructions say which workspace the session acts on and why it was picked, and `get_workspace` returns its name, ID and the reason (`requested`, `only_membership`, `owned` or `oldest_membership`). `get_workspace` is offered on OAuth sessions only, because an API key does not report its workspace to the server. With writes on, check the workspace before changing anything.
 
 ### Running the HTTP transport
 

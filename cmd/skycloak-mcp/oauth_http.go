@@ -134,6 +134,9 @@ type resolvedCredential struct {
 	// scopes is nil when the credential's grant is not enumerable (an API key),
 	// which registers every tool.
 	scopes tools.Scopes
+	// workspace is what the session exchange reported about the workspace the
+	// key acts on. Zero for an API key, which does not say.
+	workspace tools.Workspace
 }
 
 type resolvedCredentialKey struct{}
@@ -212,7 +215,15 @@ func (b *oauthBridge) resolve(ctx context.Context, token, workspaceID string) (r
 	if len(session.Scopes) == 0 {
 		return resolvedCredential{}, &oauthFailure{stage: stageScopes, subject: claims.Subject, workspace: workspaceID, err: errNoScopes}
 	}
-	return resolvedCredential{apiKey: session.APIKey, scopes: tools.NewScopes(session.Scopes)}, nil
+	return resolvedCredential{
+		apiKey: session.APIKey,
+		scopes: tools.NewScopes(session.Scopes),
+		workspace: tools.Workspace{
+			ID:     session.WorkspaceID,
+			Name:   session.WorkspaceName,
+			Reason: session.PickReason,
+		},
+	}, nil
 }
 
 // writeOAuthError maps a failed resolution onto a status the client can act on,

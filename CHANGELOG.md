@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- `skycloak_get_workspace` returns the workspace an OAuth session acts on: its name, its ID
+  and why it was picked (`requested`, `only_membership`, `owned` or
+  `oldest_membership`). The server's connect instructions now name that
+  workspace and the reason too. Both are read from the session-key response and
+  left out when it does not carry them, so older servers keep working; API-key
+  sessions do not report a workspace and are not offered the tool.
 - `skycloak_get_realm` now returns the realm's `frontend_url`, the public URL it
   serves on behind the caller's own proxy, and leaves it out when none is set.
   `skycloak_update_realm` takes `frontend_url` to set it, or an empty string to
