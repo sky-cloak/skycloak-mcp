@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
+	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -14,6 +16,36 @@ type Workspace struct {
 	ID     string `json:"workspace_id,omitempty" jsonschema:"the workspace ID the session acts on"`
 	Name   string `json:"workspace_name,omitempty" jsonschema:"the workspace name"`
 	Reason string `json:"pick_reason,omitempty" jsonschema:"why it was picked: requested, only_membership, owned or oldest_membership"`
+}
+
+// maxWorkspaceFieldRunes caps how much of a workspace name, ID or reason is
+// passed on to the assistant.
+const maxWorkspaceFieldRunes = 80
+
+// clean makes a value that someone else chose safe to place in text the
+// assistant treats as the server's own: control characters, newlines and other
+// invisible separators are dropped, whitespace runs collapse, and the result is
+// cut to a fixed length.
+func clean(s string) string {
+	s = strings.Map(func(r rune) rune {
+		switch {
+		case unicode.IsSpace(r):
+			return ' '
+		case unicode.IsControl(r), unicode.Is(unicode.Cf, r), unicode.Is(unicode.Zl, r), unicode.Is(unicode.Zp, r):
+			return -1
+		}
+		return r
+	}, s)
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > maxWorkspaceFieldRunes {
+		s = strings.TrimSpace(string(r[:maxWorkspaceFieldRunes]))
+	}
+	return s
+}
+
+// sanitized returns w with every field cleaned.
+func (w Workspace) sanitized() Workspace {
+	return Workspace{ID: clean(w.ID), Name: clean(w.Name), Reason: clean(w.Reason)}
 }
 
 // Known reports whether there is anything to tell the assistant.
@@ -40,12 +72,14 @@ func reasonText(reason string) string {
 	}
 }
 
+// label names the workspace with its name quoted, so the name reads as a value
+// and not as part of the sentence around it. w must be sanitized.
 func (w Workspace) label() string {
 	switch {
 	case w.Name != "" && w.ID != "":
-		return fmt.Sprintf("%s (%s)", w.Name, w.ID)
+		return fmt.Sprintf("%q (%s)", w.Name, w.ID)
 	case w.Name != "":
-		return w.Name
+		return fmt.Sprintf("%q", w.Name)
 	default:
 		return w.ID
 	}
@@ -54,6 +88,7 @@ func (w Workspace) label() string {
 // Instructions is the text a server hands a client when it connects, naming the
 // workspace the session acts on. It is empty when the workspace is not known.
 func (w Workspace) Instructions() string {
+	w = w.sanitized()
 	if !w.Known() {
 		return ""
 	}
@@ -80,6 +115,7 @@ func RegisterWorkspace(s *mcp.Server, w Workspace) {
 }
 
 func getWorkspaceHandler(w Workspace) mcp.ToolHandlerFor[NoInput, Workspace] {
+	w = w.sanitized()
 	return func(context.Context, *mcp.CallToolRequest, NoInput) (*mcp.CallToolResult, Workspace, error) {
 		text := "Workspace: " + w.label()
 		if r := reasonText(w.Reason); r != "" {

@@ -493,7 +493,7 @@ func TestOAuthSessionNamesItsWorkspace(t *testing.T) {
 	resp := mcpPost(t, st.ts.URL, token, "", initBody)
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
-	for _, want := range []string{"Acme (ws-1)", "joined first"} {
+	for _, want := range []string{`\"Acme\" (ws-1)`, "joined first"} {
 		if !strings.Contains(string(body), want) {
 			t.Fatalf("initialize instructions lack %q: %s", want, truncate(body))
 		}
@@ -515,6 +515,9 @@ func TestAPIKeySessionHasNoWorkspaceTool(t *testing.T) {
 	resp := mcpPost(t, st.ts.URL, "sk_sc_test", "", `{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}`)
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "skycloak_list_clusters") {
+		t.Fatalf("tools/list = %d, want 200 listing skycloak_list_clusters: %s", resp.StatusCode, truncate(body))
+	}
 	if strings.Contains(string(body), "skycloak_get_workspace") {
 		t.Fatalf("workspace tool offered without a known workspace: %s", truncate(body))
 	}

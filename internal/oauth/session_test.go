@@ -449,3 +449,34 @@ func TestSessionDoesNotCacheFailures(t *testing.T) {
 		t.Fatalf("second attempt after the dashboard recovered: %v", err)
 	}
 }
+
+func TestSessionReadsTheWorkspaceNameAndPickReason(t *testing.T) {
+	dash := newFakeDashboard(t)
+	dash.keyFor = func(int) map[string]any {
+		return map[string]any{
+			"api_key":        "sk_sc_minted",
+			"workspace_id":   "ws-1",
+			"workspace_name": "Acme",
+			"pick_reason":    "owned",
+			"expires_at":     time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+			"scopes":         []string{"clusters:read"},
+		}
+	}
+	s, err := NewExchanger(dash.srv.URL, dash.srv.Client()).Session(t.Context(), "tok", "user-1", "")
+	if err != nil {
+		t.Fatalf("Session: %v", err)
+	}
+	if s.WorkspaceName != "Acme" || s.PickReason != "owned" {
+		t.Fatalf("name %q reason %q, want Acme and owned", s.WorkspaceName, s.PickReason)
+	}
+
+	// An older dashboard sends neither field.
+	old := newFakeDashboard(t)
+	s, err = NewExchanger(old.srv.URL, old.srv.Client()).Session(t.Context(), "tok", "user-1", "")
+	if err != nil {
+		t.Fatalf("Session: %v", err)
+	}
+	if s.WorkspaceName != "" || s.PickReason != "" {
+		t.Fatalf("name %q reason %q, want both empty", s.WorkspaceName, s.PickReason)
+	}
+}
