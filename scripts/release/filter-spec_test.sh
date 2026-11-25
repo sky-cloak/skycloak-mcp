@@ -50,4 +50,39 @@ echo 'not json' >"$tmp/bad.json"
 "$here/filter-spec.sh" "$tmp/bad.json" /v1/hidden >/dev/null 2>&1; code=$?
 if [[ $code -eq 2 ]]; then ok "a file that is not JSON is refused"; else bad "not json: exit $code, want 2"; fi
 
+out=$("$here/filter-spec.sh" "$tmp/spec.json" /v1/hidden/); code=$?
+got=$(jq -c '.paths | keys' <<<"$out")
+if [[ $code -eq 0 && "$got" == '["/v1/hiddenly","/v1/widgets","/v1/widgets/{id}"]' ]]; then ok "a trailing slash on the prefix is ignored"; else bad "trailing slash: exit $code, paths $got"; fi
+
+"$here/filter-spec.sh" "$tmp/spec.json" "" >/dev/null 2>&1; code=$?
+if [[ $code -eq 2 ]]; then ok "an empty prefix is refused"; else bad "empty prefix: exit $code, want 2"; fi
+
+"$here/filter-spec.sh" "$tmp/spec.json" / >/dev/null 2>&1; code=$?
+if [[ $code -eq 2 ]]; then ok "a prefix of only a slash is refused"; else bad "slash prefix: exit $code, want 2"; fi
+
+cat >"$tmp/spec.yaml" <<'Y'
+openapi: 3.0.3
+info:
+  title: Sample
+  version: "1"
+paths:
+  /v1/widgets:
+    get:
+      responses:
+        "200":
+          description: ok
+  /v1/hidden/gizmos:
+    get:
+      responses:
+        "200":
+          description: ok
+Y
+if command -v yq >/dev/null 2>&1; then
+  out=$("$here/filter-spec.sh" "$tmp/spec.yaml" /v1/hidden); code=$?
+  got=$(jq -c '.paths | keys' <<<"$out" 2>/dev/null)
+  if [[ $code -eq 0 && "$got" == '["/v1/widgets"]' ]]; then ok "a YAML spec is filtered and written as JSON"; else bad "yaml: exit $code, paths $got"; fi
+else
+  bad "yq is not installed"
+fi
+
 exit $fail

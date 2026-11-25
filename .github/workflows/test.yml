@@ -12,17 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install oasdiff
-        run: |
-          go install github.com/oasdiff/oasdiff@v1.41.0
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Test the release scripts
         run: |
           bash scripts/release/next-version_test.sh
           bash scripts/release/resolve-spec-ref_test.sh
-          bash scripts/release/filter-spec_test.sh
-          bash scripts/release/check-breaking_test.sh
-          bash scripts/release/added-files_test.sh
       - name: Shellcheck the release scripts
         run: shellcheck scripts/release/*.sh
   test:

@@ -28,7 +28,10 @@ echo "response-optional-property-removed err" >"$levels"
 code=0
 oasdiff breaking "$old" "$new" --severity-levels "$levels" --fail-on ERR >"$out" 2>&1 || code=$?
 case $code in
-  0) echo "no breaking changes" ;;
+  0)
+    cat "$out"
+    echo "no breaking changes"
+    ;;
   1)
     cat "$out"
     exit 3
