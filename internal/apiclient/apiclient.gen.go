@@ -100,6 +100,12 @@ const (
 	ClusterExtensionStatusRemoving   ClusterExtensionStatus = "removing"
 )
 
+// Defines values for ClusterFeatureChangeState.
+const (
+	ClusterFeatureChangeStateApplying ClusterFeatureChangeState = "applying"
+	ClusterFeatureChangeStatePending  ClusterFeatureChangeState = "pending"
+)
+
 // Defines values for ClusterLocation.
 const (
 	Au     ClusterLocation = "au"
@@ -292,6 +298,14 @@ const (
 	OpenFGAInstanceStatusFailed       OpenFGAInstanceStatus = "failed"
 	OpenFGAInstanceStatusProvisioning OpenFGAInstanceStatus = "provisioning"
 	OpenFGAInstanceStatusReady        OpenFGAInstanceStatus = "ready"
+)
+
+// Defines values for PasswordBlacklistFileStatus.
+const (
+	PasswordBlacklistFileStatusDelivering        PasswordBlacklistFileStatus = "delivering"
+	PasswordBlacklistFileStatusFailed            PasswordBlacklistFileStatus = "failed"
+	PasswordBlacklistFileStatusReady             PasswordBlacklistFileStatus = "ready"
+	PasswordBlacklistFileStatusWaitingForRestart PasswordBlacklistFileStatus = "waiting_for_restart"
 )
 
 // Defines values for PrivateLinkConnectionStatus.
@@ -1052,13 +1066,31 @@ type ClusterExtension struct {
 // ClusterExtensionStatus defines model for ClusterExtensionStatus.
 type ClusterExtensionStatus string
 
+// ClusterFeatureChange A feature flag change that has not finished rolling out.
+type ClusterFeatureChange struct {
+	// NextWindow When the maintenance window next opens. Present for a `pending` change whose window could be resolved.
+	NextWindow *time.Time `json:"next_window,omitempty"`
+
+	// State Where a Keycloak feature flag change stands.
+	State ClusterFeatureChangeState `json:"state"`
+}
+
+// ClusterFeatureChangeState Where a Keycloak feature flag change stands.
+type ClusterFeatureChangeState string
+
 // ClusterFeatureInfo Metadata about a Keycloak feature flag available for tenant clusters.
 type ClusterFeatureInfo struct {
+	// Dangerous Whether turning this feature on has security implications that need explicit confirmation.
+	Dangerous *bool `json:"dangerous,omitempty"`
+
 	// Description Short description of what the feature does.
 	Description nullable.Nullable[string] `json:"description"`
 
 	// DisplayName Human-readable feature name.
 	DisplayName string `json:"display_name"`
+
+	// Experimental Whether Keycloak marks this feature experimental. Experimental features may change or be removed between releases.
+	Experimental *bool `json:"experimental,omitempty"`
 
 	// MaxVersion Maximum cluster version this feature is available on.
 	MaxVersion nullable.Nullable[KeycloakVersion] `json:"max_version"`
@@ -1071,6 +1103,30 @@ type ClusterFeatureInfo struct {
 
 	// Preview Whether this feature is currently in preview and may change.
 	Preview bool `json:"preview"`
+}
+
+// ClusterFeatureSet The Keycloak feature flags you manage on a cluster. Flags that only Skycloak can set are not listed and are never changed through this API.
+type ClusterFeatureSet struct {
+	// Change The change still rolling out. Absent when nothing is pending.
+	Change *ClusterFeatureChange `json:"change,omitempty"`
+
+	// Features Enabled feature flags. While a change is pending or applying this is the requested set, which Keycloak runs once the change finishes.
+	Features []string `json:"features"`
+}
+
+// ClusterFeatureUpdate Outcome of replacing a cluster's feature flags.
+type ClusterFeatureUpdate struct {
+	// Change Whether the restart is `pending` for the maintenance window or `applying` now. Absent when nothing restarts.
+	Change *ClusterFeatureChange `json:"change,omitempty"`
+
+	// Features The enabled feature flags after the change.
+	Features []string `json:"features"`
+
+	// Impact Customer-facing description of how disruptive the restart is for this cluster's size. Absent when nothing restarts.
+	Impact *string `json:"impact,omitempty"`
+
+	// RestartsKeycloak True when the change restarts Keycloak, including a change from an earlier request that is still pending. False when the request left the set as it was and nothing is pending.
+	RestartsKeycloak bool `json:"restarts_keycloak"`
 }
 
 // ClusterId defines model for ClusterId.
@@ -1410,6 +1466,9 @@ type ClusterUpgradePathRequest struct {
 
 // ClusterUpgradePathRun An upgrade path of a cluster.
 type ClusterUpgradePathRun struct {
+	// CancelRequested Set once a cancel was accepted while a step is in progress. `status` stays `running` until that step ends, then usually becomes `cancelled`, or `failed` if that step fails. The field stays set on the ended path.
+	CancelRequested *bool `json:"cancel_requested,omitempty"`
+
 	// ClusterId Cluster the path belongs to.
 	ClusterId ClusterId `json:"cluster_id"`
 
@@ -2571,6 +2630,28 @@ type PageLimit = int
 // PageOffset defines model for PageOffset.
 type PageOffset = int
 
+// PasswordBlacklistFile A password blacklist file kept for a dedicated cluster. Files cannot be changed: new content needs a new name.
+type PasswordBlacklistFile struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// Name Name of a password blacklist file: letters, digits, dot, dash and underscore, up to 255 characters. It is the name a realm password policy refers to, as in `passwordBlacklist(<name>)`.
+	Name PasswordBlacklistFileName `json:"name"`
+
+	// Sha256 Hex-encoded SHA-256 of the file content.
+	Sha256 string `json:"sha256" validate:"omitnil,max=500"`
+
+	// Size Size of the file in bytes.
+	Size      int64                       `json:"size"`
+	Status    PasswordBlacklistFileStatus `json:"status"`
+	UpdatedAt time.Time                   `json:"updated_at"`
+}
+
+// PasswordBlacklistFileName Name of a password blacklist file: letters, digits, dot, dash and underscore, up to 255 characters. It is the name a realm password policy refers to, as in `passwordBlacklist(<name>)`.
+type PasswordBlacklistFileName = string
+
+// PasswordBlacklistFileStatus defines model for PasswordBlacklistFileStatus.
+type PasswordBlacklistFileStatus string
+
 // PerformanceMetrics System performance metrics over the requested time window.
 type PerformanceMetrics struct {
 	// CpuUsage Mean CPU utilization across all pods (0–100+, may exceed 100 on multi-core systems).
@@ -2924,6 +3005,15 @@ type RegistrationAnalytics struct {
 	RegistrationTrends        []EventTimeSeriesPoint `json:"registration_trends"`
 	TotalRegistrationAttempts int64                  `json:"total_registration_attempts"`
 	TotalRegistrations        int64                  `json:"total_registrations"`
+}
+
+// ReplaceClusterFeaturesRequest Replaces the cluster's whole set of enabled feature flags.
+type ReplaceClusterFeaturesRequest struct {
+	// ApplyNow Restart Keycloak at once instead of waiting for the cluster's maintenance window. Has no effect on a cluster without a maintenance window, which always applies at once. Defaults to `false`.
+	ApplyNow *bool `json:"apply_now,omitempty"`
+
+	// Features The complete set of enabled feature flags. Flags missing from the list are turned off. Flags that only Skycloak can set and that are already on the cluster are ignored; other flags outside the list from `GET /cluster-features` are refused.
+	Features []string `json:"features"`
 }
 
 // ResponseTimeMetrics Response time statistics for authentication endpoints.
@@ -4231,6 +4321,16 @@ type UpgradeClusterExtensionParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
 }
 
+// GetClusterFeaturesParams defines parameters for GetClusterFeatures.
+type GetClusterFeaturesParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// ReplaceClusterFeaturesParams defines parameters for ReplaceClusterFeatures.
+type ReplaceClusterFeaturesParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
 // GetClusterInsightsAuthenticationParams defines parameters for GetClusterInsightsAuthentication.
 type GetClusterInsightsAuthenticationParams struct {
 	// Realm Restrict metrics to a specific realm.
@@ -4354,6 +4454,38 @@ type DeleteOpenFGAInstanceParams struct {
 
 // GetOpenFGAInstanceParams defines parameters for GetOpenFGAInstance.
 type GetOpenFGAInstanceParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// ListPasswordBlacklistFilesParams defines parameters for ListPasswordBlacklistFiles.
+type ListPasswordBlacklistFilesParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// UploadPasswordBlacklistFileMultipartBody defines parameters for UploadPasswordBlacklistFile.
+type UploadPasswordBlacklistFileMultipartBody struct {
+	// ApplyNow When `true`, the restart that adds the folder runs at once instead of in the maintenance window. Sent as a plain-text multipart field (`true` or `false`). Defaults to `false`. It only matters for the first file on a cluster, or while an earlier file is still waiting for the restart. It is refused with 422 when applying now is not available for the cluster.
+	ApplyNow *bool `json:"apply_now,omitempty"`
+
+	// File The file content, one password per line. Up to 25 MB.
+	File openapi_types.File `json:"file"`
+
+	// Name Name of the file on the cluster. Letters, digits, dot, dash and underscore only, up to 255 characters, and unique on the cluster.
+	Name string `json:"name" validate:"required,max=255"`
+}
+
+// UploadPasswordBlacklistFileParams defines parameters for UploadPasswordBlacklistFile.
+type UploadPasswordBlacklistFileParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// DeletePasswordBlacklistFileParams defines parameters for DeletePasswordBlacklistFile.
+type DeletePasswordBlacklistFileParams struct {
+	APIVersion CommonParameters `json:"API-Version"`
+}
+
+// GetPasswordBlacklistFileParams defines parameters for GetPasswordBlacklistFile.
+type GetPasswordBlacklistFileParams struct {
 	APIVersion CommonParameters `json:"API-Version"`
 }
 
@@ -5046,11 +5178,17 @@ type CreateExportJSONRequestBody = CreateExportRequest
 // InstallExtensionJSONRequestBody defines body for InstallExtension for application/json ContentType.
 type InstallExtensionJSONRequestBody = InstallExtensionRequest
 
+// ReplaceClusterFeaturesJSONRequestBody defines body for ReplaceClusterFeatures for application/json ContentType.
+type ReplaceClusterFeaturesJSONRequestBody = ReplaceClusterFeaturesRequest
+
 // SetClusterMaintenanceWindowJSONRequestBody defines body for SetClusterMaintenanceWindow for application/json ContentType.
 type SetClusterMaintenanceWindowJSONRequestBody = MaintenanceWindow
 
 // CreateOpenFGAInstanceJSONRequestBody defines body for CreateOpenFGAInstance for application/json ContentType.
 type CreateOpenFGAInstanceJSONRequestBody = CreateOpenFGAInstanceRequest
+
+// UploadPasswordBlacklistFileMultipartRequestBody defines body for UploadPasswordBlacklistFile for multipart/form-data ContentType.
+type UploadPasswordBlacklistFileMultipartRequestBody UploadPasswordBlacklistFileMultipartBody
 
 // UpdateClusterPrivateLinkJSONRequestBody defines body for UpdateClusterPrivateLink for application/json ContentType.
 type UpdateClusterPrivateLinkJSONRequestBody = UpdateClusterPrivateLinkRequest
@@ -5410,6 +5548,14 @@ type ClientInterface interface {
 	// UpgradeClusterExtension request
 	UpgradeClusterExtension(ctx context.Context, clusterId ClusterId, extensionId ExtensionId, params *UpgradeClusterExtensionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetClusterFeatures request
+	GetClusterFeatures(ctx context.Context, clusterId ClusterId, params *GetClusterFeaturesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceClusterFeaturesWithBody request with any body
+	ReplaceClusterFeaturesWithBody(ctx context.Context, clusterId ClusterId, params *ReplaceClusterFeaturesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceClusterFeatures(ctx context.Context, clusterId ClusterId, params *ReplaceClusterFeaturesParams, body ReplaceClusterFeaturesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetClusterInsightsAuthentication request
 	GetClusterInsightsAuthentication(ctx context.Context, clusterId ClusterId, params *GetClusterInsightsAuthenticationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -5452,6 +5598,18 @@ type ClientInterface interface {
 
 	// GetOpenFGAInstance request
 	GetOpenFGAInstance(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *GetOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPasswordBlacklistFiles request
+	ListPasswordBlacklistFiles(ctx context.Context, clusterId ClusterId, params *ListPasswordBlacklistFilesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UploadPasswordBlacklistFileWithBody request with any body
+	UploadPasswordBlacklistFileWithBody(ctx context.Context, clusterId ClusterId, params *UploadPasswordBlacklistFileParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeletePasswordBlacklistFile request
+	DeletePasswordBlacklistFile(ctx context.Context, clusterId ClusterId, name PasswordBlacklistFileName, params *DeletePasswordBlacklistFileParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetPasswordBlacklistFile request
+	GetPasswordBlacklistFile(ctx context.Context, clusterId ClusterId, name PasswordBlacklistFileName, params *GetPasswordBlacklistFileParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetClusterPrivateLink request
 	GetClusterPrivateLink(ctx context.Context, clusterId ClusterId, params *GetClusterPrivateLinkParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6559,6 +6717,42 @@ func (c *Client) UpgradeClusterExtension(ctx context.Context, clusterId ClusterI
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetClusterFeatures(ctx context.Context, clusterId ClusterId, params *GetClusterFeaturesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterFeaturesRequest(c.Server, clusterId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceClusterFeaturesWithBody(ctx context.Context, clusterId ClusterId, params *ReplaceClusterFeaturesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceClusterFeaturesRequestWithBody(c.Server, clusterId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceClusterFeatures(ctx context.Context, clusterId ClusterId, params *ReplaceClusterFeaturesParams, body ReplaceClusterFeaturesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceClusterFeaturesRequest(c.Server, clusterId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GetClusterInsightsAuthentication(ctx context.Context, clusterId ClusterId, params *GetClusterInsightsAuthenticationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterInsightsAuthenticationRequest(c.Server, clusterId, params)
 	if err != nil {
@@ -6729,6 +6923,54 @@ func (c *Client) DeleteOpenFGAInstance(ctx context.Context, clusterId ClusterId,
 
 func (c *Client) GetOpenFGAInstance(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *GetOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOpenFGAInstanceRequest(c.Server, clusterId, instanceId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListPasswordBlacklistFiles(ctx context.Context, clusterId ClusterId, params *ListPasswordBlacklistFilesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPasswordBlacklistFilesRequest(c.Server, clusterId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UploadPasswordBlacklistFileWithBody(ctx context.Context, clusterId ClusterId, params *UploadPasswordBlacklistFileParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadPasswordBlacklistFileRequestWithBody(c.Server, clusterId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeletePasswordBlacklistFile(ctx context.Context, clusterId ClusterId, name PasswordBlacklistFileName, params *DeletePasswordBlacklistFileParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeletePasswordBlacklistFileRequest(c.Server, clusterId, name, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetPasswordBlacklistFile(ctx context.Context, clusterId ClusterId, name PasswordBlacklistFileName, params *GetPasswordBlacklistFileParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPasswordBlacklistFileRequest(c.Server, clusterId, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -11445,6 +11687,113 @@ func NewUpgradeClusterExtensionRequest(server string, clusterId ClusterId, exten
 	return req, nil
 }
 
+// NewGetClusterFeaturesRequest generates requests for GetClusterFeatures
+func NewGetClusterFeaturesRequest(server string, clusterId ClusterId, params *GetClusterFeaturesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/features", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewReplaceClusterFeaturesRequest calls the generic ReplaceClusterFeatures builder with application/json body
+func NewReplaceClusterFeaturesRequest(server string, clusterId ClusterId, params *ReplaceClusterFeaturesParams, body ReplaceClusterFeaturesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceClusterFeaturesRequestWithBody(server, clusterId, params, "application/json", bodyReader)
+}
+
+// NewReplaceClusterFeaturesRequestWithBody generates requests for ReplaceClusterFeatures with any type of body
+func NewReplaceClusterFeaturesRequestWithBody(server string, clusterId ClusterId, params *ReplaceClusterFeaturesParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/features", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
 // NewGetClusterInsightsAuthenticationRequest generates requests for GetClusterInsightsAuthentication
 func NewGetClusterInsightsAuthenticationRequest(server string, clusterId ClusterId, params *GetClusterInsightsAuthenticationParams) (*http.Request, error) {
 	var err error
@@ -12470,6 +12819,210 @@ func NewGetOpenFGAInstanceRequest(server string, clusterId ClusterId, instanceId
 	}
 
 	operationPath := fmt.Sprintf("/clusters/%s/openfga-instances/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewListPasswordBlacklistFilesRequest generates requests for ListPasswordBlacklistFiles
+func NewListPasswordBlacklistFilesRequest(server string, clusterId ClusterId, params *ListPasswordBlacklistFilesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/password-blacklist-files", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewUploadPasswordBlacklistFileRequestWithBody generates requests for UploadPasswordBlacklistFile with any type of body
+func NewUploadPasswordBlacklistFileRequestWithBody(server string, clusterId ClusterId, params *UploadPasswordBlacklistFileParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/password-blacklist-files", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewDeletePasswordBlacklistFileRequest generates requests for DeletePasswordBlacklistFile
+func NewDeletePasswordBlacklistFileRequest(server string, clusterId ClusterId, name PasswordBlacklistFileName, params *DeletePasswordBlacklistFileParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/password-blacklist-files/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithLocation("simple", false, "API-Version", runtime.ParamLocationHeader, params.APIVersion)
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("API-Version", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewGetPasswordBlacklistFileRequest generates requests for GetPasswordBlacklistFile
+func NewGetPasswordBlacklistFileRequest(server string, clusterId ClusterId, name PasswordBlacklistFileName, params *GetPasswordBlacklistFileParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster_id", runtime.ParamLocationPath, clusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/password-blacklist-files/%s", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -19734,6 +20287,14 @@ type ClientWithResponsesInterface interface {
 	// UpgradeClusterExtensionWithResponse request
 	UpgradeClusterExtensionWithResponse(ctx context.Context, clusterId ClusterId, extensionId ExtensionId, params *UpgradeClusterExtensionParams, reqEditors ...RequestEditorFn) (*UpgradeClusterExtensionResponse, error)
 
+	// GetClusterFeaturesWithResponse request
+	GetClusterFeaturesWithResponse(ctx context.Context, clusterId ClusterId, params *GetClusterFeaturesParams, reqEditors ...RequestEditorFn) (*GetClusterFeaturesResponse, error)
+
+	// ReplaceClusterFeaturesWithBodyWithResponse request with any body
+	ReplaceClusterFeaturesWithBodyWithResponse(ctx context.Context, clusterId ClusterId, params *ReplaceClusterFeaturesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceClusterFeaturesResponse, error)
+
+	ReplaceClusterFeaturesWithResponse(ctx context.Context, clusterId ClusterId, params *ReplaceClusterFeaturesParams, body ReplaceClusterFeaturesJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceClusterFeaturesResponse, error)
+
 	// GetClusterInsightsAuthenticationWithResponse request
 	GetClusterInsightsAuthenticationWithResponse(ctx context.Context, clusterId ClusterId, params *GetClusterInsightsAuthenticationParams, reqEditors ...RequestEditorFn) (*GetClusterInsightsAuthenticationResponse, error)
 
@@ -19776,6 +20337,18 @@ type ClientWithResponsesInterface interface {
 
 	// GetOpenFGAInstanceWithResponse request
 	GetOpenFGAInstanceWithResponse(ctx context.Context, clusterId ClusterId, instanceId OpenFGAInstanceId, params *GetOpenFGAInstanceParams, reqEditors ...RequestEditorFn) (*GetOpenFGAInstanceResponse, error)
+
+	// ListPasswordBlacklistFilesWithResponse request
+	ListPasswordBlacklistFilesWithResponse(ctx context.Context, clusterId ClusterId, params *ListPasswordBlacklistFilesParams, reqEditors ...RequestEditorFn) (*ListPasswordBlacklistFilesResponse, error)
+
+	// UploadPasswordBlacklistFileWithBodyWithResponse request with any body
+	UploadPasswordBlacklistFileWithBodyWithResponse(ctx context.Context, clusterId ClusterId, params *UploadPasswordBlacklistFileParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadPasswordBlacklistFileResponse, error)
+
+	// DeletePasswordBlacklistFileWithResponse request
+	DeletePasswordBlacklistFileWithResponse(ctx context.Context, clusterId ClusterId, name PasswordBlacklistFileName, params *DeletePasswordBlacklistFileParams, reqEditors ...RequestEditorFn) (*DeletePasswordBlacklistFileResponse, error)
+
+	// GetPasswordBlacklistFileWithResponse request
+	GetPasswordBlacklistFileWithResponse(ctx context.Context, clusterId ClusterId, name PasswordBlacklistFileName, params *GetPasswordBlacklistFileParams, reqEditors ...RequestEditorFn) (*GetPasswordBlacklistFileResponse, error)
 
 	// GetClusterPrivateLinkWithResponse request
 	GetClusterPrivateLinkWithResponse(ctx context.Context, clusterId ClusterId, params *GetClusterPrivateLinkParams, reqEditors ...RequestEditorFn) (*GetClusterPrivateLinkResponse, error)
@@ -21481,6 +22054,64 @@ func (r UpgradeClusterExtensionResponse) StatusCode() int {
 	return 0
 }
 
+type GetClusterFeaturesResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *ClusterFeatureSet
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r GetClusterFeaturesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetClusterFeaturesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ReplaceClusterFeaturesResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *ClusterFeatureUpdate
+	ApplicationproblemJSON400 *ErrorBody
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON409 *ErrorBody
+	ApplicationproblemJSON422 *ValidationErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceClusterFeaturesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceClusterFeaturesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetClusterInsightsAuthenticationResponse struct {
 	Body                      []byte
 	HTTPResponse              *http.Response
@@ -21850,6 +22481,122 @@ func (r GetOpenFGAInstanceResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetOpenFGAInstanceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListPasswordBlacklistFilesResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *[]PasswordBlacklistFile
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPasswordBlacklistFilesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPasswordBlacklistFilesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UploadPasswordBlacklistFileResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON201                   *PasswordBlacklistFile
+	ApplicationproblemJSON400 *ErrorBody
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON409 *ErrorBody
+	ApplicationproblemJSON413 *ErrorBody
+	ApplicationproblemJSON422 *ValidationErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r UploadPasswordBlacklistFileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UploadPasswordBlacklistFileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeletePasswordBlacklistFileResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON409 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r DeletePasswordBlacklistFileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeletePasswordBlacklistFileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetPasswordBlacklistFileResponse struct {
+	Body                      []byte
+	HTTPResponse              *http.Response
+	JSON200                   *PasswordBlacklistFile
+	ApplicationproblemJSON401 *ErrorBody
+	ApplicationproblemJSON403 *ErrorBody
+	ApplicationproblemJSON404 *ErrorBody
+	ApplicationproblemJSON429 *ErrorBody
+	ApplicationproblemJSON500 *ErrorBody
+	ApplicationproblemJSON501 *ErrorBody
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPasswordBlacklistFileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPasswordBlacklistFileResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -25678,6 +26425,32 @@ func (c *ClientWithResponses) UpgradeClusterExtensionWithResponse(ctx context.Co
 	return ParseUpgradeClusterExtensionResponse(rsp)
 }
 
+// GetClusterFeaturesWithResponse request returning *GetClusterFeaturesResponse
+func (c *ClientWithResponses) GetClusterFeaturesWithResponse(ctx context.Context, clusterId ClusterId, params *GetClusterFeaturesParams, reqEditors ...RequestEditorFn) (*GetClusterFeaturesResponse, error) {
+	rsp, err := c.GetClusterFeatures(ctx, clusterId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetClusterFeaturesResponse(rsp)
+}
+
+// ReplaceClusterFeaturesWithBodyWithResponse request with arbitrary body returning *ReplaceClusterFeaturesResponse
+func (c *ClientWithResponses) ReplaceClusterFeaturesWithBodyWithResponse(ctx context.Context, clusterId ClusterId, params *ReplaceClusterFeaturesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceClusterFeaturesResponse, error) {
+	rsp, err := c.ReplaceClusterFeaturesWithBody(ctx, clusterId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceClusterFeaturesResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceClusterFeaturesWithResponse(ctx context.Context, clusterId ClusterId, params *ReplaceClusterFeaturesParams, body ReplaceClusterFeaturesJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceClusterFeaturesResponse, error) {
+	rsp, err := c.ReplaceClusterFeatures(ctx, clusterId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceClusterFeaturesResponse(rsp)
+}
+
 // GetClusterInsightsAuthenticationWithResponse request returning *GetClusterInsightsAuthenticationResponse
 func (c *ClientWithResponses) GetClusterInsightsAuthenticationWithResponse(ctx context.Context, clusterId ClusterId, params *GetClusterInsightsAuthenticationParams, reqEditors ...RequestEditorFn) (*GetClusterInsightsAuthenticationResponse, error) {
 	rsp, err := c.GetClusterInsightsAuthentication(ctx, clusterId, params, reqEditors...)
@@ -25809,6 +26582,42 @@ func (c *ClientWithResponses) GetOpenFGAInstanceWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseGetOpenFGAInstanceResponse(rsp)
+}
+
+// ListPasswordBlacklistFilesWithResponse request returning *ListPasswordBlacklistFilesResponse
+func (c *ClientWithResponses) ListPasswordBlacklistFilesWithResponse(ctx context.Context, clusterId ClusterId, params *ListPasswordBlacklistFilesParams, reqEditors ...RequestEditorFn) (*ListPasswordBlacklistFilesResponse, error) {
+	rsp, err := c.ListPasswordBlacklistFiles(ctx, clusterId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPasswordBlacklistFilesResponse(rsp)
+}
+
+// UploadPasswordBlacklistFileWithBodyWithResponse request with arbitrary body returning *UploadPasswordBlacklistFileResponse
+func (c *ClientWithResponses) UploadPasswordBlacklistFileWithBodyWithResponse(ctx context.Context, clusterId ClusterId, params *UploadPasswordBlacklistFileParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadPasswordBlacklistFileResponse, error) {
+	rsp, err := c.UploadPasswordBlacklistFileWithBody(ctx, clusterId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUploadPasswordBlacklistFileResponse(rsp)
+}
+
+// DeletePasswordBlacklistFileWithResponse request returning *DeletePasswordBlacklistFileResponse
+func (c *ClientWithResponses) DeletePasswordBlacklistFileWithResponse(ctx context.Context, clusterId ClusterId, name PasswordBlacklistFileName, params *DeletePasswordBlacklistFileParams, reqEditors ...RequestEditorFn) (*DeletePasswordBlacklistFileResponse, error) {
+	rsp, err := c.DeletePasswordBlacklistFile(ctx, clusterId, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeletePasswordBlacklistFileResponse(rsp)
+}
+
+// GetPasswordBlacklistFileWithResponse request returning *GetPasswordBlacklistFileResponse
+func (c *ClientWithResponses) GetPasswordBlacklistFileWithResponse(ctx context.Context, clusterId ClusterId, name PasswordBlacklistFileName, params *GetPasswordBlacklistFileParams, reqEditors ...RequestEditorFn) (*GetPasswordBlacklistFileResponse, error) {
+	rsp, err := c.GetPasswordBlacklistFile(ctx, clusterId, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPasswordBlacklistFileResponse(rsp)
 }
 
 // GetClusterPrivateLinkWithResponse request returning *GetClusterPrivateLinkResponse
@@ -30364,6 +31173,156 @@ func ParseUpgradeClusterExtensionResponse(rsp *http.Response) (*UpgradeClusterEx
 	return response, nil
 }
 
+// ParseGetClusterFeaturesResponse parses an HTTP response from a GetClusterFeaturesWithResponse call
+func ParseGetClusterFeaturesResponse(rsp *http.Response) (*GetClusterFeaturesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetClusterFeaturesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterFeatureSet
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceClusterFeaturesResponse parses an HTTP response from a ReplaceClusterFeaturesWithResponse call
+func ParseReplaceClusterFeaturesResponse(rsp *http.Response) (*ReplaceClusterFeaturesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceClusterFeaturesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterFeatureUpdate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ValidationErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetClusterInsightsAuthenticationResponse parses an HTTP response from a GetClusterInsightsAuthenticationWithResponse call
 func ParseGetClusterInsightsAuthenticationResponse(rsp *http.Response) (*GetClusterInsightsAuthenticationResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -31273,6 +32232,306 @@ func ParseGetOpenFGAInstanceResponse(rsp *http.Response) (*GetOpenFGAInstanceRes
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest OpenFGAInstance
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPasswordBlacklistFilesResponse parses an HTTP response from a ListPasswordBlacklistFilesWithResponse call
+func ParseListPasswordBlacklistFilesResponse(rsp *http.Response) (*ListPasswordBlacklistFilesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPasswordBlacklistFilesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []PasswordBlacklistFile
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUploadPasswordBlacklistFileResponse parses an HTTP response from a UploadPasswordBlacklistFileWithResponse call
+func ParseUploadPasswordBlacklistFileResponse(rsp *http.Response) (*UploadPasswordBlacklistFileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UploadPasswordBlacklistFileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest PasswordBlacklistFile
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest ValidationErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeletePasswordBlacklistFileResponse parses an HTTP response from a DeletePasswordBlacklistFileWithResponse call
+func ParseDeletePasswordBlacklistFileResponse(rsp *http.Response) (*DeletePasswordBlacklistFileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeletePasswordBlacklistFileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest ErrorBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPasswordBlacklistFileResponse parses an HTTP response from a GetPasswordBlacklistFileWithResponse call
+func ParseGetPasswordBlacklistFileResponse(rsp *http.Response) (*GetPasswordBlacklistFileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPasswordBlacklistFileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PasswordBlacklistFile
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
