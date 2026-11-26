@@ -68,7 +68,7 @@ func TestRegisterWorkspaceOnlyWhenKnown(t *testing.T) {
 	if !has(Workspace{ID: "ws-1", Name: "Acme"}) {
 		t.Error("tool missing for a known workspace")
 	}
-	if has(Workspace{Name: "‮\n"}) {
+	if has(Workspace{Name: "\u202e\n"}) {
 		t.Error("tool registered for a name that cleans to nothing")
 	}
 	if has(Workspace{}) {
