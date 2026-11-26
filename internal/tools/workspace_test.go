@@ -24,6 +24,9 @@ func TestWorkspaceInstructions(t *testing.T) {
 			}
 		}
 	}
+	if got := (Workspace{ID: "ws-1", Name: "Acme", Reason: "odd reason"}).Instructions(); !strings.Contains(got, `because "odd reason".`) {
+		t.Errorf("unrecognised reason not quoted: %s", got)
+	}
 	if got := (Workspace{}).Instructions(); got != "" {
 		t.Errorf("unknown workspace gave instructions %q", got)
 	}
@@ -65,6 +68,9 @@ func TestRegisterWorkspaceOnlyWhenKnown(t *testing.T) {
 	if !has(Workspace{ID: "ws-1", Name: "Acme"}) {
 		t.Error("tool missing for a known workspace")
 	}
+	if has(Workspace{Name: "‮\n"}) {
+		t.Error("tool registered for a name that cleans to nothing")
+	}
 	if has(Workspace{}) {
 		t.Error("tool registered with no workspace")
 	}
@@ -100,5 +106,22 @@ func TestGetWorkspaceToolWithOnlyAnID(t *testing.T) {
 	}
 	if got := w.Instructions(); !strings.Contains(got, "workspace ws-1.") || strings.Contains(got, "picked because") {
 		t.Fatalf("instructions = %q", got)
+	}
+}
+
+func TestWorkspaceNameWithQuoteIsEscaped(t *testing.T) {
+	w := Workspace{ID: "ws-1", Name: `Acme" and "Other`, Reason: "owned"}
+	if got := w.Instructions(); !strings.Contains(got, `"Acme\" and \"Other" (ws-1)`) {
+		t.Fatalf("quote not escaped: %q", got)
+	}
+}
+
+func TestLongWorkspaceNameIsMarkedAsCut(t *testing.T) {
+	w := Workspace{ID: "ws-1", Name: strings.Repeat("x", 200)}.sanitized()
+	if !strings.HasSuffix(w.Name, cutMarker) || len([]rune(w.Name)) != maxWorkspaceFieldRunes {
+		t.Fatalf("name = %q", w.Name)
+	}
+	if again := w.sanitized(); again != w {
+		t.Fatalf("cleaning twice changed the name: %q", again.Name)
 	}
 }

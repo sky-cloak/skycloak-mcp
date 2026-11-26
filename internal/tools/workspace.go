@@ -19,8 +19,11 @@ type Workspace struct {
 }
 
 // maxWorkspaceFieldRunes caps how much of a workspace name, ID or reason is
-// passed on to the assistant.
-const maxWorkspaceFieldRunes = 80
+// passed on to the assistant. A longer value is cut and ends in an ellipsis.
+const (
+	maxWorkspaceFieldRunes = 80
+	cutMarker              = "..."
+)
 
 // clean makes a value that someone else chose safe to place in text the
 // assistant treats as the server's own: control characters, newlines and other
@@ -38,7 +41,7 @@ func clean(s string) string {
 	}, s)
 	s = strings.Join(strings.Fields(s), " ")
 	if r := []rune(s); len(r) > maxWorkspaceFieldRunes {
-		s = strings.TrimSpace(string(r[:maxWorkspaceFieldRunes]))
+		s = strings.TrimSpace(string(r[:maxWorkspaceFieldRunes-len(cutMarker)])) + cutMarker
 	}
 	return s
 }
@@ -54,7 +57,8 @@ func (w Workspace) Known() bool {
 }
 
 // reasonText spells a pick reason out for a person. An unrecognised value is
-// passed through, so a reason a newer server adds still shows up.
+// passed through quoted, so a reason a newer server adds still shows up and
+// reads as a value.
 func reasonText(reason string) string {
 	switch reason {
 	case "requested":
@@ -68,7 +72,7 @@ func reasonText(reason string) string {
 	case "":
 		return ""
 	default:
-		return reason
+		return fmt.Sprintf("%q", reason)
 	}
 }
 
@@ -104,7 +108,7 @@ func (w Workspace) Instructions() string {
 // answer is what the session was connected with rather than anything read from
 // the API, and nothing is registered when the workspace is not known.
 func RegisterWorkspace(s *mcp.Server, w Workspace) {
-	if !w.Known() {
+	if !w.sanitized().Known() {
 		return
 	}
 	addTool(s, &mcp.Tool{
