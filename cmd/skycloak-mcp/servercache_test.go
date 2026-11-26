@@ -15,8 +15,8 @@ import (
 
 // counting build function: returns a distinct server per call so tests can tell
 // a cache hit from a rebuild by identity.
-func countingBuilder(calls *int) func(string, bool, tools.Scopes) *mcp.Server {
-	return func(string, bool, tools.Scopes) *mcp.Server {
+func countingBuilder(calls *int) func(string, bool, tools.Scopes, tools.Workspace) *mcp.Server {
+	return func(string, bool, tools.Scopes, tools.Workspace) *mcp.Server {
 		*calls++
 		return mcp.NewServer(&mcp.Implementation{Name: "t", Version: "t"}, nil)
 	}
@@ -26,8 +26,8 @@ func TestServerCacheReusesServerForSameCredential(t *testing.T) {
 	calls := 0
 	c := newServerCache(8, time.Minute, countingBuilder(&calls))
 
-	first := c.get("sk_sc_a", false, nil)
-	second := c.get("sk_sc_a", false, nil)
+	first := c.get("sk_sc_a", false, nil, tools.Workspace{})
+	second := c.get("sk_sc_a", false, nil, tools.Workspace{})
 
 	if first != second {
 		t.Fatal("same credential produced different servers; the cache is not hitting")
@@ -44,9 +44,9 @@ func TestServerCacheSeparatesCredentialsAndWriteMode(t *testing.T) {
 	// Different credentials must never share a server — that is the tenant
 	// boundary. Same credential at different write modes must not share either,
 	// or a read-only session would be handed the write-enabled tool set.
-	a := c.get("sk_sc_a", false, nil)
-	b := c.get("sk_sc_b", false, nil)
-	aWrite := c.get("sk_sc_a", true, nil)
+	a := c.get("sk_sc_a", false, nil, tools.Workspace{})
+	b := c.get("sk_sc_b", false, nil, tools.Workspace{})
+	aWrite := c.get("sk_sc_a", true, nil, tools.Workspace{})
 
 	if a == b {
 		t.Fatal("different credentials shared a server")
@@ -66,10 +66,10 @@ func TestServerCacheSeparatesScopeSets(t *testing.T) {
 	calls := 0
 	c := newServerCache(8, time.Minute, countingBuilder(&calls))
 
-	unknown := c.get("sk_sc_a", true, nil)
-	readOnly := c.get("sk_sc_a", true, tools.NewScopes([]string{"clusters:read"}))
-	sameReadOnly := c.get("sk_sc_a", true, tools.NewScopes([]string{"clusters:read"}))
-	readWrite := c.get("sk_sc_a", true, tools.NewScopes([]string{"clusters:read", "clusters:write"}))
+	unknown := c.get("sk_sc_a", true, nil, tools.Workspace{})
+	readOnly := c.get("sk_sc_a", true, tools.NewScopes([]string{"clusters:read"}), tools.Workspace{})
+	sameReadOnly := c.get("sk_sc_a", true, tools.NewScopes([]string{"clusters:read"}), tools.Workspace{})
+	readWrite := c.get("sk_sc_a", true, tools.NewScopes([]string{"clusters:read", "clusters:write"}), tools.Workspace{})
 
 	if unknown == readOnly || readOnly == readWrite {
 		t.Fatal("servers built for different scope sets were shared")
@@ -88,23 +88,23 @@ func TestServerCacheEvictsLeastRecentlyUsedBeyondMax(t *testing.T) {
 	c := newServerCache(2, time.Minute, countingBuilder(&calls))
 	c.now = func() time.Time { return clock }
 
-	c.get("a", false, nil)
+	c.get("a", false, nil, tools.Workspace{})
 	clock = clock.Add(time.Second)
-	c.get("b", false, nil)
+	c.get("b", false, nil, tools.Workspace{})
 	clock = clock.Add(time.Second)
-	c.get("a", false, nil) // refresh a, making b the least recently used
+	c.get("a", false, nil, tools.Workspace{}) // refresh a, making b the least recently used
 	clock = clock.Add(time.Second)
-	c.get("c", false, nil) // exceeds max -> evicts b
+	c.get("c", false, nil, tools.Workspace{}) // exceeds max -> evicts b
 
 	if got := c.len(); got != 2 {
 		t.Fatalf("cache holds %d entries, want 2", got)
 	}
 	callsBefore := calls
-	c.get("a", false, nil)
+	c.get("a", false, nil, tools.Workspace{})
 	if calls != callsBefore {
 		t.Fatal("`a` was evicted; least-recently-used should have been `b`")
 	}
-	c.get("b", false, nil)
+	c.get("b", false, nil, tools.Workspace{})
 	if calls != callsBefore+1 {
 		t.Fatal("`b` was not evicted")
 	}
@@ -116,9 +116,9 @@ func TestServerCacheRebuildsAfterIdleTTL(t *testing.T) {
 	c := newServerCache(8, 30*time.Minute, countingBuilder(&calls))
 	c.now = func() time.Time { return clock }
 
-	first := c.get("a", false, nil)
+	first := c.get("a", false, nil, tools.Workspace{})
 	clock = clock.Add(31 * time.Minute)
-	second := c.get("a", false, nil)
+	second := c.get("a", false, nil, tools.Workspace{})
 
 	if first == second {
 		t.Fatal("expired entry was reused")
@@ -133,7 +133,7 @@ func TestServerCacheRebuildsAfterIdleTTL(t *testing.T) {
 func TestServerCacheDoesNotStoreRawCredential(t *testing.T) {
 	c := newServerCache(8, time.Minute, countingBuilder(new(int)))
 	const secret = "sk_sc_super_secret_value"
-	c.get(secret, false, nil)
+	c.get(secret, false, nil, tools.Workspace{})
 
 	for k := range c.entries {
 		if strings.Contains(k, secret) {
@@ -151,7 +151,7 @@ func TestServerCacheBuildsConcurrentlyAcrossKeys(t *testing.T) {
 	building.Add(keys)
 	release := make(chan struct{})
 
-	c := newServerCache(64, time.Minute, func(string, bool, tools.Scopes) *mcp.Server {
+	c := newServerCache(64, time.Minute, func(string, bool, tools.Scopes, tools.Workspace) *mcp.Server {
 		building.Done() // announce arrival
 		<-release       // hold until every builder has arrived
 		return mcp.NewServer(&mcp.Implementation{Name: "t", Version: "t"}, nil)
@@ -162,7 +162,7 @@ func TestServerCacheBuildsConcurrentlyAcrossKeys(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			c.get(fmt.Sprintf("key-%d", i), false, nil)
+			c.get(fmt.Sprintf("key-%d", i), false, nil, tools.Workspace{})
 		}(i)
 	}
 
@@ -182,7 +182,7 @@ func TestServerCacheBuildsConcurrentlyAcrossKeys(t *testing.T) {
 // caller, or a burst of new sessions multiplies the cost.
 func TestServerCacheBuildsOncePerKeyUnderConcurrency(t *testing.T) {
 	var calls atomic.Int32
-	c := newServerCache(64, time.Minute, func(string, bool, tools.Scopes) *mcp.Server {
+	c := newServerCache(64, time.Minute, func(string, bool, tools.Scopes, tools.Workspace) *mcp.Server {
 		calls.Add(1)
 		time.Sleep(20 * time.Millisecond)
 		return mcp.NewServer(&mcp.Implementation{Name: "t", Version: "t"}, nil)
@@ -194,7 +194,7 @@ func TestServerCacheBuildsOncePerKeyUnderConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			servers[i] = c.get("same-key", false, nil)
+			servers[i] = c.get("same-key", false, nil, tools.Workspace{})
 		}(i)
 	}
 	wg.Wait()
@@ -206,5 +206,18 @@ func TestServerCacheBuildsOncePerKeyUnderConcurrency(t *testing.T) {
 		if s != servers[0] || s == nil {
 			t.Fatalf("caller %d got a different (or nil) server", i)
 		}
+	}
+}
+
+// The workspace is written into a server's instructions, so a changed one must
+// not be answered with the server built for the old.
+func TestServerCacheSeparatesWorkspaces(t *testing.T) {
+	var calls int
+	c := newServerCache(64, time.Minute, countingBuilder(&calls))
+	a := c.get("sk_sc_a", false, nil, tools.Workspace{ID: "w1", Name: "One", Reason: "owned"})
+	b := c.get("sk_sc_a", false, nil, tools.Workspace{ID: "w1", Name: "Renamed", Reason: "owned"})
+	again := c.get("sk_sc_a", false, nil, tools.Workspace{ID: "w1", Name: "One", Reason: "owned"})
+	if a == b || a != again {
+		t.Fatalf("workspace not part of the cache key: a==b %v, a==again %v", a == b, a == again)
 	}
 }

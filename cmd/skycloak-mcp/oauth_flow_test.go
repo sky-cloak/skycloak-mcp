@@ -114,10 +114,12 @@ func newFakeSessionKeyAPI(t *testing.T, scopes []string) *fakeSessionKeyAPI {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"api_key":      "sk_sc_session_" + string(rune('0'+n)),
-			"workspace_id": "ws-1",
-			"expires_at":   time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
-			"scopes":       scopes,
+			"api_key":        "sk_sc_session_" + string(rune('0'+n)),
+			"workspace_id":   "ws-1",
+			"workspace_name": "Acme",
+			"pick_reason":    "oldest_membership",
+			"expires_at":     time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+			"scopes":         scopes,
 		})
 	}))
 	t.Cleanup(d.srv.Close)
@@ -479,5 +481,44 @@ func TestOAuthSessionsAreIsolatedPerSubject(t *testing.T) {
 	}
 	if len(seen) < 2 {
 		t.Fatalf("both callers went upstream with the same key: %v", seen)
+	}
+}
+
+// The connect instructions name the workspace and why it was picked, and the
+// tool answers with the same facts.
+func TestOAuthSessionNamesItsWorkspace(t *testing.T) {
+	st := newOAuthStack(t, writeSessionScopes)
+	token := st.realm.token(t, "user-1")
+
+	resp := mcpPost(t, st.ts.URL, token, "", initBody)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	for _, want := range []string{`\"Acme\" (ws-1)`, "joined first"} {
+		if !strings.Contains(string(body), want) {
+			t.Fatalf("initialize instructions lack %q: %s", want, truncate(body))
+		}
+	}
+
+	resp = mcpPost(t, st.ts.URL, token, "", `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"skycloak_get_workspace","arguments":{}}}`)
+	body, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	for _, want := range []string{"workspace_name", "Acme", "ws-1", "oldest_membership"} {
+		if !strings.Contains(string(body), want) {
+			t.Fatalf("skycloak_get_workspace lacks %q: %s", want, truncate(body))
+		}
+	}
+}
+
+// An API key says nothing about its workspace, so there is no tool to offer.
+func TestAPIKeySessionHasNoWorkspaceTool(t *testing.T) {
+	st := newOAuthStack(t, writeSessionScopes)
+	resp := mcpPost(t, st.ts.URL, "sk_sc_test", "", `{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}`)
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "skycloak_list_clusters") {
+		t.Fatalf("tools/list = %d, want 200 listing skycloak_list_clusters: %s", resp.StatusCode, truncate(body))
+	}
+	if strings.Contains(string(body), "skycloak_get_workspace") {
+		t.Fatalf("workspace tool offered without a known workspace: %s", truncate(body))
 	}
 }

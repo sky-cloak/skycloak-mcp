@@ -38,11 +38,11 @@ type serverCache struct {
 	entries map[string]*cachedServer
 	max     int
 	ttl     time.Duration
-	build   func(apiKey string, allowWrites bool, scopes tools.Scopes) *mcp.Server
+	build   func(apiKey string, allowWrites bool, scopes tools.Scopes, ws tools.Workspace) *mcp.Server
 	now     func() time.Time
 }
 
-func newServerCache(maxEntries int, ttl time.Duration, build func(string, bool, tools.Scopes) *mcp.Server) *serverCache {
+func newServerCache(maxEntries int, ttl time.Duration, build func(string, bool, tools.Scopes, tools.Workspace) *mcp.Server) *serverCache {
 	return &serverCache{
 		entries: make(map[string]*cachedServer, maxEntries),
 		max:     maxEntries,
@@ -52,8 +52,8 @@ func newServerCache(maxEntries int, ttl time.Duration, build func(string, bool, 
 	}
 }
 
-func (c *serverCache) get(apiKey string, allowWrites bool, scopes tools.Scopes) *mcp.Server {
-	key := cacheKey(apiKey, allowWrites, scopes)
+func (c *serverCache) get(apiKey string, allowWrites bool, scopes tools.Scopes, ws tools.Workspace) *mcp.Server {
+	key := cacheKey(apiKey, allowWrites, scopes, ws)
 
 	c.mu.Lock()
 	now := c.now()
@@ -74,7 +74,7 @@ func (c *serverCache) get(apiKey string, allowWrites bool, scopes tools.Scopes) 
 	// would make one unknown credential stall every other caller, and a flood of
 	// them would serialize the whole process. The Once collapses concurrent
 	// misses for the same credential into a single build.
-	entry.once.Do(func() { entry.server = c.build(apiKey, allowWrites, scopes) })
+	entry.once.Do(func() { entry.server = c.build(apiKey, allowWrites, scopes, ws) })
 	return entry.server
 }
 
@@ -108,9 +108,12 @@ func (c *serverCache) len() int {
 // cacheKey identifies a built server. The scope set is part of it because it
 // decides which tools the server carries, so two grants must never collide on
 // one entry. "unknown" (nil scopes) is its own key, distinct from any grant.
-func cacheKey(apiKey string, allowWrites bool, scopes tools.Scopes) string {
+func cacheKey(apiKey string, allowWrites bool, scopes tools.Scopes, ws tools.Workspace) string {
 	sum := sha256.Sum256([]byte(apiKey))
-	return hex.EncodeToString(sum[:]) + "|" + strconv.FormatBool(allowWrites) + "|" + scopeKey(scopes)
+	// The workspace is part of the key because it is written into the server's
+	// instructions, so a changed name or pick reason must not reuse a stale one.
+	wsSum := sha256.Sum256([]byte(ws.ID + "\x00" + ws.Name + "\x00" + ws.Reason))
+	return hex.EncodeToString(sum[:]) + "|" + strconv.FormatBool(allowWrites) + "|" + scopeKey(scopes) + "|" + hex.EncodeToString(wsSum[:8])
 }
 
 func scopeKey(scopes tools.Scopes) string {

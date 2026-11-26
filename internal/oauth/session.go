@@ -79,8 +79,12 @@ func (e *AmbiguousWorkspaceError) Error() string {
 type Session struct {
 	APIKey      string
 	WorkspaceID string
-	ExpiresAt   time.Time
-	Scopes      []string
+	// WorkspaceName and PickReason are empty when the dashboard is older than
+	// the fields and does not report them.
+	WorkspaceName string
+	PickReason    string
+	ExpiresAt     time.Time
+	Scopes        []string
 }
 
 // Exchanger swaps a verified Keycloak access token for a short-lived Skycloak
@@ -205,10 +209,12 @@ func (e *Exchanger) evictLocked(now time.Time) {
 }
 
 type sessionKeyResponse struct {
-	APIKey      string    `json:"api_key"`
-	WorkspaceID string    `json:"workspace_id"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	Scopes      []string  `json:"scopes"`
+	APIKey        string    `json:"api_key"`
+	WorkspaceID   string    `json:"workspace_id"`
+	WorkspaceName string    `json:"workspace_name"`
+	PickReason    string    `json:"pick_reason"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	Scopes        []string  `json:"scopes"`
 }
 
 func (e *Exchanger) request(ctx context.Context, token, workspaceID string) (*Session, error) {
@@ -254,10 +260,12 @@ func (e *Exchanger) request(ctx context.Context, token, workspaceID string) (*Se
 		return nil, fmt.Errorf("%w: the dashboard returned no expiry", ErrExchangeFailed)
 	}
 	return &Session{
-		APIKey:      out.APIKey,
-		WorkspaceID: out.WorkspaceID,
-		ExpiresAt:   out.ExpiresAt,
-		Scopes:      out.Scopes,
+		APIKey:        out.APIKey,
+		WorkspaceID:   out.WorkspaceID,
+		WorkspaceName: out.WorkspaceName,
+		PickReason:    out.PickReason,
+		ExpiresAt:     out.ExpiresAt,
+		Scopes:        out.Scopes,
 	}, nil
 }
 
