@@ -36,13 +36,13 @@ Then ask for something:
 
 ## Tools
 
-143 tools: 63 read-only and 80 write, plus `get_workspace` on OAuth sessions. Read-only tools are always available. On the hosted server the write tools are registered too and gated by your credential's scopes; the local binary registers them only when started with `--allow-writes`.
+145 tools: 64 read-only and 81 write, plus `get_workspace` on OAuth sessions. Read-only tools are always available. On the hosted server the write tools are registered too and gated by your credential's scopes; the local binary registers them only when started with `--allow-writes`.
 
 Tool names carry a `skycloak_` prefix that the table below omits, so `list_clusters` is `skycloak_list_clusters` in your client.
 
 | Area | Read-only | Write (`--allow-writes`) |
 |---|---|---|
-| Clusters | `list_clusters`, `get_cluster`, `list_cluster_locations`, `list_cluster_types`, `list_cluster_features`, `list_cluster_versions`, `list_cluster_upgrades`, `get_cluster_upgrade_path`, `get_cluster_credentials`, `get_cluster_insights`, `get_cluster_maintenance_window` | `create_cluster`, `update_cluster`, `delete_cluster`, `cancel_cluster_upgrade`, `restart_cluster_instances`, `set_cluster_maintenance_window`, `delete_cluster_maintenance_window` |
+| Clusters | `list_clusters`, `get_cluster`, `list_cluster_locations`, `list_cluster_types`, `list_cluster_features`, `get_cluster_features`, `list_cluster_versions`, `list_cluster_upgrades`, `get_cluster_upgrade_path`, `get_cluster_credentials`, `get_cluster_insights`, `get_cluster_maintenance_window` | `create_cluster`, `update_cluster`, `delete_cluster`, `cancel_cluster_upgrade`, `restart_cluster_instances`, `set_cluster_maintenance_window`, `delete_cluster_maintenance_window`, `set_cluster_features` |
 | Edge security | `get_cluster_security`, `list_cluster_captcha_domains` | `update_cluster_security`, `add_cluster_captcha_domain`, `remove_cluster_captcha_domain` |
 | Private link | `get_cluster_private_link` | `update_cluster_private_link` |
 | Realms | `list_realms`, `get_realm` | `create_realm`, `update_realm`, `delete_realm` |

@@ -52,7 +52,7 @@ func TestSetClusterFeaturesStatesRestartAndExperimental(t *testing.T) {
 		},
 	}
 	res, out, err := setClusterFeaturesHandler(api)(context.Background(), nil,
-		SetClusterFeaturesInput{ClusterID: "c1", Features: []string{"cimd", "token-exchange"}, ApplyNow: true})
+		SetClusterFeaturesInput{ClusterID: "c1", Features: []string{"cimd", "token-exchange"}, ApplyNow: true, Confirm: true})
 	if err != nil || res.IsError {
 		t.Fatalf("set features: err=%v res=%+v", err, res)
 	}
@@ -64,6 +64,25 @@ func TestSetClusterFeaturesStatesRestartAndExperimental(t *testing.T) {
 		if !strings.Contains(txt, want) {
 			t.Errorf("text %q does not contain %q", txt, want)
 		}
+	}
+}
+
+func TestSetClusterFeaturesApplyNowNeedsConfirm(t *testing.T) {
+	res, _, _ := setClusterFeaturesHandler(stubAPI{featuresUpdate: &skycloak.ClusterFeaturesUpdate{}})(context.Background(), nil,
+		SetClusterFeaturesInput{ClusterID: "c1", Features: []string{"cimd"}, ApplyNow: true})
+	if !res.IsError || !strings.Contains(resultText(res), "confirm=true") {
+		t.Fatalf("res=%v text=%q", res.IsError, resultText(res))
+	}
+}
+
+func TestSetClusterFeaturesNoneExperimental(t *testing.T) {
+	api := stubAPI{
+		features:       []skycloak.ClusterFeatureInfo{{Name: "token-exchange"}},
+		featuresUpdate: &skycloak.ClusterFeaturesUpdate{Features: []string{"token-exchange"}, RestartsKeycloak: true},
+	}
+	res, _, _ := setClusterFeaturesHandler(api)(context.Background(), nil, SetClusterFeaturesInput{ClusterID: "c1", Features: []string{"token-exchange"}})
+	if txt := resultText(res); !strings.Contains(txt, "None of the enabled flags is experimental") {
+		t.Fatalf("text = %q", txt)
 	}
 }
 

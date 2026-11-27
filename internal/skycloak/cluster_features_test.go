@@ -94,3 +94,24 @@ func TestSetClusterFeaturesRefusal(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestListClusterFeaturesMapsFlags(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/cluster-features" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, 200, `[{"name":"cimd","display_name":"CIMD","preview":false,"experimental":true,"dangerous":true,"min_version":"26.8.0"},{"name":"token-exchange","display_name":"Token exchange","preview":true}]`)
+	}))
+	defer srv.Close()
+
+	got, err := newTestClient(srv.URL).ListClusterFeatures(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || !got[0].Experimental || !got[0].Dangerous || got[0].MinVersion != "26.8.0" {
+		t.Fatalf("got %+v", got)
+	}
+	if got[1].Experimental || got[1].Dangerous || got[1].MinVersion != "" || !got[1].Preview {
+		t.Fatalf("got %+v", got[1])
+	}
+}

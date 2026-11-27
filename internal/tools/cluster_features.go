@@ -24,7 +24,7 @@ func registerClusterFeatureWriteTools(s *mcp.Server, api API) {
 	addTool(s, &mcp.Tool{
 		Name: "skycloak_set_cluster_features",
 		Description: "Replace the whole set of Keycloak feature flags enabled on one cluster: flags left out of the list are turned off, so read the current set with skycloak_get_cluster_features first. " +
-			"A change restarts Keycloak. By default it waits for the cluster's maintenance window, and a cluster without a window restarts at once; set apply_now=true to restart at once whatever the window. " +
+			"A change restarts Keycloak. By default it waits for the cluster's maintenance window, and a cluster without a window restarts at once; set apply_now=true together with confirm=true to restart at once whatever the window." +
 			"Some flags are experimental in Keycloak and may change or be removed between releases. The result states whether Keycloak restarts, whether the change is pending or applying, and which of the flags are experimental.",
 		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(false), ReadOnlyHint: false, IdempotentHint: true, DestructiveHint: ptr(true), Title: "Set cluster features"},
 	}, setClusterFeaturesHandler(api))
@@ -57,7 +57,8 @@ func getClusterFeaturesHandler(api API) mcp.ToolHandlerFor[GetClusterFeaturesInp
 type SetClusterFeaturesInput struct {
 	ClusterID string   `json:"cluster_id" jsonschema:"the cluster ID"`
 	Features  []string `json:"features" jsonschema:"the complete set of feature flags to enable; flags left out are turned off. Use an empty list to turn every flag off"`
-	ApplyNow  bool     `json:"apply_now,omitempty" jsonschema:"restart Keycloak at once instead of waiting for the cluster's maintenance window; has no effect on a cluster without a window, which always applies at once"`
+	ApplyNow  bool     `json:"apply_now,omitempty" jsonschema:"restart Keycloak at once instead of waiting for the cluster's maintenance window; has no effect on a cluster without a window, which always applies at once. Requires confirm=true"`
+	Confirm   bool     `json:"confirm,omitempty" jsonschema:"must be true when apply_now is set, to confirm the immediate restart, which disrupts live traffic on the cluster"`
 }
 
 // SetClusterFeaturesOutput is the structured result of skycloak_set_cluster_features.
@@ -74,6 +75,9 @@ func setClusterFeaturesHandler(api API) mcp.ToolHandlerFor[SetClusterFeaturesInp
 		}
 		if in.Features == nil {
 			return errResult("features is required: send the complete set of flags to enable, or an empty list to turn every flag off"), SetClusterFeaturesOutput{}, nil
+		}
+		if in.ApplyNow && !in.Confirm {
+			return errResult("Refusing to restart Keycloak at once: set confirm=true together with apply_now=true. This disrupts live traffic on the cluster."), SetClusterFeaturesOutput{}, nil
 		}
 		u, err := api.SetClusterFeatures(ctx, in.ClusterID, in.Features, in.ApplyNow)
 		if err != nil {
@@ -109,6 +113,8 @@ func setClusterFeaturesHandler(api API) mcp.ToolHandlerFor[SetClusterFeaturesInp
 		switch {
 		case len(out.ExperimentalFeatures) > 0:
 			fmt.Fprintf(&b, " Experimental in Keycloak and may change or be removed between releases: %s.", strings.Join(out.ExperimentalFeatures, ", "))
+		case catalogKnown && len(u.Features) > 0:
+			b.WriteString(" None of the enabled flags is experimental in Keycloak.")
 		case !catalogKnown:
 			b.WriteString(" Some feature flags are experimental in Keycloak; skycloak_list_cluster_features marks which.")
 		}
