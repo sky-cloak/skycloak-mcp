@@ -75,6 +75,8 @@ type API interface {
 	ListClusterLocations(ctx context.Context) ([]skycloak.ClusterLocationInfo, error)
 	ListClusterTypes(ctx context.Context) ([]skycloak.ClusterTypeInfo, error)
 	ListClusterFeatures(ctx context.Context) ([]skycloak.ClusterFeatureInfo, error)
+	GetClusterFeatures(ctx context.Context, clusterID string) (*skycloak.ClusterFeatures, error)
+	SetClusterFeatures(ctx context.Context, clusterID string, features []string, applyNow bool) (*skycloak.ClusterFeaturesUpdate, error)
 	ClusterTypeVersions(ctx context.Context, clusterType string) ([]skycloak.ClusterTypeVersion, error)
 	ListClusterUpgrades(ctx context.Context, clusterID string) ([]skycloak.ClusterUpgrade, error)
 	ListIdentityProviderTemplates(ctx context.Context) ([]skycloak.ProviderTemplate, error)
@@ -232,6 +234,7 @@ var toolAreas = []toolArea{
 	{name: "observability", scopes: []string{"clusters:logs:read", "clusters:events:read"}, register: registerObservabilityReadTools},
 	{name: "domains", scopes: []string{"domains:read"}, register: registerDomainReadTools},
 	{name: "branding", scopes: []string{"themes:read", "branding:read"}, register: registerBrandingReadTools},
+	{name: "cluster feature reads", scopes: []string{"clusters:read"}, register: registerClusterFeatureReadTools},
 	{name: "extensions", scopes: []string{"extensions:read", "clusters:extensions:read"}, register: registerExtensionReadTools},
 	{name: "exports", scopes: []string{"clusters:exports:read"}, register: registerExportReadTools},
 	{name: "openfga", scopes: []string{"openfga:read"}, register: registerOpenFGAReadTools},
@@ -275,6 +278,7 @@ var toolAreas = []toolArea{
 	{name: "branding upserts", write: true, scopes: []string{"branding:write", "branding:read"}, register: registerBrandingUpsertTools},
 	{name: "realm transfer writes", write: true, scopes: []string{"clusters:exports:write", "clusters:imports:write"}, register: registerRealmTransferWriteTools},
 	{name: "cluster writes", write: true, scopes: []string{"clusters:write"}, register: registerClusterWriteTools},
+	{name: "cluster feature writes", write: true, scopes: []string{"clusters:write"}, register: registerClusterFeatureWriteTools},
 	{name: "application writes", write: true, scopes: []string{"applications:write"}, register: registerApplicationWriteTools},
 	{name: "identity provider writes", write: true, scopes: []string{"identity-providers:write"}, register: registerIdentityProviderWriteTools},
 	{name: "realm writes", write: true, scopes: []string{"realms:write"}, register: registerRealmWriteTools},

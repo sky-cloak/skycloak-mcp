@@ -13,37 +13,39 @@ import (
 )
 
 type stubAPI struct {
-	clusters     []skycloak.Cluster
-	cluster      *skycloak.Cluster
-	realms       []skycloak.Realm
-	apps         []skycloak.Application
-	idps         []skycloak.IdentityProvider
-	logs         []skycloak.LogEntry
-	secLogs      []skycloak.SecurityLogEntry
-	events       []skycloak.EventEntry
-	domains      []skycloak.Domain
-	domain       *skycloak.Domain
-	themes       []skycloak.Theme
-	assign       *skycloak.ThemeAssignment
-	login        *skycloak.LoginBranding
-	email        *skycloak.EmailBranding
-	catalog      []skycloak.ExtensionInfo
-	clusExts     []skycloak.ClusterExtension
-	exports      []skycloak.Export
-	fgaInstances []skycloak.OpenFGAInstance
-	fgaInstance  *skycloak.OpenFGAInstance
-	themeArchive []byte
-	export       *skycloak.Export
-	rroles       []skycloak.RealmRole
-	rgroups      []skycloak.RealmGroup
-	rusers       []skycloak.RealmUser
-	ruser        *skycloak.RealmUser
-	appRoles     []skycloak.ApplicationRole
-	appSess      []skycloak.ApplicationSession
-	locations    []skycloak.ClusterLocationInfo
-	ctypes       []skycloak.ClusterTypeInfo
-	features     []skycloak.ClusterFeatureInfo
-	versionInfo  []skycloak.ClusterTypeVersion
+	clusters        []skycloak.Cluster
+	cluster         *skycloak.Cluster
+	realms          []skycloak.Realm
+	apps            []skycloak.Application
+	idps            []skycloak.IdentityProvider
+	logs            []skycloak.LogEntry
+	secLogs         []skycloak.SecurityLogEntry
+	events          []skycloak.EventEntry
+	domains         []skycloak.Domain
+	domain          *skycloak.Domain
+	themes          []skycloak.Theme
+	assign          *skycloak.ThemeAssignment
+	login           *skycloak.LoginBranding
+	email           *skycloak.EmailBranding
+	catalog         []skycloak.ExtensionInfo
+	clusterFeatures *skycloak.ClusterFeatures
+	featuresUpdate  *skycloak.ClusterFeaturesUpdate
+	clusExts        []skycloak.ClusterExtension
+	exports         []skycloak.Export
+	fgaInstances    []skycloak.OpenFGAInstance
+	fgaInstance     *skycloak.OpenFGAInstance
+	themeArchive    []byte
+	export          *skycloak.Export
+	rroles          []skycloak.RealmRole
+	rgroups         []skycloak.RealmGroup
+	rusers          []skycloak.RealmUser
+	ruser           *skycloak.RealmUser
+	appRoles        []skycloak.ApplicationRole
+	appSess         []skycloak.ApplicationSession
+	locations       []skycloak.ClusterLocationInfo
+	ctypes          []skycloak.ClusterTypeInfo
+	features        []skycloak.ClusterFeatureInfo
+	versionInfo     []skycloak.ClusterTypeVersion
 	// realmErrFor fails specific clusters, so a partial fleet answer is testable.
 	realmErrFor   map[string]error
 	upgrades      []skycloak.ClusterUpgrade
@@ -416,6 +418,20 @@ func (s stubAPI) ListClusterTypes(context.Context) ([]skycloak.ClusterTypeInfo, 
 
 func (s stubAPI) ListClusterFeatures(context.Context) ([]skycloak.ClusterFeatureInfo, error) {
 	return s.features, s.err
+}
+
+func (s stubAPI) GetClusterFeatures(context.Context, string) (*skycloak.ClusterFeatures, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.clusterFeatures, nil
+}
+
+func (s stubAPI) SetClusterFeatures(_ context.Context, _ string, _ []string, _ bool) (*skycloak.ClusterFeaturesUpdate, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.featuresUpdate, nil
 }
 
 func (s stubAPI) ClusterTypeVersions(context.Context, string) ([]skycloak.ClusterTypeVersion, error) {
