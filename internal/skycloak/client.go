@@ -1907,10 +1907,89 @@ func (c *Client) ListClusterTypes(ctx context.Context) ([]ClusterTypeInfo, error
 
 // ClusterFeatureInfo is an available Keycloak feature flag.
 type ClusterFeatureInfo struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Description string `json:"description,omitempty"`
-	Preview     bool   `json:"preview"`
+	Name         string `json:"name"`
+	DisplayName  string `json:"display_name"`
+	Description  string `json:"description,omitempty"`
+	Preview      bool   `json:"preview"`
+	Experimental bool   `json:"experimental"`
+	Dangerous    bool   `json:"dangerous"`
+	MinVersion   string `json:"min_version,omitempty"`
+}
+
+// FeatureChange is a feature flag change that has not finished rolling out.
+// State is pending (waiting for the maintenance window) or applying (Keycloak is
+// restarting).
+type FeatureChange struct {
+	State      string `json:"state"`
+	NextWindow string `json:"next_window,omitempty"`
+}
+
+func featureChangeFromAPI(c *apiclient.ClusterFeatureChange) *FeatureChange {
+	if c == nil {
+		return nil
+	}
+	out := &FeatureChange{State: string(c.State)}
+	if c.NextWindow != nil {
+		out.NextWindow = c.NextWindow.Format(time.RFC3339)
+	}
+	return out
+}
+
+// ClusterFeatures is the set of feature flags enabled on one cluster and any
+// change still rolling out.
+type ClusterFeatures struct {
+	Features []string       `json:"features"`
+	Change   *FeatureChange `json:"change,omitempty"`
+}
+
+// ClusterFeaturesUpdate is the outcome of replacing a cluster's feature flags.
+type ClusterFeaturesUpdate struct {
+	Features         []string       `json:"features"`
+	RestartsKeycloak bool           `json:"restarts_keycloak"`
+	Change           *FeatureChange `json:"change,omitempty"`
+	Impact           string         `json:"impact,omitempty"`
+}
+
+// GetClusterFeatures returns the feature flags enabled on one cluster.
+func (c *Client) GetClusterFeatures(ctx context.Context, clusterID string) (*ClusterFeatures, error) {
+	resp, err := c.gen.GetClusterFeaturesWithResponse(ctx, cid(clusterID), nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	return &ClusterFeatures{Features: nonNilStrings(resp.JSON200.Features), Change: featureChangeFromAPI(resp.JSON200.Change)}, nil
+}
+
+// SetClusterFeatures replaces the feature flags enabled on one cluster. With
+// applyNow Keycloak restarts at once instead of waiting for the maintenance window.
+func (c *Client) SetClusterFeatures(ctx context.Context, clusterID string, features []string, applyNow bool) (*ClusterFeaturesUpdate, error) {
+	body := apiclient.ReplaceClusterFeaturesJSONRequestBody{Features: nonNilStrings(features)}
+	if applyNow {
+		body.ApplyNow = &applyNow
+	}
+	resp, err := c.gen.ReplaceClusterFeaturesWithResponse(ctx, cid(clusterID), nil, body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.JSON200 == nil {
+		return nil, statusError(resp.HTTPResponse, resp.Body)
+	}
+	u := resp.JSON200
+	out := &ClusterFeaturesUpdate{Features: nonNilStrings(u.Features), RestartsKeycloak: u.RestartsKeycloak, Change: featureChangeFromAPI(u.Change)}
+	if u.Impact != nil {
+		out.Impact = *u.Impact
+	}
+	return out, nil
+}
+
+// nonNilStrings returns s, or an empty slice for nil so it encodes as [].
+func nonNilStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // ListClusterFeatures returns the available Keycloak feature flags.
@@ -1924,7 +2003,9 @@ func (c *Client) ListClusterFeatures(ctx context.Context) ([]ClusterFeatureInfo,
 	}
 	out := make([]ClusterFeatureInfo, 0, len(*resp.JSON200))
 	for _, f := range *resp.JSON200 {
-		out = append(out, ClusterFeatureInfo{Name: f.Name, DisplayName: f.DisplayName, Description: nstrN(f.Description), Preview: f.Preview})
+		out = append(out, ClusterFeatureInfo{Name: f.Name, DisplayName: f.DisplayName, Description: nstrN(f.Description), Preview: f.Preview,
+			Experimental: f.Experimental != nil && *f.Experimental, Dangerous: f.Dangerous != nil && *f.Dangerous,
+			MinVersion: nstrN(f.MinVersion)})
 	}
 	return out, nil
 }

@@ -12,6 +12,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   password blacklist operations no longer answer 403.
 
 ### Added
+- `skycloak_get_cluster_features` reads the Keycloak feature flags enabled on one
+  cluster and any change still rolling out (`pending` until the maintenance
+  window, or `applying`). `skycloak_set_cluster_features` replaces the cluster's
+  whole flag set and takes `apply_now` to restart Keycloak at once instead of
+  waiting for the maintenance window. Its result states that Keycloak restarts,
+  whether the change is pending or applying, and which of the enabled flags are
+  experimental. `skycloak_list_cluster_features` now also reports each flag's
+  `experimental` and `dangerous` marks and its minimum Keycloak version.
 - `skycloak_get_workspace` returns the workspace an OAuth session acts on: its name, its ID
   and why it was picked (`requested`, `only_membership`, `owned` or
   `oldest_membership`). The server's connect instructions now name that
