@@ -6,6 +6,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- `--allow-writes` keys now request `clusters:password-blacklists:read` and
+  `clusters:password-blacklists:write`, and read-only keys request the read scope, so
+  password blacklist operations no longer answer 403.
+
 ### Added
 - `skycloak_get_workspace` returns the workspace an OAuth session acts on: its name, its ID
   and why it was picked (`requested`, `only_membership`, `owned` or
